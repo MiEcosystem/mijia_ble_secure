@@ -3489,13 +3489,13 @@
 // <e> NRF_LOG_ENABLED - nrf_log - Logging
 //==========================================================
 #ifndef NRF_LOG_ENABLED
-#define NRF_LOG_ENABLED 0
+#define NRF_LOG_ENABLED 1
 #endif
 #if  NRF_LOG_ENABLED
 // <e> NRF_LOG_USES_COLORS - If enabled then ANSI escape code for colors is prefixed to every string
 //==========================================================
 #ifndef NRF_LOG_USES_COLORS
-#define NRF_LOG_USES_COLORS 0
+#define NRF_LOG_USES_COLORS 1
 #endif
 #if  NRF_LOG_USES_COLORS
 // <o> NRF_LOG_COLOR_DEFAULT  - ANSI escape code prefix.
@@ -3527,7 +3527,7 @@
 // <8=> White 
 
 #ifndef NRF_LOG_ERROR_COLOR
-#define NRF_LOG_ERROR_COLOR 0
+#define NRF_LOG_ERROR_COLOR 2
 #endif
 
 // <o> NRF_LOG_WARNING_COLOR  - ANSI escape code prefix.
@@ -3543,7 +3543,7 @@
 // <8=> White 
 
 #ifndef NRF_LOG_WARNING_COLOR
-#define NRF_LOG_WARNING_COLOR 0
+#define NRF_LOG_WARNING_COLOR 4
 #endif
 
 #endif //NRF_LOG_USES_COLORS
@@ -3558,7 +3558,7 @@
 // <4=> Debug 
 
 #ifndef NRF_LOG_DEFAULT_LEVEL
-#define NRF_LOG_DEFAULT_LEVEL 3
+#define NRF_LOG_DEFAULT_LEVEL 4
 #endif
 
 // <e> NRF_LOG_DEFERRED - Enable deffered logger.
@@ -3611,7 +3611,7 @@
 // <e> NRF_LOG_BACKEND_SERIAL_USES_UART - If enabled data is printed over UART
 //==========================================================
 #ifndef NRF_LOG_BACKEND_SERIAL_USES_UART
-#define NRF_LOG_BACKEND_SERIAL_USES_UART 1
+#define NRF_LOG_BACKEND_SERIAL_USES_UART 0
 #endif
 #if  NRF_LOG_BACKEND_SERIAL_USES_UART
 // <o> NRF_LOG_BACKEND_SERIAL_UART_BAUDRATE  - Default Baudrate
@@ -3680,7 +3680,7 @@
 // <e> NRF_LOG_BACKEND_SERIAL_USES_RTT - If enabled data is printed using RTT
 //==========================================================
 #ifndef NRF_LOG_BACKEND_SERIAL_USES_RTT
-#define NRF_LOG_BACKEND_SERIAL_USES_RTT 0
+#define NRF_LOG_BACKEND_SERIAL_USES_RTT 1
 #endif
 #if  NRF_LOG_BACKEND_SERIAL_USES_RTT
 // <o> NRF_LOG_BACKEND_RTT_OUTPUT_BUFFER_SIZE - RTT output buffer size. 
@@ -3714,7 +3714,7 @@
 
 // <o> SEGGER_RTT_CONFIG_MAX_NUM_UP_BUFFERS - Size of upstream buffer. 
 #ifndef SEGGER_RTT_CONFIG_MAX_NUM_UP_BUFFERS
-#define SEGGER_RTT_CONFIG_MAX_NUM_UP_BUFFERS 2
+#define SEGGER_RTT_CONFIG_MAX_NUM_UP_BUFFERS 1
 #endif
 
 // <o> SEGGER_RTT_CONFIG_BUFFER_SIZE_DOWN - Size of upstream buffer. 
@@ -3724,7 +3724,7 @@
 
 // <o> SEGGER_RTT_CONFIG_MAX_NUM_DOWN_BUFFERS - Size of upstream buffer. 
 #ifndef SEGGER_RTT_CONFIG_MAX_NUM_DOWN_BUFFERS
-#define SEGGER_RTT_CONFIG_MAX_NUM_DOWN_BUFFERS 2
+#define SEGGER_RTT_CONFIG_MAX_NUM_DOWN_BUFFERS 1
 #endif
 
 // </h> 

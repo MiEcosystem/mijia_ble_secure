@@ -55,17 +55,17 @@
 #define CENTRAL_LINK_COUNT              0                                           /**< Number of central links used by the application. When changing this number remember to adjust the RAM settings*/
 #define PERIPHERAL_LINK_COUNT           1                                           /**< Number of peripheral links used by the application. When changing this number remember to adjust the RAM settings*/
 
-#define DEVICE_NAME                     "Nordic_UART"                               /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "Mi_Demo"                                   /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
-#define APP_ADV_TIMEOUT_IN_SECONDS      180                                         /**< The advertising timeout (in units of seconds). */
+#define APP_ADV_TIMEOUT_IN_SECONDS      0                                           /**< The advertising timeout (in units of seconds). */
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
 #define APP_TIMER_OP_QUEUE_SIZE         4                                           /**< Size of timer operation queues. */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(75, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(40, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)  /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
@@ -545,7 +545,7 @@ static void advertising_init(void)
     memset(&advdata, 0, sizeof(advdata));
     advdata.name_type          = BLE_ADVDATA_FULL_NAME;
     advdata.include_appearance = false;
-    advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_LIMITED_DISC_MODE;
+    advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
 
     memset(&scanrsp, 0, sizeof(scanrsp));
     scanrsp.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
@@ -626,6 +626,36 @@ int main(void)
     }
 }
 
+
+
+void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info)
+{
+	error_info_t* pinfo = (error_info_t *)info;
+    NRF_LOG_ERROR(" Oops ! \n");
+
+    switch (id)
+    {
+        case NRF_FAULT_ID_SDK_ASSERT:
+			NRF_LOG_RAW_INFO("ERROR at %s : %d\n", (uint32_t)pinfo->p_file_name,
+			                                                 pinfo->line_num  );
+            break;
+
+        case NRF_FAULT_ID_SDK_ERROR:
+			NRF_LOG_RAW_INFO("ERRNO %d at %s : %d\n",          pinfo->err_code,
+			                                         (uint32_t)pinfo->p_file_name,
+			                                                   pinfo->line_num);
+            break;
+    }	
+
+    NRF_LOG_FINAL_FLUSH();
+
+    // On assert, the system can only recover with a reset.
+#ifndef DEBUG
+    NVIC_SystemReset();
+#else
+    app_error_save_and_stop(id, pc, info);
+#endif // DEBUG
+}
 
 /**
  * @}

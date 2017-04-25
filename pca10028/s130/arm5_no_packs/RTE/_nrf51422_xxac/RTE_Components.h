@@ -3,7 +3,7 @@
  * Auto generated Run-Time-Environment Component Configuration File
  *      *** Do not modify ! ***
  *
- * Project: 'ble_app_uart_pca10028_s130' 
+ * Project: 'ble_app_mi_secure_pca10028_s130' 
  * Target:  'nrf51422_xxac' 
  */
 

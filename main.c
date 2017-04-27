@@ -33,6 +33,9 @@
 #include "app_timer.h"
 #include "app_button.h"
 #include "ble_nus.h"
+
+#include "ble_mi_secure.h"
+
 #include "app_uart.h"
 #include "app_util_platform.h"
 #include "bsp.h"
@@ -62,7 +65,7 @@
 #define APP_ADV_TIMEOUT_IN_SECONDS      0                                           /**< The advertising timeout (in units of seconds). */
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
-#define APP_TIMER_OP_QUEUE_SIZE         4                                           /**< Size of timer operation queues. */
+#define APP_TIMER_OP_QUEUE_SIZE         8                                           /**< Size of timer operation queues. */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(40, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
@@ -81,6 +84,7 @@ static ble_nus_t                        m_nus;                                  
 static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;    /**< Handle of the current connection. */
 
 static ble_uuid_t                       m_adv_uuids[] = {{BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}};  /**< Universally unique service identifier. */
+
 
 
 /**@brief Function for assert macro callback.
@@ -146,8 +150,6 @@ static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t lengt
     {
         while (app_uart_put(p_data[i]) != NRF_SUCCESS);
     }
-    while (app_uart_put('\r') != NRF_SUCCESS);
-    while (app_uart_put('\n') != NRF_SUCCESS);
 }
 /**@snippet [Handling the data received over BLE] */
 
@@ -158,6 +160,7 @@ static void services_init(void)
 {
     uint32_t       err_code;
     ble_nus_init_t nus_init;
+	ble_mi_init_t  mi_init;
 
     memset(&nus_init, 0, sizeof(nus_init));
 
@@ -165,6 +168,13 @@ static void services_init(void)
 
     err_code = ble_nus_init(&m_nus, &nus_init);
     APP_ERROR_CHECK(err_code);
+	
+	memset(&mi_init, 0, sizeof(mi_init));
+	
+	mi_init.data_handler = NULL;
+
+	err_code = ble_mi_init(&mi_init);
+	APP_ERROR_CHECK(err_code);
 }
 
 
@@ -377,12 +387,31 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
     ble_conn_params_on_ble_evt(p_ble_evt);
     ble_nus_on_ble_evt(&m_nus, p_ble_evt);
+	ble_mi_on_ble_evt(p_ble_evt);
     on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
     bsp_btn_ble_on_ble_evt(p_ble_evt);
 
 }
 
+/**@brief Function for dispatching a system event to interested modules.
+ *
+ * @details This function is called from the System event interrupt handler after a system
+ *          event has been received.
+ *
+ * @param[in] sys_evt  System stack event @ NRF_SOC_EVTS.
+ */
+static void sys_evt_dispatch(uint32_t sys_evt)
+{
+    // Dispatch the system event to the fstorage module, where it will be
+    // dispatched to the Flash Data Storage (FDS) module.
+//    fs_sys_event_handler(sys_evt);
+
+    // Dispatch to the Advertising module last, since it will check if there are any
+    // pending flash operations in fstorage. Let fstorage process system events first,
+    // so that it can report correctly to the Advertising module.
+    ble_advertising_on_sys_evt(sys_evt);
+}
 
 /**@brief Function for the SoftDevice initialization.
  *
@@ -392,7 +421,10 @@ static void ble_stack_init(void)
 {
     uint32_t err_code;
 
-    nrf_clock_lf_cfg_t clock_lf_cfg = NRF_CLOCK_LFCLKSRC;
+    nrf_clock_lf_cfg_t clock_lf_cfg = {.source        = NRF_CLOCK_LF_SRC_XTAL,
+	                                   .rc_ctiv       = 0,
+	                                   .rc_temp_ctiv  = 0,
+	                                   .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_20_PPM};
 
     // Initialize SoftDevice.
     SOFTDEVICE_HANDLER_INIT(&clock_lf_cfg, NULL);
@@ -410,11 +442,20 @@ static void ble_stack_init(void)
 #if (NRF_SD_BLE_API_VERSION == 3)
     ble_enable_params.gatt_enable_params.att_mtu = NRF_BLE_MAX_MTU_SIZE;
 #endif
+
+#if (IS_SRVC_CHANGED_CHARACT_PRESENT == 1)
+    ble_enable_params.gatt_enable_params.service_changed = 1;
+#endif
+
     err_code = softdevice_enable(&ble_enable_params);
     APP_ERROR_CHECK(err_code);
 
     // Subscribe for BLE events.
     err_code = softdevice_ble_evt_handler_set(ble_evt_dispatch);
+    APP_ERROR_CHECK(err_code);
+
+    // Subscribe for SOC events.
+	err_code = softdevice_sys_evt_handler_set(sys_evt_dispatch);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -604,7 +645,7 @@ int main(void)
     // Initialize.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
     uart_init();
-
+	
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
     gap_params_init();
@@ -615,7 +656,7 @@ int main(void)
     NRF_LOG_RAW_INFO("Compiled  %s %s\n", nrf_log_push(__DATE__), nrf_log_push(__TIME__));
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
-
+	
     // Enter main loop.
     for (;;)
     {

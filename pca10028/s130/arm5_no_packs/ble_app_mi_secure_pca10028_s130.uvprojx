@@ -404,6 +404,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\mi_secure.c</FilePath>
             </File>
+            <File>
+              <FileName>mi_secure.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\mi_secure.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -2460,6 +2465,11 @@
               <FileName>mi_secure.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mi_secure.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_secure.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\mi_secure.h</FilePath>
             </File>
           </Files>
         </Group>

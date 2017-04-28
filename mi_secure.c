@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include "app_timer.h"
 #include "pt.h"
-//#include "mi_secure.h"
+#include "mi_secure.h"
 
 #define NRF_LOG_MODULE_NAME "mi_secure"
 #include "nrf_log.h"
@@ -65,27 +65,22 @@ static int protothread1_flag, protothread2_flag;
 
 static int protothread1(pthread_t *pt)
 {
-  /* A protothread function must begin with PT_BEGIN() which takes a
-     pointer to a struct pt. */
-  PT_BEGIN(pt);
+	PT_BEGIN(pt);
 
-  /* We loop forever here. */
-  while(1) {
-    /* Wait until the other protothread has set its flag. */
-    PT_WAIT_UNTIL(pt, protothread2_flag != 0);
-    NRF_LOG_INFO("Protothread 1 running\n");
+	while(1) {
+		/* Wait until the other protothread has set its flag. */
+		PT_WAIT_UNTIL(pt, protothread2_flag != 0);
+		NRF_LOG_INFO("Protothread 1 running\n");
 
-    /* We then reset the other protothread's flag, and set our own
-       flag so that the other protothread can run. */
-    protothread2_flag = 0;
-    protothread1_flag = 1;
+		/* We then reset the other protothread's flag, and set our own
+		   flag so that the other protothread can run. */
+		protothread2_flag = 0;
+		protothread1_flag = 1;
 
-    /* And we loop. */
-  }
+		/* And we loop. */
+	}
 
-  /* All protothread functions must end with PT_END() which takes a
-     pointer to a struct pt. */
-  PT_END(pt);
+	PT_END(pt);
 }
 
 static int protothread2(pthread_t *pt)

@@ -60,8 +60,6 @@ typedef struct {
     uint16_t                 conn_handle;             /**< Handle of the current connection (as provided by the SoftDevice). BLE_CONN_HANDLE_INVALID if not in a connection. */
     bool                     is_notification_enabled; /**< Variable to indicate if the peer has enabled notification of the RX characteristic.*/
     ble_mi_data_handler_t    data_handler;            /**< Event handler to be called for handling received data. */
-    ble_mi_data_handler_t    pubkey_rxd_handler;     /**< Event handler to be called for handling received data. */
-    ble_mi_data_handler_t    buffer_rxd_handler;     /**< Event handler to be called for handling received data. */
 } ble_mi_t;
 
 /**@brief Function for initializing the Xiaomi Service.

@@ -13,11 +13,40 @@
 #include "ble_mi_secure.h"
 #include "ble_srv_common.h"
 
+#define NRF_LOG_MODULE_NAME "ble_mi"
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+
 #define BLE_UUID_MI_AUTH   0x0010                      /**< The UUID of the AUTH   Characteristic. */
 #define BLE_UUID_MI_BUFFER 0x0015                      /**< The UUID of the Buffer Characteristic. */
 #define BLE_UUID_MI_PUBKEY 0x0016                      /**< The UUID of the PubKey Characteristic. */
 
+#define PUBKEY_BYTE 255
+
+typedef struct {
+	uint8_t curr_len;
+	uint8_t full_len;
+	uint8_t avail;
+	uint8_t data[PUBKEY_BYTE];
+} fast_xfer_t;
+
+typedef enum {
+	PUBKEY = 0x10,
+} fast_xfer_data_t;
+
+typedef struct {
+	uint8_t            remain_len;
+	fast_xfer_data_t   type;
+	uint8_t            data[1];
+} fast_xfer_frame_t;
+
+static void auth_handler(uint8_t *pdata, uint8_t len);
+static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
+static void buffer_rxd_handler(uint8_t *pdata, uint8_t len);
+
 static ble_mi_t   mi_srv;
+
+fast_xfer_t m_pubkey;
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S110 SoftDevice.
  *
@@ -65,11 +94,18 @@ static void on_write(ble_evt_t * p_ble_evt)
             mi_srv.is_notification_enabled = false;
         }
     }
-    else if ((p_evt_write->handle == mi_srv.buffer_handles.value_handle)
-             &&
-             (mi_srv.buffer_rxd_handler != NULL))
+    else if (p_evt_write->handle == mi_srv.auth_handles.value_handle)
     {
-        mi_srv.buffer_rxd_handler(p_evt_write->data, p_evt_write->len);
+        auth_handler(p_evt_write->data, p_evt_write->len);
+    }
+    else if (p_evt_write->handle == mi_srv.buffer_handles.value_handle)
+    {
+        buffer_rxd_handler(p_evt_write->data, p_evt_write->len);
+    }
+    else if (p_evt_write->handle == mi_srv.pubkey_handles.value_handle)
+    {
+        if ( m_pubkey.avail != 1 )
+			fast_xfer_rxd(&m_pubkey, p_evt_write->data, p_evt_write->len);
     }
     else
     {
@@ -133,7 +169,7 @@ static uint32_t char_add(uint16_t                        uuid,
 
     attr_char_value.p_uuid    = &ble_uuid;
     attr_char_value.p_attr_md = &attr_md;
-    attr_char_value.init_len  = char_len;
+    attr_char_value.init_len  = 1;
     attr_char_value.init_offs = 0;
     attr_char_value.max_len   = char_len;
     attr_char_value.p_value   = p_char_value ? p_char_value : NULL;
@@ -144,7 +180,38 @@ static uint32_t char_add(uint16_t                        uuid,
 	                                       p_handles);
 }
 
-void buffer_rxd_handler(uint8_t *pdata, uint8_t len)
+static void auth_handler(uint8_t *pdata, uint8_t len)
+{
+	return;
+}
+
+static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
+{
+	fast_xfer_frame_t *pframe = (fast_xfer_frame_t*)pdata;
+
+	uint8_t          full_len = pxfer->full_len;
+	uint8_t          curr_len = pframe->remain_len;
+	uint8_t          data_len = len - 2;
+
+	if ((pframe->remain_len < data_len)) {
+		NRF_LOG_ERROR(" illegal frame parameter : len\n");
+		pxfer->full_len = 0;
+		return;
+	}
+	if (full_len < curr_len )
+		pxfer->full_len = curr_len;
+
+	memcpy(pxfer->data + sizeof(pxfer->data) - curr_len,
+		   pframe->data,
+		   data_len);
+
+	pxfer->curr_len += data_len;
+
+	if (pxfer->curr_len == pxfer->full_len )
+		pxfer->avail = 1;
+}
+
+static void buffer_rxd_handler(uint8_t *pdata, uint8_t len)
 {
 	
 }

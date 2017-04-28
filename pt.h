@@ -80,6 +80,10 @@ struct pt {
   lc_t lc;
 };
 
+typedef struct {
+	lc_t lc;
+} pthread_t;
+
 #define PT_WAITING 0
 #define PT_YIELDED 1
 #define PT_EXITED  2

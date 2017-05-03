@@ -32,6 +32,31 @@ extern "C" {
 #define BLE_UUID_MI_SERVICE 0xFE95                      /**< The UUID of the Xiaomi Service. */
 #define BLE_MI_MAX_DATA_LEN (GATT_MTU_SIZE_DEFAULT - 3) /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Xiaomi  service module. */
 
+typedef enum {
+	PUBKEY = 0x10,
+} fast_xfer_data_t;
+
+typedef struct {
+	uint8_t            remain_len;
+	fast_xfer_data_t   type;
+	uint8_t            data[1];
+} fast_xfer_frame_t;
+
+typedef struct {
+	uint8_t            remain_len;
+	fast_xfer_data_t   type;
+	uint8_t            data[18];
+} fast_xfer_tx_frame_t;
+
+typedef struct {
+	uint8_t           curr_len;
+	uint8_t           full_len;
+	uint8_t              avail;
+	fast_xfer_data_t      type;
+	uint8_t          data[255];
+} fast_xfer_t;
+
+
 /**@brief Xiaomi Service event handler type. */
 typedef void (*ble_mi_data_handler_t) (uint8_t * p_data, uint16_t length);
 

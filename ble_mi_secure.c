@@ -23,30 +23,14 @@
 
 #define PUBKEY_BYTE 255
 
-typedef struct {
-	uint8_t curr_len;
-	uint8_t full_len;
-	uint8_t avail;
-	uint8_t data[PUBKEY_BYTE];
-} fast_xfer_t;
-
-typedef enum {
-	PUBKEY = 0x10,
-} fast_xfer_data_t;
-
-typedef struct {
-	uint8_t            remain_len;
-	fast_xfer_data_t   type;
-	uint8_t            data[1];
-} fast_xfer_frame_t;
-
 static void auth_handler(uint8_t *pdata, uint8_t len);
 static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
-static void buffer_rxd_handler(uint8_t *pdata, uint8_t len);
+static void reliable_xfer_rxd(uint8_t *pdata, uint8_t len);
 
 static ble_mi_t   mi_srv;
 
-fast_xfer_t m_pubkey;
+fast_xfer_t m_app_pub = {.type = PUBKEY};
+fast_xfer_t m_dev_pub = {.type = PUBKEY};
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S110 SoftDevice.
  *
@@ -100,12 +84,15 @@ static void on_write(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_write->handle == mi_srv.buffer_handles.value_handle)
     {
-        buffer_rxd_handler(p_evt_write->data, p_evt_write->len);
+        reliable_xfer_rxd(p_evt_write->data, p_evt_write->len);
     }
     else if (p_evt_write->handle == mi_srv.pubkey_handles.value_handle)
     {
-        if ( m_pubkey.avail != 1 )
-			fast_xfer_rxd(&m_pubkey, p_evt_write->data, p_evt_write->len);
+		fast_xfer_frame_t *pframe = (void*)p_evt_write->data;
+        if (pframe->type == PUBKEY && pframe->remain_len < PUBKEY_BYTE)
+			fast_xfer_rxd(&m_app_pub, p_evt_write->data, p_evt_write->len);
+		else
+			NRF_LOG_ERROR("Unkown fast xfer data type\n");
     }
     else
     {
@@ -185,10 +172,10 @@ static void auth_handler(uint8_t *pdata, uint8_t len)
 	return;
 }
 
-static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
+void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 {
 	fast_xfer_frame_t *pframe = (fast_xfer_frame_t*)pdata;
-
+	
 	uint8_t          full_len = pxfer->full_len;
 	uint8_t          curr_len = pframe->remain_len;
 	uint8_t          data_len = len - 2;
@@ -201,17 +188,87 @@ static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 	if (full_len < curr_len )
 		pxfer->full_len = curr_len;
 
-	memcpy(pxfer->data + sizeof(pxfer->data) - curr_len,
+	uint8_t *addr = pxfer->data + sizeof(pxfer->data) - curr_len;
+	memcpy(addr,
 		   pframe->data,
 		   data_len);
 
 	pxfer->curr_len += data_len;
-
-	if (pxfer->curr_len == pxfer->full_len )
+	
+	if (pxfer->curr_len == pxfer->full_len ) {
 		pxfer->avail = 1;
+		pxfer->curr_len = 0;
+	}
 }
 
-static void buffer_rxd_handler(uint8_t *pdata, uint8_t len)
+int fast_xfer_recive(fast_xfer_t *pxfer)
+{
+	if (!pxfer->avail) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+int fast_xfer_txd(fast_xfer_t *pxfer)
+{
+	ble_gatts_hvx_params_t hvx_params;
+	fast_xfer_tx_frame_t        frame;
+	uint32_t                 data_len;
+	uint32_t                    errno;
+
+    memset(&hvx_params, 0, sizeof(hvx_params));
+	memset(&frame,      0, sizeof(frame));
+
+	data_len = pxfer->curr_len > 18 ? 18 : pxfer->curr_len;
+
+	frame.remain_len = pxfer->curr_len;
+	frame.type       = pxfer->type;
+	memcpy(frame.data,
+	       pxfer->data + pxfer->full_len - pxfer->curr_len,
+	       data_len);
+	
+	data_len += 2;      // add 2 bytes (remain_len and type)
+    hvx_params.handle = mi_srv.pubkey_handles.value_handle;
+    hvx_params.p_data = (void*)&frame;
+    hvx_params.p_len  = (uint16_t*)&data_len;
+    hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
+
+    errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
+
+	if (errno == NRF_SUCCESS) {
+		pxfer->curr_len -= data_len - 2;
+		NRF_LOG_INFO("Send %d bytes\n", data_len-2);
+	}
+
+	return errno;
+}
+
+int fast_xfer_send(fast_xfer_t *pxfer)
+{
+	uint32_t errno;
+	if ((mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID) || (!mi_srv.is_notification_enabled))
+    {
+        return NRF_ERROR_INVALID_STATE;
+    }
+	
+	uint8_t free_packet_cnt;
+	sd_ble_tx_packet_count_get(mi_srv.conn_handle, &free_packet_cnt);
+	NRF_LOG_INFO("free TX packets: %d\n", free_packet_cnt);
+	while( free_packet_cnt-- ) {
+		errno = fast_xfer_txd(pxfer);
+		if (errno != NRF_SUCCESS) {
+			NRF_LOG_ERROR("Notify error %d", errno);
+		}
+		else if (pxfer->curr_len == 0 ) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static void reliable_xfer_rxd(uint8_t *pdata, uint8_t len)
 {
 	
 }

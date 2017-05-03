@@ -1,9 +1,9 @@
 #include <stdint.h>
 #include "app_timer.h"
 #include "pt.h"
+#include "ble_mi_secure.h"
 #include "mi_secure.h"
-
-#define NRF_LOG_MODULE_NAME "mi_secure"
+#define NRF_LOG_MODULE_NAME "schd"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
@@ -33,7 +33,7 @@ int mi_schedulor_init(uint32_t interval)
 {
 	int32_t errno;
 	schd_interval = interval;
-
+	NRF_LOG_INFO("START schd\n");
 	errno = app_timer_create(&mi_schd_timer_id, APP_TIMER_MODE_REPEATED, mi_schedulor);
 	APP_ERROR_CHECK(errno);
 
@@ -61,7 +61,9 @@ int mi_schedulor_stop(int type)
 
 
 static int protothread1_flag, protothread2_flag;
-
+extern fast_xfer_t m_app_pub;
+int fast_xfer_recive(fast_xfer_t *pxfer);
+int fast_xfer_send(fast_xfer_t *pxfer);
 
 static int protothread1(pthread_t *pt)
 {
@@ -69,9 +71,14 @@ static int protothread1(pthread_t *pt)
 
 	while(1) {
 		/* Wait until the other protothread has set its flag. */
-		PT_WAIT_UNTIL(pt, protothread2_flag != 0);
-		NRF_LOG_INFO("Protothread 1 running\n");
-
+		PT_WAIT_UNTIL(pt, m_app_pub.avail == 1);
+		m_app_pub.avail = 0;
+		NRF_LOG_INFO("PT1 recive %d bytes:\n", m_app_pub.full_len);
+		NRF_LOG_RAW_HEXDUMP_INFO(m_app_pub.data+255-m_app_pub.full_len, m_app_pub.full_len);
+		
+//		m_app_pub.curr_len = m_app_pub.full_len;
+//		m_app_pub.full_len = 255;
+//		PT_WAIT_UNTIL(pt, fast_xfer_send(&m_app_pub) != 1);
 		/* We then reset the other protothread's flag, and set our own
 		   flag so that the other protothread can run. */
 		protothread2_flag = 0;
@@ -106,8 +113,8 @@ static int protothread2(pthread_t *pt)
 void mi_schedulor(void * p_context)
 {
 	schd_time++;
-	
+	NRF_LOG_INFO(" Tick %d\n", schd_time);
 	protothread1(&pt1);
-	protothread2(&pt2);
+//	protothread2(&pt2);
 
 }

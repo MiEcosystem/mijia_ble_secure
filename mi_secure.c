@@ -33,7 +33,7 @@ int mi_schedulor_init(uint32_t interval)
 {
 	int32_t errno;
 	schd_interval = interval;
-	NRF_LOG_INFO("START schd\n");
+	NRF_LOG_INFO("START\n");
 	errno = app_timer_create(&mi_schd_timer_id, APP_TIMER_MODE_REPEATED, mi_schedulor);
 	APP_ERROR_CHECK(errno);
 
@@ -60,7 +60,6 @@ int mi_schedulor_stop(int type)
 }
 
 
-static int protothread1_flag, protothread2_flag;
 extern fast_xfer_t m_app_pub;
 int fast_xfer_recive(fast_xfer_t *pxfer);
 int fast_xfer_send(fast_xfer_t *pxfer);
@@ -76,15 +75,41 @@ static int protothread1(pthread_t *pt)
 		NRF_LOG_INFO("PT1 recive %d bytes:\n", m_app_pub.full_len);
 		NRF_LOG_RAW_HEXDUMP_INFO(m_app_pub.data+255-m_app_pub.full_len, m_app_pub.full_len);
 		
-//		m_app_pub.curr_len = m_app_pub.full_len;
-//		m_app_pub.full_len = 255;
-//		PT_WAIT_UNTIL(pt, fast_xfer_send(&m_app_pub) != 1);
-		/* We then reset the other protothread's flag, and set our own
-		   flag so that the other protothread can run. */
-		protothread2_flag = 0;
-		protothread1_flag = 1;
+		m_app_pub.curr_len = m_app_pub.full_len;
+		m_app_pub.full_len = 255;
+		PT_WAIT_UNTIL(pt, fast_xfer_send(&m_app_pub) == 0);
+		m_app_pub.full_len = 0;
 
-		/* And we loop. */
+	}
+
+	PT_END(pt);
+}
+
+
+uint8_t cert_buffer[512];
+reliable_xfer_t m_cert = {.pdata = cert_buffer};
+extern int reliable_xfer_ack(fctrl_ack_t ack, ...);
+extern uint16_t last_sn;
+extern uint16_t get_lost_sn();
+pthread_t pt_resend;
+
+static int pthread_resend(pthread_t *pt)
+{
+	PT_BEGIN(pt);
+
+	uint16_t sn;
+
+	while(1) {
+		sn = get_lost_sn();
+		if (sn == 0) {
+			PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_SUCCESS) == NRF_SUCCESS);
+			PT_EXIT(pt);
+		}
+		else {
+			last_sn = sn - 1;
+			PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_LOST, sn) == NRF_SUCCESS);
+			PT_WAIT_UNTIL(pt, m_cert.curr_sn == sn);
+		}
 	}
 
 	PT_END(pt);
@@ -95,16 +120,21 @@ static int protothread2(pthread_t *pt)
   PT_BEGIN(pt);
 
   while(1) {
-    /* Let the other protothread run. */
-    protothread2_flag = 1;
 
     /* Wait until the other protothread has set its flag. */
-    PT_WAIT_UNTIL(pt, protothread1_flag != 0);
-    NRF_LOG_INFO("Protothread 2 running\n");
-    
-    /* We then reset the other protothread's flag. */
-    protothread1_flag = 0;
+    PT_WAIT_UNTIL(pt, m_cert.amount != 0);
+	
+	PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 
+	PT_WAIT_UNTIL(pt, m_cert.send_end == 1);
+
+	PT_SPAWN(pt, &pt_resend, pthread_resend(&pt_resend));
+
+	PT_WAIT_UNTIL(pt, reliable_xfer_cmd(DEV_CERT, m_cert.amount) == NRF_SUCCESS);
+	
+	PT_WAIT_UNTIL(pt, 0);
+	
+	
     /* And we loop. */
   }
   PT_END(pt);
@@ -113,8 +143,8 @@ static int protothread2(pthread_t *pt)
 void mi_schedulor(void * p_context)
 {
 	schd_time++;
-	NRF_LOG_INFO(" Tick %d\n", schd_time);
+//	NRF_LOG_INFO(" Tick %d\n", schd_time);
 	protothread1(&pt1);
-//	protothread2(&pt2);
+	protothread2(&pt2);
 
 }

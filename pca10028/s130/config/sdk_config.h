@@ -3495,7 +3495,7 @@
 // <e> NRF_LOG_USES_COLORS - If enabled then ANSI escape code for colors is prefixed to every string
 //==========================================================
 #ifndef NRF_LOG_USES_COLORS
-#define NRF_LOG_USES_COLORS 1
+#define NRF_LOG_USES_COLORS 0
 #endif
 #if  NRF_LOG_USES_COLORS
 // <o> NRF_LOG_COLOR_DEFAULT  - ANSI escape code prefix.
@@ -3598,7 +3598,7 @@
 // <i> Logger backend RAM usage is determined by this value.
 
 #ifndef NRF_LOG_BACKEND_MAX_STRING_LENGTH
-#define NRF_LOG_BACKEND_MAX_STRING_LENGTH 256
+#define NRF_LOG_BACKEND_MAX_STRING_LENGTH 512
 #endif
 
 // <o> NRF_LOG_TIMESTAMP_DIGITS - Number of digits for timestamp 

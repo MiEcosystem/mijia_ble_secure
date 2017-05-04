@@ -29,6 +29,9 @@
 extern "C" {
 #endif
 
+#define MODE_CMD  0
+#define MODE_ACK  1
+
 #define BLE_UUID_MI_SERVICE 0xFE95                      /**< The UUID of the Xiaomi Service. */
 #define BLE_MI_MAX_DATA_LEN (GATT_MTU_SIZE_DEFAULT - 3) /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Xiaomi  service module. */
 
@@ -93,12 +96,9 @@ typedef struct {
 
 typedef struct {
 	uint16_t        amount;
-	uint16_t         rxcnt;
-	uint16_t         txcnt;
-	uint16_t     expect_sn;
-	uint16_t     curr_sn;
-	uint8_t          avail;
+	uint16_t       curr_sn;
 	uint8_t       send_end;
+	uint8_t           mode;
 	uint8_t           type;
 	uint8_t         *pdata;
 } reliable_xfer_t;
@@ -164,6 +164,9 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt);
  * @retval NRF_SUCCESS If the string was sent successfully. Otherwise, an error code is returned.
  */
 uint32_t ble_mi_string_send(uint8_t * p_string, uint16_t length);
+
+int reliable_xfer_cmd(fctrl_cmd_t cmd, ...);
+int reliable_xfer_ack(fctrl_ack_t ack, ...);
 
 #ifdef __cplusplus
 }

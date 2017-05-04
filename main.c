@@ -657,7 +657,7 @@ int main(void)
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 	
-	mi_schedulor_init(APP_TIMER_TICKS(100, APP_TIMER_PRESCALER));
+	mi_schedulor_init(APP_TIMER_TICKS(5, APP_TIMER_PRESCALER));
 	mi_schedulor_start(0);
 
     // Enter main loop.

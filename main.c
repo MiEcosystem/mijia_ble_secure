@@ -47,7 +47,7 @@
 
 #define RTT_CTRL_CLEAR                  "[2J"
 
-#define IS_SRVC_CHANGED_CHARACT_PRESENT 0                                           /**< Include the service_changed characteristic. If not enabled, the server's database cannot be changed for the lifetime of the device. */
+#define IS_SRVC_CHANGED_CHARACT_PRESENT 1                                           /**< Include the service_changed characteristic. If not enabled, the server's database cannot be changed for the lifetime of the device. */
 
 #if (NRF_SD_BLE_API_VERSION == 3)
 #define NRF_BLE_MAX_MTU_SIZE            GATT_MTU_SIZE_DEFAULT                       /**< MTU size used in the softdevice enabling and to reply to a BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST event. */
@@ -58,7 +58,13 @@
 #define CENTRAL_LINK_COUNT              0                                           /**< Number of central links used by the application. When changing this number remember to adjust the RAM settings*/
 #define PERIPHERAL_LINK_COUNT           1                                           /**< Number of peripheral links used by the application. When changing this number remember to adjust the RAM settings*/
 
-#define DEVICE_NAME                     "Mi_Demo"                                   /**< Name of device. Will be included in the advertising data. */
+#ifdef NRF52
+#define DEVICE_NAME                     "Secure_nRF52"                              /**< Name of device. Will be included in the advertising data. */
+#else
+#define 
+#define DEVICE_NAME                     "Secure_nRF51"                              /**< Name of device. Will be included in the advertising data. */
+#endif
+
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
@@ -444,7 +450,7 @@ static void ble_stack_init(void)
 #endif
 
 #if (IS_SRVC_CHANGED_CHARACT_PRESENT == 1)
-    ble_enable_params.gatt_enable_params.service_changed = 1;
+    ble_enable_params.gatts_enable_params.service_changed = 1;
 #endif
 
     err_code = softdevice_enable(&ble_enable_params);

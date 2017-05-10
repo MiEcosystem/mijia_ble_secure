@@ -2589,7 +2589,7 @@
 // <e> TWI_ENABLED - nrf_drv_twi - TWI/TWIM peripheral driver
 //==========================================================
 #ifndef TWI_ENABLED
-#define TWI_ENABLED 0
+#define TWI_ENABLED 1
 #endif
 #if  TWI_ENABLED
 // <o> TWI_DEFAULT_CONFIG_FREQUENCY  - Frequency
@@ -2636,7 +2636,7 @@
 // <e> TWI0_ENABLED - Enable TWI0 instance
 //==========================================================
 #ifndef TWI0_ENABLED
-#define TWI0_ENABLED 0
+#define TWI0_ENABLED 1
 #endif
 #if  TWI0_ENABLED
 // <q> TWI0_USE_EASY_DMA  - Use EasyDMA (if present)
@@ -2680,7 +2680,7 @@
 // <4=> Debug 
 
 #ifndef TWI_CONFIG_LOG_LEVEL
-#define TWI_CONFIG_LOG_LEVEL 3
+#define TWI_CONFIG_LOG_LEVEL 4
 #endif
 
 // <o> TWI_CONFIG_INFO_COLOR  - ANSI escape code prefix.
@@ -2712,7 +2712,7 @@
 // <8=> White 
 
 #ifndef TWI_CONFIG_DEBUG_COLOR
-#define TWI_CONFIG_DEBUG_COLOR 0
+#define TWI_CONFIG_DEBUG_COLOR 2
 #endif
 
 #endif //TWI_CONFIG_LOG_ENABLED
@@ -2724,7 +2724,7 @@
 // <e> UART_ENABLED - nrf_drv_uart - UART/UARTE peripheral driver
 //==========================================================
 #ifndef UART_ENABLED
-#define UART_ENABLED 1
+#define UART_ENABLED 0
 #endif
 #if  UART_ENABLED
 // <o> UART_DEFAULT_CONFIG_HWFC  - Hardware Flow Control
@@ -3646,7 +3646,7 @@
 // <i> Must be power of 2
 
 #ifndef NRF_LOG_DEFERRED_BUFSIZE
-#define NRF_LOG_DEFERRED_BUFSIZE 256
+#define NRF_LOG_DEFERRED_BUFSIZE 512
 #endif
 
 #endif //NRF_LOG_DEFERRED

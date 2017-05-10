@@ -82,7 +82,7 @@ struct pt {
 
 typedef struct {
 	lc_t lc;
-} pthread_t;
+} pt_t;
 
 #define PT_WAITING 0
 #define PT_YIELDED 1

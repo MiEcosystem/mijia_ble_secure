@@ -25,14 +25,13 @@
 #define PUBKEY_BYTE 255
 
 static void auth_handler(uint8_t *pdata, uint8_t len);
-void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
-void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
+static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
+static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 
 static ble_mi_t   mi_srv;
 
 fast_xfer_t m_app_pub = {.type = PUBKEY};
 fast_xfer_t m_dev_pub = {.type = PUBKEY};
-
 
 extern reliable_xfer_t m_cert;
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S110 SoftDevice.
@@ -90,8 +89,8 @@ static void on_write(ble_evt_t * p_ble_evt)
 		reliable_xfer_frame_t *pframe = (void*)p_evt_write->data;
 		uint16_t  curr_sn = pframe->sn;
 		if (curr_sn == 0 ) {
-			if (pframe->f.ctrl.mode == 0) {
-				fctrl_cmd_t cmd = pframe->f.ctrl.type;
+			if (pframe->f.ctrl.mode == MODE_CMD) {
+				fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->f.ctrl.type;
 				m_cert.mode = MODE_CMD;
 				m_cert.type = cmd;
 				switch (cmd) {
@@ -99,11 +98,11 @@ static void on_write(ble_evt_t * p_ble_evt)
 						m_cert.amount = *(uint16_t*)pframe->f.ctrl.arg;
 						break;
 					default:
-						NRF_LOG_ERROR("Unkown reliable CMD\n");
+						NRF_LOG_ERROR("Unkown reliable CMD.\n");
 				}
 			}
 			else {
-				fctrl_ack_t ack = pframe->f.ctrl.type;
+				fctrl_ack_t ack = (fctrl_ack_t)pframe->f.ctrl.type;
 				m_cert.mode = MODE_ACK;
 				m_cert.type = ack;
 				switch (ack) {
@@ -115,7 +114,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 						m_cert.curr_sn = *(uint16_t*)pframe->f.ctrl.arg;
 						break;
 					default:
-						NRF_LOG_ERROR("Unkown reliable ACK\n");
+						NRF_LOG_ERROR("Unkown reliable ACK.\n");
 				}
 			}
 		}
@@ -348,7 +347,7 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("can't send ack\n");
+		NRF_LOG_INFO("can't send cmd\n");
 	}
 
 	return errno;

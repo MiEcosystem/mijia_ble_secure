@@ -165,8 +165,12 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt);
  */
 uint32_t ble_mi_string_send(uint8_t * p_string, uint16_t length);
 
+int fast_xfer_recive(fast_xfer_t *pxfer);
+int fast_xfer_send(fast_xfer_t *pxfer);
+
 int reliable_xfer_cmd(fctrl_cmd_t cmd, ...);
 int reliable_xfer_ack(fctrl_ack_t ack, ...);
+int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn);
 
 #ifdef __cplusplus
 }

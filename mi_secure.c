@@ -158,6 +158,68 @@ static int pthread_send(pt_t *pt, reliable_xfer_t *pxfer)
 }
 
 static timer_t timeout_timer;
+pt_t pt_rl_rx;
+uint8_t rl_xfer_mode = 0; // idle:0  rx:1  tx:2   error:3
+int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
+{
+//	if (rl_xfer_mode != 1 || rl_xfer_mode)
+//		PT_EXIT(pt);
+
+	static timer_t rxd_timer;
+	static uint16_t sn;
+
+	PT_BEGIN(pt);
+	rl_xfer_mode = 1;
+	// exchange data head : data type + data pkg cnt
+	if (pframe->sn == 0 && pframe->f.ctrl.mode == MODE_CMD) {
+		fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->f.ctrl.type;
+		m_cert.mode = MODE_CMD;
+		m_cert.type = cmd;
+		switch (cmd) {
+			case DEV_CERT:
+				m_cert.amount = *(uint16_t*)pframe->f.ctrl.arg;
+				break;
+			default:
+				NRF_LOG_ERROR("Unkown reliable CMD.\n");
+		}
+	}
+	else {
+		PT_EXIT(pt);
+		rl_xfer_mode = 3;
+	}
+
+//	APP Layer PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
+	timer_set(&rxd_timer, 1000);
+	while(pframe->sn > 0 && pframe->sn < m_cert.amount && !timer_expired(&rxd_timer)) {
+		memcpy(m_cert.pdata + (pframe->sn - 1) * 18, pframe->f.data, len-sizeof(pframe->sn));
+		timer_set(&rxd_timer, 1000);
+		PT_YIELD(pt);
+	}
+	
+	if (pframe->sn == m_cert.amount)
+		memcpy(m_cert.pdata + (pframe->sn - 1) * 18, pframe->f.data, len-sizeof(pframe->sn));
+	else {
+		rl_xfer_mode = 3;
+		PT_EXIT(pt);
+	}
+
+// <!> BUG : if sd_ble_gatts_hvx has no TX packet for the ackonwleage
+	while(1) {
+		sn = find_lost_sn(&m_cert);
+		if (sn == 0) {
+			reliable_xfer_ack(A_SUCCESS);
+			break;
+		}
+		else {
+			reliable_xfer_ack(A_LOST, sn);
+			PT_WAIT_UNTIL(pt, pframe->sn == sn);
+			memcpy(m_cert.pdata + (sn - 1) * 18, pframe->f.data, len-sizeof(sn));
+		}
+	}
+
+	rl_xfer_mode = 0;
+	PT_END(pt);
+}
 
 static int reliable_xfer_thread(pt_t *pt)
 {

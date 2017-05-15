@@ -29,7 +29,7 @@ extern "C" {
 
 void mi_schedulor(void * p_context);
 int mi_schedulor_init(uint32_t interval);
-int mi_schedulor_start(int type);
+int mi_schedulor_start(uint32_t *p_context);
 int mi_schedulor_stop(int type);
 
 #ifdef __cplusplus

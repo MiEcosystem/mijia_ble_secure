@@ -32,6 +32,17 @@ extern "C" {
 #define MODE_CMD  0
 #define MODE_ACK  1
 
+#define REG_START    	0x10UL
+#define REG_SUCCESS 	0x11UL
+#define REG_FAILED	0x12UL
+#define LOG_START	0x20UL
+#define LOG_SUCCESS	0x21UL
+#define LOG_FAILED	0x22UL
+#define SHARED_LOG_START	0x30UL
+#define SHARED_LOG_SUCCESS	0x31UL
+#define SHARED_LOG_FAILED	0x32UL
+#define SHARED_LOG_EXPIRED	0x33UL
+
 #define BLE_UUID_MI_SERVICE 0xFE95                      /**< The UUID of the Xiaomi Service. */
 #define BLE_MI_MAX_DATA_LEN (GATT_MTU_SIZE_DEFAULT - 3) /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Xiaomi  service module. */
 
@@ -63,7 +74,8 @@ typedef enum {
 	DEV_LIST = 0x00,
 	DEV_CERT,
 	DEV_MANU_CERT,
-	DEV_PUBKEY
+	DEV_PUBKEY,
+	DEV_SIGNATURE
 } fctrl_cmd_t;
 
 typedef enum {
@@ -105,6 +117,7 @@ typedef struct {
 	uint8_t           mode;
 	uint8_t           type;
 	uint8_t         *pdata;
+	uint8_t     last_bytes;
 	r_xfer_stat_t   status;
 } reliable_xfer_t;
 

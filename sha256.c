@@ -342,8 +342,8 @@ void mbedtls_md_init( mbedtls_md_context_t *ctx )
 
 void mbedtls_md_free( mbedtls_md_context_t *ctx )
 {
-	mbedtls_sha256_free((mbedtls_sha256_context *)ctx->md_ctx);
-	free((mbedtls_sha256_context *)ctx->md_ctx);
+//	mbedtls_sha256_free((mbedtls_sha256_context *)ctx->md_ctx);
+//	free((mbedtls_sha256_context *)ctx->md_ctx);
 }
 
 

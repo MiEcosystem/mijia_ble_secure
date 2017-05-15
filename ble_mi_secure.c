@@ -29,10 +29,10 @@ static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 
 static ble_mi_t   mi_srv;
-
+uint32_t auth_status;
 fast_xfer_t m_app_pub = {.type = PUBKEY};
 
-extern reliable_xfer_t m_cert;
+extern reliable_xfer_t reliable_control_block;
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S110 SoftDevice.
  *
  * @param[in] p_mi_s    Xiaomi Service structure.
@@ -90,27 +90,27 @@ static void on_write(ble_evt_t * p_ble_evt)
 		if (curr_sn == 0 ) {
 			if (pframe->f.ctrl.mode == MODE_CMD) {
 				fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->f.ctrl.type;
-				m_cert.mode = MODE_CMD;
-				m_cert.type = cmd;
+				reliable_control_block.mode = MODE_CMD;
+				reliable_control_block.type = cmd;
 				switch (cmd) {
 					case DEV_CERT:
-						m_cert.amount = *(uint16_t*)pframe->f.ctrl.arg;
-						break;
+						
 					default:
-						NRF_LOG_ERROR("Unkown reliable CMD.\n");
+						reliable_control_block.amount = *(uint16_t*)pframe->f.ctrl.arg;
+//						NRF_LOG_ERROR("Unkown reliable CMD.\n");
 				}
 			}
 			else {
 				fctrl_ack_t ack = (fctrl_ack_t)pframe->f.ctrl.type;
-				m_cert.mode = MODE_ACK;
-				m_cert.type = ack;
+				reliable_control_block.mode = MODE_ACK;
+				reliable_control_block.type = ack;
 				switch (ack) {
 					case A_SUCCESS:
 					case A_READY:
-						m_cert.curr_sn = 0;
+						reliable_control_block.curr_sn = 0;
 						break;						
 					case A_LOST:
-						m_cert.curr_sn = *(uint16_t*)pframe->f.ctrl.arg;
+						reliable_control_block.curr_sn = *(uint16_t*)pframe->f.ctrl.arg;
 						break;
 					default:
 						NRF_LOG_ERROR("Unkown reliable ACK.\n");
@@ -118,8 +118,10 @@ static void on_write(ble_evt_t * p_ble_evt)
 			}
 		}
 		else {
-			reliable_xfer_rxd(&m_cert, p_evt_write->data, p_evt_write->len);
-			m_cert.curr_sn = curr_sn;
+			if (reliable_control_block.pdata != NULL) {
+				reliable_xfer_rxd(&reliable_control_block, p_evt_write->data, p_evt_write->len);
+			}
+			reliable_control_block.curr_sn = curr_sn;
 		}
     }
     else if (p_evt_write->handle == mi_srv.pubkey_handles.value_handle)
@@ -205,6 +207,15 @@ static uint32_t char_add(uint16_t                        uuid,
 
 static void auth_handler(uint8_t *pdata, uint8_t len)
 {
+	memcpy(&auth_status, pdata, len);
+	
+	switch (auth_status) {
+		case REG_START:
+		case LOG_START:
+		case SHARED_LOG_START:
+			mi_schedulor_start(&auth_status);
+			break;
+	}
 	return;
 }
 
@@ -368,8 +379,9 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
 	pdata   += sn - 1;
 
 	if (sn == pxfer->amount) {
-		for ( int i = 0; pdata[0][i] != 0 || pdata[0][i+1] != 0; i++) 
-			data_len = i+1;
+//		for ( int i = 0; pdata[0][i] != 0 || pdata[0][i+1] != 0; i++) 
+//			data_len = i+1;
+		data_len = pxfer->last_bytes;
 	}
 	else {
 		data_len = sizeof(frame.f.data);

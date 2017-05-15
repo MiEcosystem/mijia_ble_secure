@@ -28,9 +28,8 @@ void nrf_aes_ecb_encrypt(uint8_t* pKey, uint8_t* input, uint8_t inputLen, uint8_
 	memset(&ecb_data, 0, sizeof(ecb_data));
 	memcpy(ecb_data.key, pKey, 16);
 	memcpy(ecb_data.cleartext, input, 16);
-	memcpy(output, ecb_data.ciphertext, 16);
 	sd_ecb_block_encrypt(&ecb_data);
-
+	memcpy(output, ecb_data.ciphertext, 16);
 }
 
 
@@ -312,9 +311,7 @@ uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr
     aes_enc_t *tmpPtr, enc_tmp;
     tmpPtr = &enc_tmp;
     memset(tmpPtr, 0, sizeof(aes_enc_t));
-    if ( tmpPtr == NULL ) {
-        while(1);
-    }
+
     /* get B0 */
     flags.bf.L = 1;  /* L-1 (15-nonceLen-1)*/
     flags.bf.M = (micLen - 2)>>1;
@@ -327,7 +324,6 @@ uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr
     /* last byte is mStrlen */
     enc_tmp.bf.B[14] = mStrLen>>8;
     enc_tmp.bf.B[15] = mStrLen & 0xff;
-
 
     enc_tmp.newAstr[0] = aStrLen>>8;
     enc_tmp.newAstr[1] = aStrLen & 0xff;
@@ -393,7 +389,7 @@ uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *m
     aes_ccmAuthTran(micLen, key, iv, mStr, mStrLen, aStr, aStrLen, tmpMic);
     for ( i=0; i<micLen; i++ ) {
         if ( mic[i] != tmpMic[i] ) {
-            return -1;
+            return 1;
         }
     }
     return 0;
@@ -401,10 +397,9 @@ uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *m
 
 
 
-int nrf_aes_ccm_encrypt(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, uint32_t* cipTxtLen, uint8_t* pKey, uint8_t* iv)
+int nrf_aes_ccm_encrypt(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, uint8_t* pKey, uint8_t* iv)
 {
     uint8_t aStr = 0x11;
-    int i;
     uint8_t mic[4] = {0};
 
     NRF_LOG_INFO("Plain Text:\r\n");
@@ -416,21 +411,15 @@ int nrf_aes_ccm_encrypt(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, ui
     memcpy(pCipTxt, pPlainTxt, textLen);
 
     NRF_LOG_INFO("Cipher Text:\r\n");
-    for (i = 0; i < textLen; i++) {
-        NRF_LOG_INFO("%02x ", pCipTxt[i]);
-    }
-    NRF_LOG_INFO("\r\n");
+	NRF_LOG_HEXDUMP_INFO(pCipTxt, textLen);
 
     NRF_LOG_INFO("MIC:\r\n");
-    for (i = 0; i < 4; i++) {
-        NRF_LOG_INFO("%02x ", mic[i]);
-    }
-    NRF_LOG_INFO("\r\n");
+    NRF_LOG_HEXDUMP_INFO(mic, 4);
 
     return 0;
 }
 
-uint8_t nrf_aes_ccm_encrypt_raw(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, size_t mStrLen, uint8_t *mStr, uint8_t *result)
+uint8_t nrf_aes_ccm_encrypt_raw(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
 {
     aes_ccmAuthTran(micLen, key, iv, mStr, mStrLen, aStr, 1, mic);
     aes_ccmEncTran(micLen, key, iv, mStr, mStrLen, aStr, 1, mic);
@@ -439,7 +428,7 @@ uint8_t nrf_aes_ccm_encrypt_raw(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_
     return AES_SUCC;
 }
 
-uint8_t nrf_aes_ccm_decrypt_raw(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, size_t micLen, uint8_t mStrLen, uint8_t *mStr, uint8_t *result)
+uint8_t nrf_aes_ccm_decrypt_raw(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
 {
   
     aes_ccmDecTran(micLen, key, iv, mStr, mStrLen, aStr, 1, mic);
@@ -460,7 +449,6 @@ void aes_ecb_test(void)
     uint8_t k[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
     uint8_t c[32] = {0};
-    int i;
 
     NRF_LOG_INFO("Plain Text:\n");
     NRF_LOG_HEXDUMP_INFO(p, sizeof(p));
@@ -468,37 +456,32 @@ void aes_ecb_test(void)
     nrf_aes_ecb_encrypt(k, p, 16, c);
 
     NRF_LOG_INFO("Cipher Text:\n");
-    NRF_LOG_HEXDUMP_INFO(c, sizeof(c));
-    NRF_LOG_INFO("\r\n");
+    NRF_LOG_HEXDUMP_INFO(c, 16);
+
 }
 
 void aes_ccm_test(void)
 {
-    uint8_t p[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    uint8_t p[32] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
     uint8_t k[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
     uint8_t iv[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                 0x18, 0x19, 0x1a, 0x1b, 0x1c};
-    uint8_t c[20] = {0};
-    uint32_t cLen = 0;
+    uint8_t c[32] = {0};
+	uint8_t d[16] = {0};
     uint8_t  aStr = 0x11;
     uint8_t  mic[4] = {0};
     int i;
 
-    //nrf_aes_ccm_encrypt(p, 16, c, &cLen, k, iv);
+    NRF_LOG_INFO("Clear Text:\r\n");
+    NRF_LOG_HEXDUMP_INFO(p, 16);
 
-    NRF_LOG_INFO("This is AES CCM TEST\r\n");
-    nrf_aes_ccm_encrypt_raw(k, iv, &aStr, mic, 1, 16, p, c);
+    nrf_aes_ccm_encrypt_raw(k, iv, NULL, mic, 4, p, 32, c);
 
-    NRF_LOG_INFO("Cipher Text:\r\n");
-    for (i = 0; i < 16; i++) {
-        NRF_LOG_INFO("%02x ", c[i]);
-    }
-    NRF_LOG_INFO("\r\n");
-
-    
-    NRF_LOG_INFO("MIC: %02x\r\n", mic[0]);
+	nrf_aes_ccm_decrypt_raw(k, iv, NULL, mic, 4, c, 32, d);
+    NRF_LOG_INFO("De-Cipher Text:\r\n");
+    NRF_LOG_HEXDUMP_INFO(d, 16);
 }
 
 

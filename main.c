@@ -570,7 +570,7 @@ void twi0_handler(nrf_drv_twi_evt_t const * p_event, void * p_context)
      switch (p_event->type)
     {
         case NRF_DRV_TWI_EVT_DONE:
-			NRF_LOG_INFO("TWI evt xfer done: %d\n", p_event->xfer_desc.type);
+			NRF_LOG_INFO("TWI evt done: %d\n", p_event->xfer_desc.type);
             m_twi0_xfer_done = true;
             break;
         default:
@@ -625,7 +625,7 @@ int main(void)
     APP_ERROR_CHECK(err_code);
 	
 	mi_schedulor_init(APP_TIMER_TICKS(1, APP_TIMER_PRESCALER));
-	mi_schedulor_start(0);
+//	mi_schedulor_start(0);
 
     // Enter main loop.
     for (;;)

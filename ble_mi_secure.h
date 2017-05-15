@@ -60,13 +60,8 @@ typedef struct {
 } fast_xfer_t;
 
 typedef enum {
-	R_CMD = 0x00,
-	R_ACK = 0x01
-} r_cmd_t;
-
-typedef enum {
 	DEV_LIST = 0x00,
-	DEV_CERT = 0x01,
+	DEV_CERT,
 	DEV_MANU_CERT,
 	DEV_PUBKEY
 } fctrl_cmd_t;
@@ -94,13 +89,23 @@ typedef struct {
 	} f;
 } reliable_xfer_frame_t;
 
+typedef enum {
+	RXFER_READY = 0x01,
+	RXFER_BUSY,
+
+	RXFER_TXD,
+	RXFER_RXD,
+
+	RXFER_DONE,
+	RXFER_ERROR = 0xFF
+} r_xfer_stat_t;
 typedef struct {
 	uint16_t        amount;
 	uint16_t       curr_sn;
-	uint8_t       send_end;
 	uint8_t           mode;
 	uint8_t           type;
 	uint8_t         *pdata;
+	r_xfer_stat_t   status;
 } reliable_xfer_t;
 
 /**@brief Xiaomi Service event handler type. */

@@ -31,7 +31,6 @@ static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t le
 static ble_mi_t   mi_srv;
 
 fast_xfer_t m_app_pub = {.type = PUBKEY};
-fast_xfer_t m_dev_pub = {.type = PUBKEY};
 
 extern reliable_xfer_t m_cert;
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S110 SoftDevice.

@@ -570,10 +570,7 @@ void twi0_handler(nrf_drv_twi_evt_t const * p_event, void * p_context)
      switch (p_event->type)
     {
         case NRF_DRV_TWI_EVT_DONE:
-            if (p_event->xfer_desc.type == NRF_DRV_TWI_XFER_RX)
-            {
-            }
-			NRF_LOG_INFO("TWI evt xfer done: %d\n", p_event->type);
+			NRF_LOG_INFO("TWI evt xfer done: %d\n", p_event->xfer_desc.type);
             m_twi0_xfer_done = true;
             break;
         default:
@@ -639,7 +636,6 @@ int main(void)
         }
     }
 }
-
 
 
 void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info)

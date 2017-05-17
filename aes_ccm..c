@@ -1,55 +1,20 @@
 #include <stdint.h>
-#include "aes_ccm.h"
-
+#include <string.h>
 #include "nrf_soc.h"
 
-#define NRF_LOG_MODULE_NAME "aes"
+#define NRF_LOG_MODULE_NAME "AES"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
-//hal_aes_cbc_encrypt()的加密前会自动padding, 所以密文buf长度必须为明文长度＋HAL_AES_BLOCK_SIZES
-//textLen可以为非16字节对齐
+#include "aes_ccm.h"
 
-void nrf_aes_encrypt(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, uint32_t* cipTxtLen, uint8_t* pKey, uint8_t keyLen, uint8_t* iv)
-{
-
-}
-
-
-//要求密文长度为16字节整数倍,输出的长度为去除了padding的实际消息长度
-void nrf_aes_decrypt(uint8_t* pCipTxt, size_t textLen, uint8_t* pPlainTxt, uint32_t* plainTxtlen, uint8_t* pKey, uint8_t keyLen, uint8_t* iv)
-{
-
-}
-
-void nrf_aes_ecb_encrypt(uint8_t* pKey, uint8_t* input, uint8_t inputLen, uint8_t* output)
+void nrf_aes_ecb_encrypt(uint8_t* pKey, uint8_t* input, uint8_t* output)
 {
 	nrf_ecb_hal_data_t ecb_data;
-	memset(&ecb_data, 0, sizeof(ecb_data));
 	memcpy(ecb_data.key, pKey, 16);
 	memcpy(ecb_data.cleartext, input, 16);
 	sd_ecb_block_encrypt(&ecb_data);
 	memcpy(output, ecb_data.ciphertext, 16);
-}
-
-
-void arch_aes_test(void)
-{
-    uint8_t hardware_id[16] = {
-        0x4d, 0x54, 0x4b, 0x30, 0x30, 0x30, 0x30, 0x30,
-        0x32, 0x30, 0x31, 0x34, 0x30, 0x38, 0x31, 0x35
-    };
-    uint8_t aes_cbc_iv[16] = {
-        0x61, 0x33, 0x46, 0x68, 0x55, 0x38, 0x31, 0x43,
-        0x77, 0x68, 0x36, 0x33, 0x50, 0x76, 0x33, 0x46
-    };
-    uint8_t plain[] = {
-        0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0, 11, 22, 33, 44, 55,
-        38, 45, 95, 55, 55, 18, 91, 77, 58, 58, 54, 0, 0, 57, 42, 87
-    };
-
-    uint8_t encrypted_buffer[48] = {0};
-    uint8_t decrypted_buffer[48] = {0};
 }
 
 #if 1
@@ -144,6 +109,8 @@ uint32_t soft_crc32(const void *pdata,int data_size,uint32_t crc)
 
 #endif
 
+#define AES_BLOCK_SIZE     16
+
 typedef union {
 	struct {
 		uint8_t L : 3;
@@ -154,18 +121,6 @@ typedef union {
 	uint8_t val;
 } ccm_flags_t;
 
-enum AES_OPT {
-    AES_ENCRYPTION = 0,
-    AES_DECRYPTION,
-};
-
-#define AES_BLOCK_SIZE     16
-
-enum {
-    AES_SUCC = 0,
-    AES_NO_BUF,               
-    AES_FAIL,
-};
 
 typedef struct {
     union {
@@ -173,11 +128,21 @@ typedef struct {
         uint8_t B[AES_BLOCK_SIZE];
     } bf;
     
-    uint8_t tmpResult[32];
+    uint8_t tmpResult[AES_BLOCK_SIZE];
     uint8_t newAstr[AES_BLOCK_SIZE];
 } aes_enc_t;
 
 
+enum AES_OPT {
+    AES_ENCRYPTION = 0,
+    AES_DECRYPTION,
+};
+
+enum {
+    AES_SUCC = 0,
+    AES_NO_BUF,               
+    AES_FAIL,
+};
 
 
 
@@ -186,34 +151,31 @@ typedef struct {
  *
  * @brief   calc the aes ccm value 
  *
- * @param   micLen - mic lenth (should be 4)
+ * @param[in]     micLen - mic lenth (should be 4)
  *
- * @param   iv - initial vector (should be 13 bytes nonce)
+ * @param[in]     iv - initial vector (should be 13 bytes nonce)
  *
- * @param   mStr - plaint text 
+ * @param[in]     mStr - plaint text 
  *
- * @param   mStrLen - plaint text length
+ * @param[in]     mStrLen - plaint text length
+ * 
+ * @param[in]     aStr -  a string  (should be AAD the data channel PDU header’s first octet with NESN, SN and MD bits masked to 0)
  *
- * @param   aStr -  a string  (should be AAD the data channel PDU header’s first octet with NESN, SN and MD bits masked to 0)
+ * @param[in]     aStrLen - a atring lenth (should be 1)
  *
- * @param   aStrLen - a atring lenth (should be 1)
+ * @param[out]    result - result (result)
  *
- * @param   result - result (result)
- *
- * @return  status l2cap_sts_t
+ * @return        status
  */
-uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic, uint8_t opt)
+static uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic, uint8_t opt)
 {
-    ccm_flags_t flags;
-    uint8_t msgLen;
+    ccm_flags_t flags = {0};
+    aes_enc_t  encTmp = {0};
+    uint16_t  counter = 1;
     uint16_t i;
+    uint8_t msgLen;
     uint8_t j;
-    uint16_t counter = 1;
 	
-    aes_enc_t *tmpPtr, encTmp;
-    tmpPtr = &encTmp;
-    memset(tmpPtr, 0, sizeof(aes_enc_t));
-    memset(&flags, 0, sizeof(ccm_flags_t));
 
     flags.bf.L = 1;
     encTmp.bf.A[0] = flags.val;
@@ -223,7 +185,7 @@ uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr
 
     encTmp.bf.A[14] = encTmp.bf.A[15] = 0;
 
-    nrf_aes_ecb_encrypt(key, encTmp.bf.A, 16, encTmp.tmpResult);
+    nrf_aes_ecb_encrypt(key, encTmp.bf.A, encTmp.tmpResult);
 
     for ( i=0; i<micLen; i++ ) {
         mic[i] ^= encTmp.tmpResult[i];
@@ -242,10 +204,9 @@ uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr
         msgLen += 0x10;
     }
 
-
-    for ( i=0; i<msgLen; i+=(1<<4) ) {
+    for ( i=0; i<msgLen; i+=AES_BLOCK_SIZE ) {
         /* use aes to the E(key, Ai) */
-        nrf_aes_ecb_encrypt(key, encTmp.bf.A, 16, encTmp.tmpResult);
+        nrf_aes_ecb_encrypt(key, encTmp.bf.A, encTmp.tmpResult);
         //tmpResult = TODO();
 
         for ( j=0; (j<AES_BLOCK_SIZE) && (i+j < mStrLen); j++) {
@@ -261,14 +222,12 @@ uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr
     return 0;
 }
 
-
-
-uint8_t aes_ccmEncTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
+static uint8_t aes_ccmEncTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
 {
 	return aes_ccmBaseTran(micLen, key, iv, mStr, mStrLen, aStr, aStrLen, mic, AES_ENCRYPTION);
 }
 
-uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
+static uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
 {
     return aes_ccmBaseTran(micLen, key, iv, mStr, mStrLen, aStr, aStrLen, mic, AES_DECRYPTION);
 }
@@ -279,38 +238,35 @@ uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr,
 /*********************************************************************
  * @fn      aes_ccmAuthTran
  *
- * @brief   calc the aes ccm value 
+ * @brief   calc the aes ccm mic value 
  *
- * @param   micLen - mic lenth (should be 4)
+ * @param[in]     micLen - mic lenth (should be 4)
  *
- * @param   iv - initial vector (should be 13 bytes nonce)
+ * @param[in]     iv - initial vector (should be 13 bytes nonce)
  *
- * @param   mStr - plaint text 
+ * @param[in]     mStr - plaint text 
  *
- * @param   mStrLen - plaint text length
+ * @param[in]     mStrLen - plaint text length
  *
- * @param   aStr -  a string  (should be AAD the data channel PDU header’s first octet with NESN, SN and MD bits masked to 0)
+ * @param[in]     aStr -  a string  (should be AAD the data channel PDU header’s first octet with NESN, SN and MD bits masked to 0)
  *
- * @param   aStrLen - a atring lenth (should be 1)
+ * @param[in]     aStrLen - a atring lenth (should be 1)
  *
- * @param   result - result (result)
+ * @param[out]    result - Message integrity check (MIC)
  *
- * @return  status l2cap_sts_t
+ * @return       status
  */
-uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint16_t aStrLen, uint8_t *result)
+static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint16_t aStrLen, uint8_t *result)
 {
-    uint16_t msgLen;
+    aes_enc_t enc_tmp = {0};
+	ccm_flags_t flags = {0};
     uint8_t mStrIndex = 0;
-    ccm_flags_t flags;
+	uint16_t msgLen;
     uint16_t i,j;
 
     if ( aStrLen + 2 > AES_BLOCK_SIZE ) {
-        while(1);
+        return 1;
     }
-    //aes_enc_t *tmpPtr = (aes_enc_t*)ev_buf_allocate(sizeof(aes_enc_t));
-    aes_enc_t *tmpPtr, enc_tmp;
-    tmpPtr = &enc_tmp;
-    memset(tmpPtr, 0, sizeof(aes_enc_t));
 
     /* get B0 */
     flags.bf.L = 1;  /* L-1 (15-nonceLen-1)*/
@@ -348,7 +304,7 @@ uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr
 
     
     /* now the msgLen should be the length of AuthData, which is generated by AddAuthData (astring, padded by 0) || PlaintexeData (mString, padded by 0)*/
-    for ( i=0; i<msgLen+16; i+=(1<<4) ) {
+    for ( i=0; i<msgLen+16; i+=AES_BLOCK_SIZE ) {
         for ( j=0; j<AES_BLOCK_SIZE; j++) {
             /* get Xi XOR Bi */
             enc_tmp.tmpResult[j] ^= enc_tmp.bf.B[j];
@@ -357,7 +313,7 @@ uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr
         /* use aes to get E(key, Xi XOR Bi) */
         //aes_encrypt(key, enc_tmp.tmpResult, enc_tmp.tmpResult);
 
-        nrf_aes_ecb_encrypt(key, enc_tmp.tmpResult, 16, enc_tmp.tmpResult);
+        nrf_aes_ecb_encrypt(key, enc_tmp.tmpResult, enc_tmp.tmpResult);
         /* update B */
         if ( aStrLen >= AES_BLOCK_SIZE ) {
             memcpy(enc_tmp.bf.B, enc_tmp.newAstr + i, AES_BLOCK_SIZE);
@@ -382,7 +338,7 @@ uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr
     return 0;
 }
 
-uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, size_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
+static uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, size_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
 {
     uint8_t tmpMic[AES_BLOCK_SIZE];
     uint8_t i;
@@ -396,8 +352,7 @@ uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *m
 }
 
 
-
-int nrf_aes_ccm_encrypt(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, uint8_t* pKey, uint8_t* iv)
+int aes_ccm_encrypt_debug(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, uint8_t* pKey, uint8_t* iv)
 {
     uint8_t aStr = 0x11;
     uint8_t mic[4] = {0};
@@ -419,23 +374,26 @@ int nrf_aes_ccm_encrypt(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, ui
     return 0;
 }
 
-uint8_t nrf_aes_ccm_encrypt_raw(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
+uint8_t aes_ccm_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
 {
-    aes_ccmAuthTran(micLen, key, iv, mStr, mStrLen, aStr, 1, mic);
-    aes_ccmEncTran(micLen, key, iv, mStr, mStrLen, aStr, 1, mic);
+	uint8_t buf[mStrLen];
+	memcpy(buf, mStr, mStrLen);
+    aes_ccmAuthTran(micLen, key, iv, buf, mStrLen, aStr, 1, mic);
+    aes_ccmEncTran(micLen, key, iv, buf, mStrLen, aStr, 1, mic);
 
-    memcpy(result, mStr, mStrLen);
+    memcpy(result, buf, mStrLen);
     return AES_SUCC;
 }
 
-uint8_t nrf_aes_ccm_decrypt_raw(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
+uint8_t aes_ccm_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
 {
-  
-    aes_ccmDecTran(micLen, key, iv, mStr, mStrLen, aStr, 1, mic);
-    uint8_t res = aes_ccmDecAuthTran(micLen, key, iv, mStr, mStrLen, aStr, 1, mic);
+	uint8_t buf[mStrLen];
+	memcpy(buf, mStr, mStrLen);
+    aes_ccmDecTran(micLen, key, iv, buf, mStrLen, aStr, 1, mic);
+    uint8_t res = aes_ccmDecAuthTran(micLen, key, iv, buf, mStrLen, aStr, 1, mic);
 
     if ( res == 0 ) {
-		memcpy(result, mStr, mStrLen);
+		memcpy(result, buf, mStrLen);
         return AES_SUCC;
     }
     return AES_FAIL;
@@ -453,35 +411,40 @@ void aes_ecb_test(void)
     NRF_LOG_INFO("Plain Text:\n");
     NRF_LOG_HEXDUMP_INFO(p, sizeof(p));
 
-    nrf_aes_ecb_encrypt(k, p, 16, c);
+    nrf_aes_ecb_encrypt(k, p, c);
 
     NRF_LOG_INFO("Cipher Text:\n");
     NRF_LOG_HEXDUMP_INFO(c, 16);
-
 }
 
 void aes_ccm_test(void)
 {
-    uint8_t p[32] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-                0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
     uint8_t k[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
     uint8_t iv[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                 0x18, 0x19, 0x1a, 0x1b, 0x1c};
-    uint8_t c[32] = {0};
-	uint8_t d[16] = {0};
-    uint8_t  aStr = 0x11;
+    uint8_t p[64] = "HELLOWORLD123456helloworld1234560xDEADBEEF!@#$%^";
+    uint8_t c[64] = {0};
+	uint8_t d[64] = {0};
     uint8_t  mic[4] = {0};
-    int i;
+
+    aes_ccm_encrypt(k, iv, NULL, mic, 4, p, 32, c);
+
+	aes_ccm_decrypt(k, iv, NULL, mic, 4, c, 32, d);
 
     NRF_LOG_INFO("Clear Text:\r\n");
-    NRF_LOG_HEXDUMP_INFO(p, 16);
+    NRF_LOG_HEXDUMP_INFO(p, 32);
+    NRF_LOG_INFO("Cipher Text:\r\n");
+    NRF_LOG_HEXDUMP_INFO(c, 32);
 
-    nrf_aes_ccm_encrypt_raw(k, iv, NULL, mic, 4, p, 32, c);
-
-	nrf_aes_ccm_decrypt_raw(k, iv, NULL, mic, 4, c, 32, d);
-    NRF_LOG_INFO("De-Cipher Text:\r\n");
-    NRF_LOG_HEXDUMP_INFO(d, 16);
+	NRF_LOG_INFO("AES-128-CCM TEST: ");
+	if(memcmp(d, p, 32) == 0) {
+		NRF_LOG_RAW_INFO(" PASS \n");
+	}
+	else {
+		NRF_LOG_RAW_INFO(" FAIL \n");
+	}
+	
 }
 
 

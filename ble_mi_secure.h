@@ -32,12 +32,12 @@ extern "C" {
 #define MODE_CMD  0
 #define MODE_ACK  1
 
-#define REG_START    	0x10UL
-#define REG_SUCCESS 	0x11UL
-#define REG_FAILED	0x12UL
-#define LOG_START	0x20UL
-#define LOG_SUCCESS	0x21UL
-#define LOG_FAILED	0x22UL
+#define REG_START    	    0x10UL
+#define REG_SUCCESS 	    0x11UL
+#define REG_FAILED	        0x12UL
+#define LOG_START	        0x20UL
+#define LOG_SUCCESS      	0x21UL
+#define LOG_FAILED	        0x22UL
 #define SHARED_LOG_START	0x30UL
 #define SHARED_LOG_SUCCESS	0x31UL
 #define SHARED_LOG_FAILED	0x32UL
@@ -75,7 +75,8 @@ typedef enum {
 	DEV_CERT,
 	DEV_MANU_CERT,
 	DEV_PUBKEY,
-	DEV_SIGNATURE
+	DEV_SIGNATURE,
+	DEV_SHARE_INFO
 } fctrl_cmd_t;
 
 typedef enum {
@@ -111,6 +112,7 @@ typedef enum {
 	RXFER_DONE,
 	RXFER_ERROR = 0xFF
 } r_xfer_stat_t;
+
 typedef struct {
 	uint16_t        amount;
 	uint16_t       curr_sn;
@@ -142,9 +144,10 @@ typedef struct
 typedef struct {
     uint8_t                  uuid_type;               /**< UUID type for Xiaomi Service Base UUID. */
     uint16_t                 service_handle;          /**< Handle of Xiaomi Service (as provided by the SoftDevice). */
+
     ble_gatts_char_handles_t auth_handles;            /**< Handles related to the characteristic (as provided by the SoftDevice). */
-    ble_gatts_char_handles_t pubkey_handles;              
-    ble_gatts_char_handles_t buffer_handles;
+    ble_gatts_char_handles_t secure_handles;
+    ble_gatts_char_handles_t fast_xfer_handles;              
               
     uint16_t                 conn_handle;             /**< Handle of the current connection (as provided by the SoftDevice). BLE_CONN_HANDLE_INVALID if not in a connection. */
     bool                     is_notification_enabled; /**< Variable to indicate if the peer has enabled notification of the RX characteristic.*/
@@ -171,17 +174,16 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init);
  */
 void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt);
 
-/**@brief Function for sending a string to the peer.
+/**@brief Function for sending Auth status to the peer.
  *
- * @details This function sends the input string as an RX characteristic notification to the
+ * @details This function sends the input status as an AUTH characteristic notification to the
  *          peer.
  *
- * @param[in] p_string    String to be sent.
- * @param[in] length      Length of the string.
+ * @param[in] status    Status to be sent.
  *
- * @retval NRF_SUCCESS If the string was sent successfully. Otherwise, an error code is returned.
+ * @retval NRF_SUCCESS If the status was sent successfully. Otherwise, an error code is returned.
  */
-uint32_t ble_mi_string_send(uint8_t * p_string, uint16_t length);
+uint32_t auth_send(uint32_t status);
 
 int fast_xfer_recive(fast_xfer_t *pxfer);
 int fast_xfer_send(fast_xfer_t *pxfer);

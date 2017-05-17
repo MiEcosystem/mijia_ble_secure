@@ -23,6 +23,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 #include "nordic_common.h"
 #include "nrf.h"
 #include "ble_hci.h"
@@ -36,14 +37,17 @@
 
 #include "ble_mi_secure.h"
 #include "mi_secure.h"
+#include "mibeacon.h"
 #include "app_util_platform.h"
 #include "bsp.h"
 #include "bsp_btn_ble.h"
-#include "nrf_drv_twi.h"
+#include "nrf_drv_twi_patched.h"
 
-#define NRF_LOG_MODULE_NAME "main"
+#define NRF_LOG_MODULE_NAME "MAIN"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
+
+#define APP_PRODUCT_ID                  0x01AC
 
 #define RTT_CTRL_CLEAR                  "[2J"
 
@@ -61,7 +65,6 @@
 #ifdef NRF52
 #define DEVICE_NAME                     "Secure_nRF52"                              /**< Name of device. Will be included in the advertising data. */
 #else
-#define 
 #define DEVICE_NAME                     "Secure_nRF51"                              /**< Name of device. Will be included in the advertising data. */
 #endif
 
@@ -507,7 +510,7 @@ void bsp_event_handler(bsp_event_t event)
 
 /**@brief Function for initializing the Advertising functionality.
  */
-static void advertising_init(void)
+static void advertising_init2(void)
 {
     uint32_t               err_code;
     ble_advdata_t          advdata;
@@ -533,6 +536,97 @@ static void advertising_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+static void advertising_init(void)
+{
+    uint32_t               err_code;
+
+    uint8_t                data[20];
+    uint8_t                tmp8;
+    uint8_t                totalLen;
+    mi_sts_t               status;
+    mibeacon_capability_t  cap;
+    uint16_t               productID;
+
+    /*-----------------------------------------------------------------------------------
+     * Set Mi Beacon
+     *---------------------------------------------------------------------------------*/
+    tmp8 = 1;
+    status = mibeacon_set(MIBEACON_ITEM_FACTORY_NEW, &tmp8, sizeof(uint8_t));
+    if (status != MI_SUCCESS) {
+        // ERROR
+        return;
+    }
+	
+    tmp8 = 4;
+    status = mibeacon_set(MIBEACON_ITEM_VERSION, &tmp8, sizeof(tmp8));
+    if (status != MI_SUCCESS) {
+        // ERROR
+        return;
+    }
+    
+    cap.value = 0;
+    cap.bf.connectable = 1;
+    cap.bf.encryptable = 1;
+    cap.bf.bondAbility = MIBEACON_BOND_PREBINDING;
+    status = mibeacon_set(MIBEACON_ITEM_CAP_INCLUDE, (uint8_t*)&cap, 1);
+    if (status != MI_SUCCESS) {
+        // ERROR
+        return;
+    }
+
+    // Product ID only need to set once
+    productID = APP_PRODUCT_ID;
+    status = mibeacon_set(MIBEACON_ITEM_PRODUCT_ID, (uint8_t*)&productID, 2);
+    if (status != MI_SUCCESS) {
+        // ERROR
+        return;
+    }
+		
+    // Set MAC Address Include
+    ble_gap_addr_t dev_mac;
+	#if (NRF_SD_BLE_API_VERSION == 3)
+        sd_ble_gap_addr_get(&dev_mac);
+    #else
+        sd_ble_gap_address_get(&dev_mac);
+    #endif
+    mibeacon_set(MIBEACON_ITEM_MAC_INCLUDE, dev_mac.addr, 6);
+
+    status = mibeacon_append(data, 0, &totalLen);
+    if (status != MI_SUCCESS) {
+        // ERROR
+        return;
+    }
+
+    /* Indicating Mi Service */
+	ble_advdata_service_data_t serviceData;
+    serviceData.service_uuid = BLE_UUID_MI_SERVICE;
+    serviceData.data.size = totalLen;
+    serviceData.data.p_data = data;
+
+    // Build advertising data struct to pass into @ref ble_advertising_init.
+    ble_advdata_t          advdata;
+    memset(&advdata, 0, sizeof(advdata));
+    advdata.name_type          = BLE_ADVDATA_FULL_NAME;
+    advdata.include_appearance = false;
+    advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
+    advdata.p_service_data_array = &serviceData;
+    advdata.service_data_count = 1;
+
+    ble_advdata_t          scanrsp;
+    memset(&scanrsp, 0, sizeof(scanrsp));
+    scanrsp.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
+    scanrsp.uuids_complete.p_uuids  = m_adv_uuids;
+
+	ble_adv_modes_config_t options;
+    memset(&options, 0, sizeof(options));
+    options.ble_adv_fast_enabled  = true;
+    options.ble_adv_fast_interval = APP_ADV_INTERVAL;
+    options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;
+
+    err_code = ble_advertising_init(&advdata, &scanrsp, &options, on_adv_evt, NULL);
+    APP_ERROR_CHECK(err_code);
+
+}
 
 /**@brief Function for initializing buttons and leds.
  *
@@ -584,8 +678,8 @@ void twi0_init (void)
     ret_code_t err_code;
 
     const nrf_drv_twi_config_t msc_config = {
-       .scl                = 26,
-       .sda                = 27,
+       .scl                = 28,
+       .sda                = 29,
        .frequency          = NRF_TWI_FREQ_100K,
        .interrupt_priority = APP_IRQ_PRIORITY_HIGH,
        .clear_bus_init     = false
@@ -596,7 +690,8 @@ void twi0_init (void)
 
     nrf_drv_twi_enable(&TWI0);
 }
-
+void time_init(struct tm * time_ptr);
+void aes_ccm_test(void);
 /**@brief Application main function.
  */
 int main(void)
@@ -612,7 +707,6 @@ int main(void)
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
 	
 	twi0_init();
-
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
     gap_params_init();
@@ -623,9 +717,9 @@ int main(void)
     NRF_LOG_RAW_INFO("Compiled  %s %s\n", nrf_log_push(__DATE__), nrf_log_push(__TIME__));
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
-	
-	mi_schedulor_init(APP_TIMER_TICKS(1, APP_TIMER_PRESCALER));
-//	mi_schedulor_start(0);
+
+	time_init(NULL);
+	mi_schedulor_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
 
     // Enter main loop.
     for (;;)

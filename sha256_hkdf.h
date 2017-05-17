@@ -53,7 +53,6 @@ typedef struct
     int is224;                  /*!< 0 => SHA-256, else SHA-224 */
 }
 mbedtls_sha256_context;
-
 /**
  * \brief          Initialize SHA-256 context
  *
@@ -106,7 +105,7 @@ void mbedtls_sha256_finish( mbedtls_sha256_context *ctx, unsigned char output[32
 /* Internal use */
 void mbedtls_sha256_process( mbedtls_sha256_context *ctx, const unsigned char data[64] );
 
-unsigned int SHA256_HKDF(unsigned char *key, unsigned int key_len,unsigned char *salt, unsigned int salt_len,
+unsigned int sha256_hkdf(unsigned char *key, unsigned int key_len,unsigned char *salt, unsigned int salt_len,
 						unsigned char *info, unsigned int info_len, unsigned char *out, unsigned int out_len);
 
 #ifdef __cplusplus

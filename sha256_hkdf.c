@@ -25,13 +25,13 @@
  */
 
 
-#include "sha256.h"
+#include "sha256_hkdf.h"
 
-#define NRF_LOG_MODULE_NAME "sha"
+#define NRF_LOG_MODULE_NAME "SHA"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
-#define MBEDTLS_SELF_TEST	1
+#define MBEDTLS_SELF_TEST	0
 #define mbedtls_printf NRF_LOG_INFO
 
 /* Implementation that should never be optimized out by the compiler */
@@ -300,9 +300,6 @@ void mbedtls_sha256_finish( mbedtls_sha256_context *ctx, unsigned char output[32
         PUT_UINT32_BE( ctx->state[7], output, 28 );
 }
 
-
-
-
 /*
  * output = SHA-256( input buffer )
  */
@@ -342,7 +339,7 @@ void mbedtls_md_init( mbedtls_md_context_t *ctx )
 
 void mbedtls_md_free( mbedtls_md_context_t *ctx )
 {
-//	mbedtls_sha256_free((mbedtls_sha256_context *)ctx->md_ctx);
+	mbedtls_sha256_free((mbedtls_sha256_context *)ctx->md_ctx);
 //	free((mbedtls_sha256_context *)ctx->md_ctx);
 }
 
@@ -353,32 +350,6 @@ int mbedtls_md_setup( mbedtls_md_context_t *ctx, int hmac )
 //        return( -1 );
 	return 0;
 }
-
-#if 0
-int mbedtls_md_starts( mbedtls_md_context_t *ctx )
-{
-	mbedtls_sha256_starts( (mbedtls_sha256_context *) ctx->md_ctx, 0);
-	return 0;
-}
-
-int mbedtls_md_update( mbedtls_md_context_t *ctx, const unsigned char *input, size_t ilen )
-{
-	mbedtls_sha256_update( (mbedtls_sha256_context *) ctx->md_ctx, input, ilen );
-	return 0;
-}
-
-int mbedtls_md_finish( mbedtls_md_context_t *ctx, unsigned char *output )
-{
-	mbedtls_sha256_finish( (mbedtls_sha256_context *) ctx->md_ctx, output );
-	return 0;
-}
-
-int mbedtls_md( const unsigned char *input, size_t ilen, unsigned char *output )
-{
-	mbedtls_sha256( input, ilen, output, 0 );
-	return 0;
-}
-#endif
 
 int mbedtls_md_hmac_starts( mbedtls_md_context_t *ctx, const unsigned char *key, size_t keylen )
 {
@@ -424,7 +395,6 @@ int mbedtls_md_hmac_update( mbedtls_md_context_t *ctx, const unsigned char *inpu
 int mbedtls_md_hmac_finish( mbedtls_md_context_t *ctx, unsigned char *output )
 {
     unsigned char tmp[SHA256_DIGEST_SIZE];
-    unsigned char *opad;
 
     mbedtls_sha256_finish( (mbedtls_sha256_context *) ctx->md_ctx, tmp );
     mbedtls_sha256_starts( (mbedtls_sha256_context *) ctx->md_ctx , 0);
@@ -454,8 +424,8 @@ int mbedtls_md_hmac( const unsigned char *key, size_t keylen, const unsigned cha
     mbedtls_md_init( &ctx );
 	memset(&sha_ctx, 0, sizeof(sha_ctx));
 	ctx.md_ctx = &sha_ctx;
-//    if( ( ret = mbedtls_md_setup( &ctx, 1 ) ) != 0 )
-//        return( ret );
+    if( ( ret = mbedtls_md_setup( &ctx, 1 ) ) != 0 )
+        return( ret );
 
     mbedtls_md_hmac_starts( &ctx, key, keylen );
     mbedtls_md_hmac_update( &ctx, input, ilen );
@@ -470,7 +440,7 @@ int mbedtls_md_hmac( const unsigned char *key, size_t keylen, const unsigned cha
 #ifndef MIN
 #define MIN(a,b) (a)<(b)?(a):(b)
 #endif
-unsigned int SHA256_HKDF(unsigned char *key, unsigned int key_len,unsigned char *salt, unsigned int salt_len,
+unsigned int sha256_hkdf(unsigned char *key, unsigned int key_len,unsigned char *salt, unsigned int salt_len,
 						unsigned char *info, unsigned int info_len, unsigned char *out, unsigned int out_len)
 {
 
@@ -520,7 +490,7 @@ unsigned int SHA256_HKDF(unsigned char *key, unsigned int key_len,unsigned char 
 
 
 /***************************************************this is for test************************************************/
-
+#if defined(MBEDTLS_SELF_TEST)
 
 ///////////////////////////////////////////
 //Hash = SHA-256
@@ -562,26 +532,16 @@ unsigned char info[80]={0xb0,
 		0xf1,0xf2,0xf3,0xf4,0xf5,0xf6,0xf7,0xf8,0xf9,0xfa,0xfb,0xfc,0xfd,0xfe,0xff};
 #endif
 
-void hexdump(unsigned char *data, unsigned int len)
-{
-	int i=0;
-	NRF_LOG_INFO("0x");
-	for(i=0;i<len;i++)
-		NRF_LOG_INFO("%02x",data[i]);
-	NRF_LOG_INFO("\n\r");
-}
-
-
 
 void hkdf_test(void)
 {
 	unsigned char out_key[128];
 
-	SHA256_HKDF(key_material,sizeof(key_material),salt,sizeof(salt),info,sizeof(info),out_key,80);
+	sha256_hkdf(key_material,sizeof(key_material),salt,sizeof(salt),info,sizeof(info),out_key,80);
 
 
 	NRF_LOG_INFO("the expand data is:\n\r");
-	hexdump(out_key, 80);
+	NRF_LOG_HEXDUMP_INFO(out_key, 80);
 
 	int i;
 
@@ -609,7 +569,7 @@ void hkdf_test(void)
 
 
 
-#if defined(MBEDTLS_SELF_TEST)
+
 /*
  * FIPS-180-2 test vectors
  */
@@ -663,7 +623,7 @@ static const unsigned char sha256_test_sum[6][32] =
 /*
  * Checkup routine
  */
-#if 0
+#if 1
 int mbedtls_sha256_self_test( int verbose )
 {
     int i, j, k, buflen, ret = 0;
@@ -719,7 +679,7 @@ exit:
 }
 #else
 
-int main2(char argc , char *argv[] )
+int test_sha_and_hkdf(char argc , char *argv[] )
 {
     int i, j, k, buflen, ret = 0;
     unsigned char buf[1024];

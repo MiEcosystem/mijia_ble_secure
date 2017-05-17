@@ -30,9 +30,10 @@ static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t le
 
 static ble_mi_t   mi_srv;
 uint32_t auth_status;
-fast_xfer_t m_app_pub = {.type = PUBKEY};
 
-extern reliable_xfer_t reliable_control_block;
+fast_xfer_t fast_control_block = {.type = PUBKEY};
+reliable_xfer_t reliable_control_block;
+
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S110 SoftDevice.
  *
  * @param[in] p_mi_s    Xiaomi Service structure.
@@ -67,8 +68,8 @@ static void on_write(ble_evt_t * p_ble_evt)
 	
     if ((p_evt_write->len == 2) &&
 		((p_evt_write->handle == mi_srv.auth_handles.cccd_handle)   ||
-		 (p_evt_write->handle == mi_srv.pubkey_handles.cccd_handle) ||
-		 (p_evt_write->handle == mi_srv.buffer_handles.cccd_handle)))
+		 (p_evt_write->handle == mi_srv.fast_xfer_handles.cccd_handle) ||
+		 (p_evt_write->handle == mi_srv.secure_handles.cccd_handle)))
     {
         if (ble_srv_is_notification_enabled(p_evt_write->data))
         {
@@ -83,7 +84,7 @@ static void on_write(ble_evt_t * p_ble_evt)
     {
         auth_handler(p_evt_write->data, p_evt_write->len);
     }
-    else if (p_evt_write->handle == mi_srv.buffer_handles.value_handle)
+    else if (p_evt_write->handle == mi_srv.secure_handles.value_handle)
     {
 		reliable_xfer_frame_t *pframe = (void*)p_evt_write->data;
 		uint16_t  curr_sn = pframe->sn;
@@ -94,10 +95,13 @@ static void on_write(ble_evt_t * p_ble_evt)
 				reliable_control_block.type = cmd;
 				switch (cmd) {
 					case DEV_CERT:
-						
-					default:
+					case DEV_MANU_CERT:
+					case DEV_PUBKEY:
+					case DEV_SIGNATURE:
 						reliable_control_block.amount = *(uint16_t*)pframe->f.ctrl.arg;
-//						NRF_LOG_ERROR("Unkown reliable CMD.\n");
+						break;
+					default:
+						NRF_LOG_ERROR("Unkown reliable CMD.\n");
 				}
 			}
 			else {
@@ -124,11 +128,11 @@ static void on_write(ble_evt_t * p_ble_evt)
 			reliable_control_block.curr_sn = curr_sn;
 		}
     }
-    else if (p_evt_write->handle == mi_srv.pubkey_handles.value_handle)
+    else if (p_evt_write->handle == mi_srv.fast_xfer_handles.value_handle)
     {
 		fast_xfer_frame_t *pframe = (void*)p_evt_write->data;
         if (pframe->type == PUBKEY && pframe->remain_len < PUBKEY_BYTE)
-			fast_xfer_rxd(&m_app_pub, p_evt_write->data, p_evt_write->len);
+			fast_xfer_rxd(&fast_control_block, p_evt_write->data, p_evt_write->len);
 		else
 			NRF_LOG_ERROR("Unkown fast xfer data type\n");
     }
@@ -216,6 +220,7 @@ static void auth_handler(uint8_t *pdata, uint8_t len)
 			mi_schedulor_start(&auth_status);
 			break;
 	}
+
 	return;
 }
 
@@ -258,7 +263,7 @@ int fast_xfer_recive(fast_xfer_t *pxfer)
 	}
 }
 
-int fast_xfer_txd(fast_xfer_t *pxfer)
+static int fast_xfer_txd(fast_xfer_t *pxfer)
 {
 	ble_gatts_hvx_params_t hvx_params;
 	fast_xfer_tx_frame_t        frame;
@@ -277,7 +282,7 @@ int fast_xfer_txd(fast_xfer_t *pxfer)
 	       data_len);
 	
 	data_len += 2;      // add 2 bytes (remain_len and type)
-    hvx_params.handle = mi_srv.pubkey_handles.value_handle;
+    hvx_params.handle = mi_srv.fast_xfer_handles.value_handle;
     hvx_params.p_data = (void*)&frame;
     hvx_params.p_len  = (uint16_t*)&data_len;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
@@ -317,7 +322,7 @@ int fast_xfer_send(fast_xfer_t *pxfer)
 	return 1;
 }
 
-void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
+static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 {
 	reliable_xfer_frame_t      *pframe = (void*)pdata;
 	uint8_t                   data_len = len - sizeof(pframe->sn);
@@ -328,14 +333,11 @@ void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 
 int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
 {
-	ble_gatts_hvx_params_t hvx_params;
-	reliable_xfer_frame_t       frame;
+	ble_gatts_hvx_params_t hvx_params = {0};
+	reliable_xfer_frame_t       frame = {0};
 	uint16_t                 data_len;
 	uint32_t                    errno;
 	uint16_t                      arg;
-
-    memset(&hvx_params, 0, sizeof(hvx_params));
-    memset(&frame,      0, sizeof(frame));
 	
 	frame.f.ctrl.mode = MODE_CMD;
 	frame.f.ctrl.type =      cmd;
@@ -349,7 +351,7 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
 	va_end(ap);
 
 	data_len = sizeof(frame.sn) + sizeof(frame.f.ctrl);
-    hvx_params.handle = mi_srv.buffer_handles.value_handle;
+    hvx_params.handle = mi_srv.secure_handles.value_handle;
     hvx_params.p_data = (void*)&frame;
     hvx_params.p_len  = &data_len;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
@@ -365,22 +367,17 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
 
 int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
 {
-	ble_gatts_hvx_params_t hvx_params;
-	reliable_xfer_frame_t       frame;
+	ble_gatts_hvx_params_t hvx_params = {0};
+	reliable_xfer_frame_t       frame = {0};
 	uint16_t                 data_len;
 	uint32_t                    errno;
 
 	uint8_t      (*pdata)[18] = (void*)pxfer->pdata;
 
-    memset(&hvx_params, 0, sizeof(hvx_params));
-    memset(&frame,      0, sizeof(frame));
-
 	frame.sn = sn;
 	pdata   += sn - 1;
 
 	if (sn == pxfer->amount) {
-//		for ( int i = 0; pdata[0][i] != 0 || pdata[0][i+1] != 0; i++) 
-//			data_len = i+1;
 		data_len = pxfer->last_bytes;
 	}
 	else {
@@ -390,7 +387,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
 	memcpy(frame.f.data, pdata, data_len);
 	
 	data_len += sizeof(frame.sn);
-    hvx_params.handle = mi_srv.buffer_handles.value_handle;
+    hvx_params.handle = mi_srv.secure_handles.value_handle;
     hvx_params.p_data = (void*)&frame;
     hvx_params.p_len  = &data_len;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
@@ -398,7 +395,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("can't send sn %d :%X\n", sn, errno);
+		NRF_LOG_RAW_INFO("Can't send sn %d :%X\n", sn, errno);
 	}
 
 	return errno;
@@ -429,7 +426,7 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
 		va_end(ap);
 	}
 	
-    hvx_params.handle = mi_srv.buffer_handles.value_handle;
+    hvx_params.handle = mi_srv.secure_handles.value_handle;
     hvx_params.p_data = (void*)&frame;
     hvx_params.p_len  = &data_len;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
@@ -502,28 +499,28 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
     err_code = char_add(BLE_UUID_MI_AUTH, NULL, 4, char_props, &mi_srv.auth_handles);
     VERIFY_SUCCESS(err_code);
 
-    // Add the Buffer Characteristic.
+    // Add the Secure AUTH Characteristic.
 	char_props = (ble_gatt_char_props_t){0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
-    err_code = char_add(BLE_UUID_MI_BUFFER, NULL, 20, char_props, &mi_srv.buffer_handles);
+    err_code = char_add(BLE_UUID_MI_BUFFER, NULL, 20, char_props, &mi_srv.secure_handles);
     VERIFY_SUCCESS(err_code);
 
 	// Add the Pubkey Characteristic.
 	char_props = (ble_gatt_char_props_t){0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
-	err_code = char_add(BLE_UUID_MI_PUBKEY, NULL, 20, char_props, &mi_srv.pubkey_handles);
+	err_code = char_add(BLE_UUID_MI_PUBKEY, NULL, 20, char_props, &mi_srv.fast_xfer_handles);
     VERIFY_SUCCESS(err_code);
     
 	return NRF_SUCCESS;
 }
 
-uint32_t ble_mi_string_send(uint8_t * p_string, uint16_t length)
+uint32_t auth_send(uint32_t status)
 {
-    ble_gatts_hvx_params_t hvx_params;
-
-
+    ble_gatts_hvx_params_t hvx_params = {0};
+	uint32_t errno;
+	uint16_t length = 4;
     if ((mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID) || (!mi_srv.is_notification_enabled))
     {
         return NRF_ERROR_INVALID_STATE;
@@ -534,13 +531,17 @@ uint32_t ble_mi_string_send(uint8_t * p_string, uint16_t length)
         return NRF_ERROR_INVALID_PARAM;
     }
 
-    memset(&hvx_params, 0, sizeof(hvx_params));
-
-    hvx_params.handle = mi_srv.buffer_handles.value_handle;
-    hvx_params.p_data = p_string;
+    hvx_params.handle = mi_srv.auth_handles.value_handle;
+    hvx_params.p_data = (uint8_t*)&status;
     hvx_params.p_len  = &length;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
 
-    return sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
+    errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
+
+	if (errno != NRF_SUCCESS) {
+		NRF_LOG_INFO("can't send auth.\n");
+	}
+
+	return errno;
 }
 

@@ -153,7 +153,7 @@ enum {
  *
  * @param[in]     micLen - mic lenth (should be 4)
  *
- * @param[in]     iv - initial vector (should be 13 bytes nonce)
+ * @param[in]     nonce - iv[4] || reserved[4] = {0} || direction || pkgcounter[4] (should be 13 bytes)
  *
  * @param[in]     mStr - plaint text 
  *
@@ -207,7 +207,6 @@ static uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
     for ( i=0; i<msgLen; i+=AES_BLOCK_SIZE ) {
         /* use aes to the E(key, Ai) */
         nrf_aes_ecb_encrypt(key, encTmp.bf.A, encTmp.tmpResult);
-        //tmpResult = TODO();
 
         for ( j=0; (j<AES_BLOCK_SIZE) && (i+j < mStrLen); j++) {
             mStr[i+j] ^= encTmp.tmpResult[j];
@@ -289,8 +288,8 @@ static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
     /* X0 is zero */
     memset(enc_tmp.tmpResult, 0, AES_BLOCK_SIZE);
 
-    msgLen = aStrLen;
     /* adjust msgLen according to aStrLen and mStrLen, should be 16x */
+    msgLen = aStrLen;
     if (aStrLen & 0x0f) {
         msgLen &= ~0x0F;
         msgLen += 0x10;
@@ -311,9 +310,8 @@ static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
         }
 
         /* use aes to get E(key, Xi XOR Bi) */
-        //aes_encrypt(key, enc_tmp.tmpResult, enc_tmp.tmpResult);
-
         nrf_aes_ecb_encrypt(key, enc_tmp.tmpResult, enc_tmp.tmpResult);
+
         /* update B */
         if ( aStrLen >= AES_BLOCK_SIZE ) {
             memcpy(enc_tmp.bf.B, enc_tmp.newAstr + i, AES_BLOCK_SIZE);
@@ -333,6 +331,7 @@ static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
             memset(enc_tmp.bf.B + mStrLen, 0, AES_BLOCK_SIZE - mStrLen);
         }
     }
+
     memcpy(result, enc_tmp.tmpResult, micLen);
     
     return 0;

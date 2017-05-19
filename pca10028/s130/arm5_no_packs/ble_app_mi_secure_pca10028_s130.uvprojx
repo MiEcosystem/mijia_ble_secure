@@ -1319,6 +1319,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\nrf_drv_twi_patched.c</FilePath>
             </File>
+            <File>
+              <FileName>nrf_drv_rng.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\drivers_nrf\rng\nrf_drv_rng.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1828,6 +1833,16 @@
               <FileName>app_timer_patched.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\app_timer_patched.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_queue.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\queue\nrf_queue.c</FilePath>
+            </File>
+            <File>
+              <FileName>mem_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\mem_manager\mem_manager.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -3241,6 +3256,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\nrf_drv_twi_patched.c</FilePath>
             </File>
+            <File>
+              <FileName>nrf_drv_rng.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\drivers_nrf\rng\nrf_drv_rng.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -3750,6 +3770,16 @@
               <FileName>app_timer_patched.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\app_timer_patched.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_queue.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\queue\nrf_queue.c</FilePath>
+            </File>
+            <File>
+              <FileName>mem_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\mem_manager\mem_manager.c</FilePath>
             </File>
           </Files>
         </Group>

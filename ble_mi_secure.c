@@ -11,8 +11,9 @@
  */
 #include <stdarg.h>
 #include "sdk_common.h"
-#include "ble_mi_secure.h"
 #include "ble_srv_common.h"
+#include "ble_mi_secure.h"
+#include "mi_secure.h"
 
 #define NRF_LOG_MODULE_NAME "ble_mi"
 #include "nrf_log.h"

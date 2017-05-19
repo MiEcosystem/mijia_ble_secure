@@ -336,7 +336,6 @@ int reliable_rxd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 
 	/* Recive data */
 	PT_WAIT_UNTIL(pt, pxfer->amount != 0 && pxfer->type == data_type);
-
 	PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 
 	timer_set(&timeout_timer, 10000);
@@ -355,6 +354,7 @@ int reliable_txd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 {
 	PT_BEGIN(pt);
 
+
 	/* Send data. */
 	PT_WAIT_UNTIL(pt, reliable_xfer_cmd(data_type, pxfer->amount) == NRF_SUCCESS);
 
@@ -363,6 +363,7 @@ int reliable_txd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, pxfer));
 
 	pxfer->amount = 0;
+
 
 	PT_END(pt);
 }
@@ -599,8 +600,7 @@ int reg_auth(pt_t *pt)
 int reg_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
-	
-	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
+
 	reliable_control_block.pdata = app_pub;
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	
@@ -713,7 +713,7 @@ int login_auth(pt_t *pt)
 
 	if(login_encrypt_data[0] != login_encrypt_data[1]) {
 		NRF_LOG_ERROR("LOG FAILED.\n");
-		mi_schedulor_stop(LOG_SUCCESS);
+		mi_schedulor_stop(LOG_FAILED);
 	}
 	NRF_LOG_INFO("LOG SUCCESS.\n");
 	PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
@@ -779,11 +779,11 @@ int shared_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
-	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-
 	MKPK.id = 0;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+
+	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
 	PT_WAIT_UNTIL(pt, app_pub[63] != app_pub[62]);
@@ -877,13 +877,25 @@ void shared_login_procedure()
 
 void aes_ecb_test();
 void aes_ccm_test();
+//uint8_t test_str[] = {13, 1,2,3,4,5,6,7,8,9,0,1,2,3,
+//					  1, 0,
+//					 16, 0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30,
+//                     16, 1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,};
+//uint8_t cipher[20];
+//uint8_t cipher2[20];
 int test_thd(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
-//	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
+//	msc_control_block = MSC_XFER(MSC_AESCCM_ENC, test_str, sizeof(test_str), cipher, 20);
 //	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-
+//	NRF_LOG_HEXDUMP_INFO(cipher, 20);
+//	uint8_t key[] = {1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6};
+//	uint8_t iv2[] = {1,2,3,4,5,6,7,8,9,0,1,2,3};
+//	uint8_t mstr[] = {0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30};
+//	uint8_t astr[1] = {0};
+//	aes_ccm_encrypt(key, iv2, astr, cipher2+16, 4, mstr, 16, cipher2);
+//	NRF_LOG_HEXDUMP_INFO(cipher2, 20);
 //	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, app_pub, 64);
 //	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
@@ -897,9 +909,9 @@ int test_thd(pt_t *pt)
 //	memset(buf, 0, 256);
 //	nrf_gpio_pin_clear(PROFILE_PIN);
 
-	nrf_gpio_pin_set(PROFILE_PIN);
-	aes_ccm_test();
-	nrf_gpio_pin_clear(PROFILE_PIN);
+//	nrf_gpio_pin_set(PROFILE_PIN);
+//	aes_ccm_test();
+//	nrf_gpio_pin_clear(PROFILE_PIN);
 
 //	nrf_gpio_pin_set(PROFILE_PIN);
 //	aes_ecb_test();
@@ -912,6 +924,7 @@ int test_thd(pt_t *pt)
 
 void mi_schedulor(void * p_context)
 {
+
 	schd_time++;
 	uint32_t *p_auth_status = p_context;
 	uint8_t auth_type = *p_auth_status & 0x30;
@@ -927,6 +940,7 @@ void mi_schedulor(void * p_context)
 			break;
 	}
 	
+
 //	fast_xfer_test(&pt1);
 //	reliable_xfer_test(&pt2);
 //	test_thd(&pt3);

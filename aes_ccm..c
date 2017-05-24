@@ -8,7 +8,45 @@
 
 #include "aes_ccm.h"
 
-void nrf_aes_ecb_encrypt(uint8_t* pKey, uint8_t* input, uint8_t* output)
+#define AES_BLOCK_SIZE     16
+#define MAX_ADATA_SIZE     16
+#define MAX_DATA_SIZE      256
+#define NONCE_LEN          12
+
+typedef union {
+	struct {
+		uint8_t L : 3;
+		uint8_t M : 3;
+		uint8_t aData :1;
+		uint8_t reserved :1;            
+	} bf;
+	uint8_t val;
+} ccm_flags_t;
+
+typedef struct {
+    union {
+        uint8_t A[AES_BLOCK_SIZE];
+        uint8_t B[AES_BLOCK_SIZE];
+    } bf;
+    
+    uint8_t tmpResult[AES_BLOCK_SIZE];
+    uint8_t newAstr[AES_BLOCK_SIZE];
+} aes_enc_t;
+
+static ccm_flags_t flag;
+
+enum AES_OPT {
+    AES_ENCRYPTION = 0,
+    AES_DECRYPTION,
+};
+
+enum {
+    AES_SUCC = 0,
+    AES_NO_BUF,               
+    AES_FAIL,
+};
+
+static void nrf_aes_ecb_encrypt(uint8_t* pKey, uint8_t* input, uint8_t* output)
 {
 	nrf_ecb_hal_data_t ecb_data;
 	memcpy(ecb_data.key, pKey, 16);
@@ -18,7 +56,6 @@ void nrf_aes_ecb_encrypt(uint8_t* pKey, uint8_t* input, uint8_t* output)
 }
 
 #if 1
-
 /*
  * Polynomial used to generate the table:
  * CRC-32-IEEE 802.3, the polynomial is :
@@ -109,43 +146,6 @@ uint32_t soft_crc32(const void *pdata,int data_size,uint32_t crc)
 
 #endif
 
-#define AES_BLOCK_SIZE     16
-
-typedef union {
-	struct {
-		uint8_t L : 3;
-		uint8_t M : 3;
-		uint8_t aData :1;
-		uint8_t reserved :1;            
-	} bf;
-	uint8_t val;
-} ccm_flags_t;
-
-
-typedef struct {
-    union {
-        uint8_t A[AES_BLOCK_SIZE];
-        uint8_t B[AES_BLOCK_SIZE];
-    } bf;
-    
-    uint8_t tmpResult[AES_BLOCK_SIZE];
-    uint8_t newAstr[AES_BLOCK_SIZE];
-} aes_enc_t;
-
-
-enum AES_OPT {
-    AES_ENCRYPTION = 0,
-    AES_DECRYPTION,
-};
-
-enum {
-    AES_SUCC = 0,
-    AES_NO_BUF,               
-    AES_FAIL,
-};
-
-
-
 /*********************************************************************
  * @fn      aes_ccmBaseTran
  *
@@ -167,7 +167,8 @@ enum {
  *
  * @return        status
  */
-static uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic, uint8_t opt)
+static uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
+	uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic, uint8_t opt)
 {
     ccm_flags_t flags = {0};
     aes_enc_t  encTmp = {0};
@@ -175,15 +176,12 @@ static uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
     uint16_t i;
     uint8_t msgLen;
     uint8_t j;
-	
 
-    flags.bf.L = 1;
+    flags.bf.L = 14 - NONCE_LEN;
     encTmp.bf.A[0] = flags.val;
 
-    /* set the iv */
-    memcpy(encTmp.bf.A+1, iv, 13);
-
-    encTmp.bf.A[14] = encTmp.bf.A[15] = 0;
+    /* set the nonce */
+    memcpy(encTmp.bf.A+1, nonce, NONCE_LEN);
 
     nrf_aes_ecb_encrypt(key, encTmp.bf.A, encTmp.tmpResult);
 
@@ -221,14 +219,16 @@ static uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
     return 0;
 }
 
-static uint8_t aes_ccmEncTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
+static uint8_t aes_ccmEncTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
+	uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
 {
-	return aes_ccmBaseTran(micLen, key, iv, mStr, mStrLen, aStr, aStrLen, mic, AES_ENCRYPTION);
+	return aes_ccmBaseTran(micLen, key, nonce, mStr, mStrLen, aStr, aStrLen, mic, AES_ENCRYPTION);
 }
 
-static uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
+static uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
+	uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
 {
-    return aes_ccmBaseTran(micLen, key, iv, mStr, mStrLen, aStr, aStrLen, mic, AES_DECRYPTION);
+    return aes_ccmBaseTran(micLen, key, nonce, mStr, mStrLen, aStr, aStrLen, mic, AES_DECRYPTION);
 }
 
 
@@ -241,7 +241,7 @@ static uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t
  *
  * @param[in]     micLen - mic lenth (should be 4)
  *
- * @param[in]     iv - initial vector (should be 13 bytes nonce)
+ * @param[in]     nonce - initial vector || reserved || packet counter
  *
  * @param[in]     mStr - plaint text 
  *
@@ -249,13 +249,14 @@ static uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t
  *
  * @param[in]     aStr -  a string  (should be AAD the data channel PDU header’s first octet with NESN, SN and MD bits masked to 0)
  *
- * @param[in]     aStrLen - a atring lenth (should be 1)
+ * @param[in]     aStrLen - a atring lenth (must less than 14)
  *
  * @param[out]    result - Message integrity check (MIC)
  *
  * @return       status
  */
-static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint16_t aStrLen, uint8_t *result)
+static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
+	uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint16_t aStrLen, uint8_t *result)
 {
     aes_enc_t enc_tmp = {0};
 	ccm_flags_t flags = {0};
@@ -268,14 +269,13 @@ static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
     }
 
     /* get B0 */
-    flags.bf.L = 1;  /* L-1 (15-nonceLen-1)*/
+    flags.bf.L = 14 - NONCE_LEN;  /* LEN - 1 (15-nonceLen-1)*/
     flags.bf.M = (micLen - 2)>>1;
     flags.bf.aData = (aStrLen > 0) ? 1 : 0;
-    flags.bf.reserved = 0;
     
     enc_tmp.bf.B[0] = flags.val;
     /* copy nonce N */
-    memcpy(enc_tmp.bf.B + 1, iv, 13);
+    memcpy(enc_tmp.bf.B + 1, nonce, NONCE_LEN);
     /* last byte is mStrlen */
     enc_tmp.bf.B[14] = mStrLen>>8;
     enc_tmp.bf.B[15] = mStrLen & 0xff;
@@ -303,8 +303,8 @@ static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
 
     
     /* now the msgLen should be the length of AuthData, which is generated by AddAuthData (astring, padded by 0) || PlaintexeData (mString, padded by 0)*/
-    for ( i=0; i<msgLen+16; i+=AES_BLOCK_SIZE ) {
-        for ( j=0; j<AES_BLOCK_SIZE; j++) {
+    for (i = 0; i < msgLen + 16; i += AES_BLOCK_SIZE ) {
+        for (j = 0; j < AES_BLOCK_SIZE; j++) {
             /* get Xi XOR Bi */
             enc_tmp.tmpResult[j] ^= enc_tmp.bf.B[j];
         }
@@ -337,11 +337,12 @@ static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_
     return 0;
 }
 
-static uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uint8_t *mStr, size_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
+static uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
+	uint8_t *mStr, uint16_t mStrLen, uint8_t *aStr, uint8_t aStrLen, uint8_t *mic)
 {
     uint8_t tmpMic[AES_BLOCK_SIZE];
     uint8_t i;
-    aes_ccmAuthTran(micLen, key, iv, mStr, mStrLen, aStr, aStrLen, tmpMic);
+    aes_ccmAuthTran(micLen, key, nonce, mStr, mStrLen, aStr, aStrLen, tmpMic);
     for ( i=0; i<micLen; i++ ) {
         if ( mic[i] != tmpMic[i] ) {
             return 1;
@@ -351,7 +352,7 @@ static uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *iv, uin
 }
 
 
-int aes_ccm_encrypt_debug(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, uint8_t* pKey, uint8_t* iv)
+int aes_ccm_encrypt_debug(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, uint8_t* pKey, uint8_t* nonce)
 {
     uint8_t aStr = 0x11;
     uint8_t mic[4] = {0};
@@ -359,8 +360,8 @@ int aes_ccm_encrypt_debug(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, 
     NRF_LOG_INFO("Plain Text:\r\n");
 	NRF_LOG_HEXDUMP_INFO(pPlainTxt, textLen);
     
-    aes_ccmAuthTran(4, pKey, iv, pPlainTxt, textLen, &aStr, 1, mic);
-    aes_ccmEncTran(4, pKey, iv, pPlainTxt, textLen, &aStr, 1, mic);
+    aes_ccmAuthTran(4, pKey, nonce, pPlainTxt, textLen, &aStr, 1, mic);
+    aes_ccmEncTran(4, pKey, nonce, pPlainTxt, textLen, &aStr, 1, mic);
 
     memcpy(pCipTxt, pPlainTxt, textLen);
 
@@ -373,23 +374,70 @@ int aes_ccm_encrypt_debug(uint8_t* pPlainTxt, size_t textLen, uint8_t* pCipTxt, 
     return 0;
 }
 
-uint8_t aes_ccm_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
+uint8_t aes_ccm_encrypt_raw(
+	uint8_t *key, uint8_t *nonce,
+	uint8_t *aStr, uint8_t aStr_len,
+	uint8_t *mic,  uint8_t micLen,
+	uint8_t *mStr, uint8_t mStrLen)
 {
+	if ( aStr_len > 14 )
+		return AES_FAIL;
+
+    aes_ccmAuthTran(micLen, key, nonce, mStr, mStrLen, aStr, aStr_len, mic);
+    aes_ccmEncTran(micLen, key, nonce, mStr, mStrLen, aStr, aStr_len, mic);
+
+    return AES_SUCC;
+}
+
+uint8_t aes_ccm_decrypt_raw(
+	uint8_t *key, uint8_t *nonce,
+	uint8_t *aStr, uint8_t aStr_len,
+	uint8_t *mic,  uint8_t micLen,
+	uint8_t *mStr, uint8_t mStrLen)
+{
+	if ( aStr_len > 14 )
+		return AES_FAIL;
+
+    aes_ccmDecTran(micLen, key, nonce, mStr, mStrLen, aStr, aStr_len, mic);
+    uint8_t res = aes_ccmDecAuthTran(micLen, key, nonce, mStr, mStrLen, aStr, aStr_len, mic);
+
+    if ( res == 0 ) {
+        return AES_SUCC;
+    }
+    return AES_FAIL;
+}
+
+uint8_t aes_ccm_encrypt(
+	uint8_t *key, uint8_t *nonce,
+	uint8_t *aStr, uint8_t aStr_len,
+	uint8_t *mic,  uint8_t micLen,
+	uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
+{
+	if ( aStr_len > 14 )
+		return AES_FAIL;
+
 	uint8_t buf[mStrLen];
 	memcpy(buf, mStr, mStrLen);
-    aes_ccmAuthTran(micLen, key, iv, buf, mStrLen, aStr, 1, mic);
-    aes_ccmEncTran(micLen, key, iv, buf, mStrLen, aStr, 1, mic);
+    aes_ccmAuthTran(micLen, key, nonce, buf, mStrLen, aStr, aStr_len, mic);
+    aes_ccmEncTran(micLen, key, nonce, buf, mStrLen, aStr, aStr_len, mic);
 
     memcpy(result, buf, mStrLen);
     return AES_SUCC;
 }
 
-uint8_t aes_ccm_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, uint8_t micLen, uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
+uint8_t aes_ccm_decrypt(
+	uint8_t *key, uint8_t *nonce,
+	uint8_t *aStr, uint8_t aStr_len,
+	uint8_t *mic,  uint8_t micLen,
+	uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
 {
+	if ( aStr_len > 14 )
+		return AES_FAIL;
+
 	uint8_t buf[mStrLen];
 	memcpy(buf, mStr, mStrLen);
-    aes_ccmDecTran(micLen, key, iv, buf, mStrLen, aStr, 1, mic);
-    uint8_t res = aes_ccmDecAuthTran(micLen, key, iv, buf, mStrLen, aStr, 1, mic);
+    aes_ccmDecTran(micLen, key, nonce, buf, mStrLen, aStr, aStr_len, mic);
+    uint8_t res = aes_ccmDecAuthTran(micLen, key, nonce, buf, mStrLen, aStr, aStr_len, mic);
 
     if ( res == 0 ) {
 		memcpy(result, buf, mStrLen);
@@ -397,7 +445,6 @@ uint8_t aes_ccm_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aStr, uint8_t *mic, 
     }
     return AES_FAIL;
 }
-
 
 void aes_ecb_test(void)
 {
@@ -420,23 +467,23 @@ void aes_ccm_test(void)
 {
     uint8_t k[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
-    uint8_t iv[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
                 0x18, 0x19, 0x1a, 0x1b, 0x1c};
-    uint8_t p[64] = "HELLOWORLD123456helloworld1234560xDEADBEEF!@#$%^";
+    uint8_t p[64] = "HELLOWORLD!@#$%^helloworld123456";
     uint8_t c[64] = {0};
 	uint8_t d[64] = {0};
     uint8_t  mic[4] = {0};
+	uint8_t astr[4] = {0};
+    aes_ccm_encrypt(k, nonce, astr, 1, mic, 4, p, 32, c);
 
-    aes_ccm_encrypt(k, iv, NULL, mic, 4, p, 32, c);
-
-	aes_ccm_decrypt(k, iv, NULL, mic, 4, c, 32, d);
+	aes_ccm_decrypt(k, nonce, astr, 1, mic, 4, c, 32, d);
 
     NRF_LOG_INFO("Clear Text:\r\n");
     NRF_LOG_HEXDUMP_INFO(p, 32);
     NRF_LOG_INFO("Cipher Text:\r\n");
     NRF_LOG_HEXDUMP_INFO(c, 32);
 
-	NRF_LOG_INFO("AES-128-CCM TEST: ");
+	NRF_LOG_INFO("AES128-CCM TEST: ");
 	if(memcmp(d, p, 32) == 0) {
 		NRF_LOG_RAW_INFO(" PASS \n");
 	}

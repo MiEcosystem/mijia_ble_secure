@@ -720,7 +720,7 @@ int main(void)
 
 	time_init(NULL);
 	mi_schedulor_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
-
+//	mi_schedulor_start(0);
     // Enter main loop.
     for (;;)
     {

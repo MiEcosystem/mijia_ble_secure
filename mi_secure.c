@@ -90,7 +90,7 @@ struct {
 
 
 uint8_t rand_key[16];
-static uint8_t iv[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+static uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
                          0x19, 0x1a, 0x1b, 0x1c};
 
 msc_info_t tmp_info;
@@ -561,13 +561,13 @@ int reg_auth(pt_t *pt)
 	PT_WAIT_UNTIL(pt, shared_key[31] != shared_key[30]);
 
 	sha256_hkdf(  shared_key,         sizeof(shared_key),
-			(void *)reg_salt,         sizeof(reg_salt),
-	        (void *)reg_info,         sizeof(reg_info),
+			(void *)reg_salt,         sizeof(reg_salt)-1,
+	        (void *)reg_info,         sizeof(reg_info)-1,
 	    (void *)&session_key,         sizeof(session_key));
 
 	PT_WAIT_UNTIL(pt, dev_sign[63] != dev_sign[62]);
 	
-	aes_ccm_encrypt(session_key.dev_key, iv, NULL, encrypt_data.mic, 4, dev_sign, 64, encrypt_data.cipher);
+	aes_ccm_encrypt(session_key.dev_key, nonce, NULL, 1, encrypt_data.mic, 4, dev_sign, 64, encrypt_data.cipher);
 	
 	PT_WAIT_UNTIL(pt, auth_status != REG_START);
 	
@@ -585,11 +585,11 @@ int reg_auth(pt_t *pt)
 	sd_rand_application_vector_get(rand_key, 16);
 
 	sha256_hkdf(  shared_key,         sizeof(shared_key),
-			(void *) mk_salt,         sizeof(mk_salt),
-	        (void *) mk_info,         sizeof(mk_info),
+			(void *) mk_salt,         sizeof(mk_salt)-1,
+	        (void *) mk_info,         sizeof(mk_info)-1,
 	                    LTMK,         sizeof(LTMK));
 
-	aes_ccm_encrypt(rand_key, iv, NULL, MKPK.mic, 4, LTMK, 32, MKPK.cipher);
+	aes_ccm_encrypt(rand_key, nonce, NULL, 1, MKPK.mic, 4, LTMK, 32, MKPK.cipher);
 	
 	// fs_store(rand_key);
 	// log encrypt procedure
@@ -693,18 +693,18 @@ int login_auth(pt_t *pt)
 	
 	PT_WAIT_UNTIL(pt, MKPK.mic[2] != MKPK.mic[3]);
 
-    aes_ccm_decrypt(rand_key, iv, NULL, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
+    aes_ccm_decrypt(rand_key, nonce, NULL, 1, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
 
 	PT_WAIT_UNTIL(pt, shared_key[31] != shared_key[30]);
 
 	sha256_hkdf(  shared_key,         sizeof(shared_key) + sizeof(LTMK),
-			(void *)log_salt,         sizeof(log_salt),
-	        (void *)log_info,         sizeof(log_info),
+			(void *)log_salt,         sizeof(log_salt)-1,
+	        (void *)log_info,         sizeof(log_info)-1,
 	    (void *)&session_key,         sizeof(session_key));
 
 	PT_WAIT_UNTIL(pt, login_encrypt_data[1] != 0);
 	
-	aes_ccm_decrypt(session_key.app_key, iv, NULL,
+	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 1,
 					(void*)(login_encrypt_data+1), 4,
 					(void*)    login_encrypt_data, 4, (void*)login_encrypt_data);
 
@@ -835,21 +835,21 @@ int shared_auth(pt_t *pt)
 	PT_BEGIN(pt);
 	// fs_read rand_key();
 	PT_WAIT_UNTIL(pt, MKPK.mic[3] != 0);
-	aes_ccm_decrypt(rand_key, iv, NULL, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
+	aes_ccm_decrypt(rand_key, nonce, NULL, 1, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
 
 	PT_WAIT_UNTIL(pt, shared_key[31] != shared_key[30]);
 	sha256_hkdf(  shared_key,         sizeof(shared_key),
-		  (void *)share_salt,         sizeof(share_salt),
-	      (void *)share_info,         sizeof(share_info),
+		  (void *)share_salt,         sizeof(share_salt)-1,
+	      (void *)share_info,         sizeof(share_info)-1,
 	    (void *)&session_key,         sizeof(session_key));
 
 	PT_WAIT_UNTIL(pt, encrypt_share_info.mic[3] != 0);
-	aes_ccm_decrypt(session_key.app_key, iv, NULL,
+	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 1,
 					encrypt_share_info.mic,    sizeof(encrypt_share_info.mic),
 					encrypt_share_info.cipher, sizeof(encrypt_share_info.cipher),
 	                (void*)&shared_info);
 
-	aes_ccm_decrypt(LTMK, iv, NULL,
+	aes_ccm_decrypt(LTMK, nonce, NULL, 1,
 					shared_info.mic,    sizeof(shared_info.mic),
 					shared_info.u.cipher , sizeof(shared_info.u.cipher),
 					(void*)&shared_info);
@@ -877,12 +877,13 @@ void shared_login_procedure()
 
 void aes_ecb_test();
 void aes_ccm_test();
-//uint8_t test_str[] = {13, 1,2,3,4,5,6,7,8,9,0,1,2,3,
-//					  1, 0,
-//					 16, 0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30,
-//                     16, 1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,};
+//uint8_t test_str[] = {12, 1,2,3,4,5,6,7,8,9,0,1,2,
+//					   1, 0,
+//					  16, 0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30,
+//                      16, 1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6};
 //uint8_t cipher[20];
 //uint8_t cipher2[20];
+
 int test_thd(pt_t *pt)
 {
 	PT_BEGIN(pt);
@@ -890,13 +891,16 @@ int test_thd(pt_t *pt)
 //	msc_control_block = MSC_XFER(MSC_AESCCM_ENC, test_str, sizeof(test_str), cipher, 20);
 //	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 //	NRF_LOG_HEXDUMP_INFO(cipher, 20);
+
+//	PT_YIELD(pt);
 //	uint8_t key[] = {1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6};
 //	uint8_t iv2[] = {1,2,3,4,5,6,7,8,9,0,1,2,3};
 //	uint8_t mstr[] = {0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30};
-//	uint8_t astr[1] = {0};
-//	aes_ccm_encrypt(key, iv2, astr, cipher2+16, 4, mstr, 16, cipher2);
+//	uint8_t astr[4] = {0};
+//	aes_ccm_encrypt(key, iv2, astr, 1, cipher2+16, 4, mstr, 16, cipher2);
 //	NRF_LOG_HEXDUMP_INFO(cipher2, 20);
-//	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, app_pub, 64);
+//	
+//	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 //	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
 //	msc_control_block = MSC_XFER(MSC_SIGN, dev_pub, 32, app_pub, 64);

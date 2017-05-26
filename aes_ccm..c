@@ -30,10 +30,8 @@ typedef struct {
     } bf;
     
     uint8_t tmpResult[AES_BLOCK_SIZE];
-    uint8_t newAstr[AES_BLOCK_SIZE];
+    uint8_t newAstr[AES_BLOCK_SIZE*2];
 } aes_enc_t;
-
-static ccm_flags_t flag;
 
 enum AES_OPT {
     AES_ENCRYPTION = 0,
@@ -192,9 +190,9 @@ static uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
     encTmp.bf.A[14] = counter>>8;
     encTmp.bf.A[15] = counter & 0xff;
 
-    if ( opt == AES_DECRYPTION ) {
-        msgLen = mStrLen - micLen;
-    }
+//    if ( opt == AES_DECRYPTION ) {
+//        msgLen = mStrLen - micLen;
+//    }
     
     msgLen = mStrLen;
     if (msgLen & 0x0f) {
@@ -249,7 +247,7 @@ static uint8_t aes_ccmDecTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
  *
  * @param[in]     aStr -  a string  (should be AAD the data channel PDU header’s first octet with NESN, SN and MD bits masked to 0)
  *
- * @param[in]     aStrLen - a atring lenth (must less than 14)
+ * @param[in]     aStrLen - a atring lenth (must less than 30)
  *
  * @param[out]    result - Message integrity check (MIC)
  *
@@ -264,26 +262,29 @@ static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
 	uint16_t msgLen;
     uint16_t i,j;
 
-    if ( aStrLen + 2 > AES_BLOCK_SIZE ) {
+    if ( aStrLen > 30 ) {
         return 1;
     }
+	else if (aStr != NULL && aStrLen > 0) {
+		enc_tmp.newAstr[0] = aStrLen>>8;
+		enc_tmp.newAstr[1] = aStrLen & 0xff;
+		memcpy(enc_tmp.newAstr + 2, aStr, aStrLen);
+		aStrLen += 2;
+	}
+	else {
+		aStrLen = 0;
+	}
 
-    /* get B0 */
+    /* Encode FLAGS */
     flags.bf.L = 14 - NONCE_LEN;  /* LEN - 1 (15-nonceLen-1)*/
     flags.bf.M = (micLen - 2)>>1;
     flags.bf.aData = (aStrLen > 0) ? 1 : 0;
-    
+
+    /* B0 = FLAGS || NONCE || MSTR_LEN */
     enc_tmp.bf.B[0] = flags.val;
-    /* copy nonce N */
     memcpy(enc_tmp.bf.B + 1, nonce, NONCE_LEN);
-    /* last byte is mStrlen */
     enc_tmp.bf.B[14] = mStrLen>>8;
     enc_tmp.bf.B[15] = mStrLen & 0xff;
-
-    enc_tmp.newAstr[0] = aStrLen>>8;
-    enc_tmp.newAstr[1] = aStrLen & 0xff;
-    memcpy(enc_tmp.newAstr + 2, aStr, aStrLen);
-    aStrLen += 2;
 
     /* X0 is zero */
     memset(enc_tmp.tmpResult, 0, AES_BLOCK_SIZE);
@@ -316,18 +317,18 @@ static uint8_t aes_ccmAuthTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
         if ( aStrLen >= AES_BLOCK_SIZE ) {
             memcpy(enc_tmp.bf.B, enc_tmp.newAstr + i, AES_BLOCK_SIZE);
             aStrLen -= AES_BLOCK_SIZE;
-        } else if ( (aStrLen>0) && (aStrLen<AES_BLOCK_SIZE) ) {
+        } else if ( aStrLen > 0 && aStrLen < AES_BLOCK_SIZE) {
             memcpy(enc_tmp.bf.B, enc_tmp.newAstr + i, aStrLen);
             memset(enc_tmp.bf.B + aStrLen, 0, AES_BLOCK_SIZE - aStrLen);
             aStrLen = 0;
             /* reset the mstring index */
             mStrIndex = 0;
         } else if ( mStrLen >= AES_BLOCK_SIZE ) {
-            memcpy(enc_tmp.bf.B, mStr + (mStrIndex*AES_BLOCK_SIZE), AES_BLOCK_SIZE);
+            memcpy(enc_tmp.bf.B, mStr + mStrIndex * AES_BLOCK_SIZE, AES_BLOCK_SIZE);
             mStrIndex++;
             mStrLen -= AES_BLOCK_SIZE;
         } else {
-            memcpy(enc_tmp.bf.B, mStr + (mStrIndex*AES_BLOCK_SIZE), mStrLen);
+            memcpy(enc_tmp.bf.B, mStr + mStrIndex * AES_BLOCK_SIZE, mStrLen);
             memset(enc_tmp.bf.B + mStrLen, 0, AES_BLOCK_SIZE - mStrLen);
         }
     }
@@ -413,7 +414,7 @@ uint8_t aes_ccm_encrypt(
 	uint8_t *mic,  uint8_t micLen,
 	uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
 {
-	if ( aStr_len > 14 )
+	if ( aStr_len > 30 )
 		return AES_FAIL;
 
 	uint8_t buf[mStrLen];
@@ -431,7 +432,7 @@ uint8_t aes_ccm_decrypt(
 	uint8_t *mic,  uint8_t micLen,
 	uint8_t *mStr, uint8_t mStrLen, uint8_t *result)
 {
-	if ( aStr_len > 14 )
+	if ( aStr_len > 30 )
 		return AES_FAIL;
 
 	uint8_t buf[mStrLen];
@@ -462,7 +463,7 @@ void aes_ecb_test(void)
     NRF_LOG_INFO("Cipher Text:\n");
     NRF_LOG_HEXDUMP_INFO(c, 16);
 }
-
+#define LEN 32
 void aes_ccm_test(void)
 {
     uint8_t k[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -473,18 +474,18 @@ void aes_ccm_test(void)
     uint8_t c[64] = {0};
 	uint8_t d[64] = {0};
     uint8_t  mic[4] = {0};
-	uint8_t astr[4] = {0};
-    aes_ccm_encrypt(k, nonce, astr, 1, mic, 4, p, 32, c);
+	uint8_t astr[4] = {1,2,3,4};
+    aes_ccm_encrypt(k, nonce, astr, sizeof(astr), mic, 4, p, LEN, c);
 
-	aes_ccm_decrypt(k, nonce, astr, 1, mic, 4, c, 32, d);
+	aes_ccm_decrypt(k, nonce, astr, sizeof(astr), mic, 4, c, LEN, d);
 
-    NRF_LOG_INFO("Clear Text:\r\n");
-    NRF_LOG_HEXDUMP_INFO(p, 32);
+//    NRF_LOG_INFO("Clear Text:\r\n");
+//    NRF_LOG_HEXDUMP_INFO(p, 32);
     NRF_LOG_INFO("Cipher Text:\r\n");
-    NRF_LOG_HEXDUMP_INFO(c, 32);
+    NRF_LOG_HEXDUMP_INFO(c, LEN);
 
 	NRF_LOG_INFO("AES128-CCM TEST: ");
-	if(memcmp(d, p, 32) == 0) {
+	if(memcmp(d, p, LEN) == 0) {
 		NRF_LOG_RAW_INFO(" PASS \n");
 	}
 	else {

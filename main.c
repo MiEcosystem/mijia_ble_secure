@@ -47,7 +47,7 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
-#define APP_PRODUCT_ID                  0x01AC
+#define APP_PRODUCT_ID                  0x009C
 
 #define RTT_CTRL_CLEAR                  "[2J"
 
@@ -714,13 +714,16 @@ int main(void)
     advertising_init();
     conn_params_init();
 
-    NRF_LOG_RAW_INFO("Compiled  %s %s\n", nrf_log_push(__DATE__), nrf_log_push(__TIME__));
+    NRF_LOG_RAW_INFO("Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
 	time_init(NULL);
 	mi_schedulor_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
-//	mi_schedulor_start(0);
+#ifdef M_TEST
+	aes_ccm_test();
+	mi_schedulor_start(0);
+#endif
     // Enter main loop.
     for (;;)
     {
@@ -735,21 +738,22 @@ int main(void)
 void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info)
 {
 	error_info_t* pinfo = (error_info_t *)info;
-    NRF_LOG_ERROR(" Oops ! \n");
+	char * const p_str = (void *)(pinfo->p_file_name);
+    NRF_LOG_ERROR(" Oops ! ");
 
     switch (id)
     {
         case NRF_FAULT_ID_SDK_ASSERT:
-			NRF_LOG_RAW_INFO("ERROR at %s : %d\n", (uint32_t)pinfo->p_file_name,
-			                                                 pinfo->line_num  );
+			NRF_LOG_RAW_INFO("ERROR at %s : %d\n", nrf_log_push(p_str),
+			                                       pinfo->line_num  );
             break;
 
         case NRF_FAULT_ID_SDK_ERROR:
-			NRF_LOG_RAW_INFO("ERRNO %d at %s : %d\n",          pinfo->err_code,
-			                                         (uint32_t)pinfo->p_file_name,
-			                                                   pinfo->line_num);
+			NRF_LOG_RAW_INFO("ERRNO %d at %s : %d\n", pinfo->err_code,
+			                                          nrf_log_push(p_str),
+			                                          pinfo->line_num);
             break;
-    }	
+    }
 
     NRF_LOG_FINAL_FLUSH();
 

@@ -34,7 +34,8 @@
 #define MBEDTLS_SELF_TEST	0
 #define mbedtls_printf NRF_LOG_INFO
 
-//#define GET_UINT32_BE(n,b,i)  n = __REV(((uint32_t*)b)[i>>2])
+#define GET_UINT32_BE(n,b,i)  n = __REV(((uint32_t*)b)[i>>2])
+#define PUT_UINT32_BE(n,b,i)  ((uint32_t*)b)[i>>2] = __REV(n)
 
 /* Implementation that should never be optimized out by the compiler */
 static void mbedtls_zeroize( void *v, size_t n ) {
@@ -139,9 +140,9 @@ static const uint32_t K[] =
     0x90BEFFFA, 0xA4506CEB, 0xBEF9A3F7, 0xC67178F2,
 };
 
-#define  SHR(x,n) ((x & 0xFFFFFFFF) >> n)
+#define SHR(x,n) ((x & 0xFFFFFFFF) >> n)
 #define ROTR(x,n) __ROR(x,n)
-
+//#define ROTR(x,n) (SHR(x,n) | (x << (32 - n)))
 #define S0(x) (ROTR(x, 7) ^ ROTR(x,18) ^  SHR(x, 3))
 #define S1(x) (ROTR(x,17) ^ ROTR(x,19) ^  SHR(x,10))
 
@@ -546,6 +547,7 @@ void hkdf_test(void)
 			0x1d,0x87
 	};
 	unsigned char out_key[82];
+//	sha256_hkdf(key_material,32,salt,19,info,19,out_key,64);
 
 	sha256_hkdf(key_material,sizeof(key_material),salt,sizeof(salt),info,sizeof(info),out_key,82);
 

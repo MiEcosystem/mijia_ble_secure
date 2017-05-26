@@ -99,6 +99,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 					case DEV_MANU_CERT:
 					case DEV_PUBKEY:
 					case DEV_SIGNATURE:
+					case DEV_SHARE_INFO:
 						reliable_control_block.amount = *(uint16_t*)pframe->f.ctrl.arg;
 						break;
 					default:

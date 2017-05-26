@@ -4,9 +4,9 @@
 
 #pragma import(__use_no_semihosting)
 
-static uint32_t ticks_per_cnt = 1;
 extern volatile uint32_t rtc1_overflow_cnt;
 
+static uint32_t ticks_per_cnt = 1;
 static time_t offset_time_in_sec;             /* Time passed since Unix epoch */
 static const char * _month[] =  {  
 	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -15,20 +15,22 @@ static const char * _month[] =  {
 
 clock_t clock(void)
 {
-    if(nrf_rtc_event_pending(NRF_RTC1, NRF_RTC_EVENT_OVERFLOW))
-    {  
-        nrf_rtc_event_clear(NRF_RTC1, NRF_RTC_EVENT_OVERFLOW);
-        rtc1_overflow_cnt++;
-    }
-	return (rtc1_overflow_cnt<<24) + nrf_rtc_counter_get(NRF_RTC1);
+	/* Be carefull the overflow. It should only be used to profile. */
+	return nrf_rtc_counter_get(NRF_RTC1);
 }
 
 time_t time(time_t *p_time)
 {
 	time_t seconds;
 
+    if(nrf_rtc_event_pending(NRF_RTC1, NRF_RTC_EVENT_OVERFLOW))
+    {  
+        nrf_rtc_event_clear(NRF_RTC1, NRF_RTC_EVENT_OVERFLOW);
+        rtc1_overflow_cnt++;
+    }
+
 	/* seconds = (rtc1_overflow_cnt * 2^24 + RTC_COUNT) * TICKS_PER_CNT / 32768 */
-	seconds = clock() * ticks_per_cnt >> 15;
+	seconds = ((rtc1_overflow_cnt<<24) + nrf_rtc_counter_get(NRF_RTC1)) * ticks_per_cnt >> 15;
 	seconds += offset_time_in_sec;
 
 	if ( p_time != NULL )

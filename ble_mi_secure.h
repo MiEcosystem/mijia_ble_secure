@@ -76,6 +76,7 @@ typedef enum {
 	DEV_MANU_CERT,
 	DEV_PUBKEY,
 	DEV_SIGNATURE,
+	DEV_LOGIN_INFO,
 	DEV_SHARE_INFO
 } fctrl_cmd_t;
 

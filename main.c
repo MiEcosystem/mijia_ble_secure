@@ -720,10 +720,12 @@ int main(void)
 
 	time_init(NULL);
 	mi_schedulor_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
+
 #ifdef M_TEST
 	aes_ccm_test();
 	mi_schedulor_start(0);
 #endif
+
     // Enter main loop.
     for (;;)
     {

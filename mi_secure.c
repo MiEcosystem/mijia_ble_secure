@@ -42,6 +42,12 @@ typedef struct {
 
 APP_TIMER_DEF(mi_schd_timer_id);
 
+#define PRINT_MSC_INFO     0
+#define PRINT_MAC          0
+#define PRINT_DEV_PUBKEY   0
+#define PRINT_SHA256       0
+#define PRINT_SIGN         0
+
 #define PROFILE_PIN  25
 #define DATA_IS_VAILD(x,n)   ((x[n-1] != 0) && (x[n-2] != 0))
 #define DATA_IS_INVAILD(x,n) (x[n-1] = x[n-2] = 0)
@@ -153,13 +159,17 @@ int mi_schedulor_init(uint32_t interval)
 int mi_schedulor_start(uint32_t *p_context)
 {
 	int32_t errno;
+
 	schd_time = 0;
+
 	PT_INIT(&pt1);
 	PT_INIT(&pt2);
 	PT_INIT(&pt3);
+	PT_INIT(&pt4);
 
 	memset(app_pub,      0, 364);
-	
+	login_encrypt_data[1] = 0;
+
 	NRF_LOG_INFO("START\n");
 	errno = app_timer_start(mi_schd_timer_id, schd_interval, p_context);
 	APP_ERROR_CHECK(errno);
@@ -209,7 +219,7 @@ static uint16_t find_lost_sn(reliable_xfer_t *pxfer)
 		p_pkg++;
 	}
 
-	if (checked_sn > pxfer->amount) {
+	if (checked_sn > pxfer->rx_num) {
 		checked_sn = 1;
 		return 0;
 	}
@@ -254,9 +264,9 @@ static int pthd_send(pt_t *pt, reliable_xfer_t *pxfer)
 		sn++;
 	}
 
-	while(pxfer->mode == MODE_ACK && pxfer->type != A_SUCCESS) {
-		PT_WAIT_UNTIL(pt, pxfer->curr_sn != 0 || pxfer->type == A_SUCCESS);
-		if (pxfer->type == A_SUCCESS) {
+	while(pxfer->mode == MODE_ACK && pxfer->ack != A_SUCCESS) {
+		PT_WAIT_UNTIL(pt, pxfer->curr_sn != 0 || pxfer->ack == A_SUCCESS);
+		if (pxfer->ack == A_SUCCESS) {
 			break;
 		}
 		else if(pxfer->curr_sn <= pxfer->amount) {
@@ -341,16 +351,16 @@ int reliable_rxd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	PT_BEGIN(pt);
 
 	/* Recive data */
-	PT_WAIT_UNTIL(pt, pxfer->amount != 0 && pxfer->type == data_type);
+	PT_WAIT_UNTIL(pt, pxfer->rx_num != 0 && pxfer->cmd == data_type);
 	PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 
 	timer_set(&timeout_timer, 10000);
-	PT_WAIT_UNTIL(pt, pxfer->amount == pxfer->curr_sn || timer_expired(&timeout_timer));
+	PT_WAIT_UNTIL(pt, pxfer->rx_num == pxfer->curr_sn || timer_expired(&timeout_timer));
 
 	PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, pxfer));
 
 	pxfer->status = RXFER_DONE;
-
+	pxfer->rx_num = 0;
 	PT_END(pt);
 }
 
@@ -362,34 +372,35 @@ int reliable_txd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	/* Send data. */
 	PT_WAIT_UNTIL(pt, reliable_xfer_cmd(data_type, pxfer->amount) == NRF_SUCCESS);
 
-	PT_WAIT_UNTIL(pt, pxfer->mode == MODE_ACK && pxfer->type == A_READY);
+	PT_WAIT_UNTIL(pt, pxfer->mode == MODE_ACK && pxfer->ack == A_READY);
 
 	PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, pxfer));
 
 	pxfer->amount = 0;
-
 	PT_END(pt);
 }
 
 static int reliable_xfer_test(pt_t *pt)
 {
 	PT_BEGIN(pt);
-
+	static uint16_t rx_amount = 0;
 	while(1) {
 		/* Recive data */
-		PT_WAIT_UNTIL(pt, reliable_control_block.amount != 0);
+		PT_WAIT_UNTIL(pt, reliable_control_block.rx_num != 0);
+		rx_amount = reliable_control_block.rx_num;
 		reliable_control_block.pdata = dev_cert;
 		PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 
 		timer_set(&timeout_timer, 10000);
-		PT_WAIT_UNTIL(pt, reliable_control_block.amount == reliable_control_block.curr_sn || timer_expired(&timeout_timer));
+		PT_WAIT_UNTIL(pt, reliable_control_block.rx_num == reliable_control_block.curr_sn || timer_expired(&timeout_timer));
 
 		PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, &reliable_control_block));
 
 		/* Send data. */
+		reliable_control_block.amount = rx_amount;
 		PT_WAIT_UNTIL(pt, reliable_xfer_cmd(DEV_CERT, reliable_control_block.amount) == NRF_SUCCESS);
 
-		PT_WAIT_UNTIL(pt, reliable_control_block.mode == MODE_ACK && reliable_control_block.type == A_READY);
+		PT_WAIT_UNTIL(pt, reliable_control_block.mode == MODE_ACK && reliable_control_block.ack == A_READY);
 
 		PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, &reliable_control_block));
 
@@ -566,6 +577,22 @@ int reg_auth(pt_t *pt)
 	mbedtls_sha256_update(&sha256_ctx, dev_be,  sizeof(dev_be));
 	mbedtls_sha256_update(&sha256_ctx, dev_pub,  sizeof(dev_pub));
 	mbedtls_sha256_finish(&sha256_ctx, dev_sha);
+#if (PRINT_MSC_INFO  == 1)
+	NRF_LOG_RAW_INFO("MSC info\t");
+	NRF_LOG_HEXDUMP_INFO(msc_info, 12);
+#endif
+#if (PRINT_MAC       == 1)
+	NRF_LOG_RAW_INFO("MAC\t");
+	NRF_LOG_HEXDUMP_INFO(dev_be, 6);
+#endif
+#if (PRINT_DEV_PUBKEY == 1)
+	NRF_LOG_RAW_INFO("DEV_PUBKEY\t");
+	NRF_LOG_HEXDUMP_INFO(dev_pub, 16);
+#endif
+#if (PRINT_SHA256     == 1)
+	NRF_LOG_RAW_INFO("SHA256\t");
+	NRF_LOG_HEXDUMP_INFO(dev_sha, 32);
+#endif
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(shared_key, 32));
 	sha256_hkdf(  shared_key,         sizeof(shared_key),
@@ -595,7 +622,7 @@ int reg_auth(pt_t *pt)
 	        (void *) mk_info,         sizeof(mk_info)-1,
 	                    LTMK,         sizeof(LTMK));
 
-	aes_ccm_encrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, LTMK, 32, MKPK.cipher);
+//	aes_ccm_encrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, LTMK, 32, MKPK.cipher);
 	
 	// fs_store(rand_key);
 	// log encrypt procedure
@@ -610,25 +637,25 @@ int reg_ble(pt_t *pt)
 	reliable_control_block.pdata = app_pub;
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	
-	PT_WAIT_UNTIL(pt, dev_pub[63] != NULL);
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_pub, 64));
 	reliable_control_block.pdata  = msc_info;
 	reliable_control_block.amount = CEIL_DIV(sizeof(msc_info) + sizeof(dev_pub), 18);
 	reliable_control_block.last_bytes = (sizeof(msc_info) + sizeof(dev_pub)) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 	
-	PT_WAIT_UNTIL(pt, dev_cert[m_certs_len.dev-1] != dev_cert[m_certs_len.dev-2]);
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_cert, m_certs_len.dev));
 	reliable_control_block.pdata  = dev_cert;
 	reliable_control_block.amount = CEIL_DIV(m_certs_len.dev, 18);
 	reliable_control_block.last_bytes = m_certs_len.dev % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_CERT));
 	
-	PT_WAIT_UNTIL(pt, manu_cert[m_certs_len.manu-1] != manu_cert[m_certs_len.manu-2]);
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(manu_cert, m_certs_len.manu));
 	reliable_control_block.pdata  = manu_cert;
 	reliable_control_block.amount = CEIL_DIV(m_certs_len.manu, 18);
 	reliable_control_block.last_bytes = m_certs_len.manu % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_MANU_CERT));
 	
-	PT_WAIT_UNTIL(pt, encrypt_data.mic[2] != encrypt_data.mic[3]);
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(encrypt_data.mic, 4));
 	reliable_control_block.pdata  = (void*)&encrypt_data;
 	reliable_control_block.amount = CEIL_DIV(sizeof(encrypt_data), 18);
 	reliable_control_block.last_bytes = sizeof(encrypt_data) % 18;
@@ -674,14 +701,28 @@ int reg_msc(pt_t *pt)
 
 	msc_control_block = MSC_XFER(MSC_SIGN, dev_sha, 32, dev_sign, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	
+#if (PRINT_SIGN == 1)
+	NRF_LOG_HEXDUMP_INFO(dev_sign, 64);
+#endif	
+
+#if EN_LTMK
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(MKPK.mic, 4));
 	
 	MKPK.id = 0;
 
 	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32+4, NULL, 0);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-
+#else
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(LTMK, 32));
+	
+	MKPK.id = 0;
+	memcpy(MKPK.cipher, LTMK, 32);
+	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32, NULL, 0);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	
+#endif
+	
+	
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
@@ -696,11 +737,13 @@ void reg_procedure()
 int login_auth(pt_t *pt)
 {
 	PT_BEGIN(pt);
-	
+
+#if EN_LTMK
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(MKPK.mic, 4));
-
     aes_ccm_decrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
-
+#else
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(LTMK, 32));
+#endif
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(shared_key, 32));
 
 	sha256_hkdf(  shared_key,         sizeof(shared_key) + sizeof(LTMK),
@@ -709,23 +752,26 @@ int login_auth(pt_t *pt)
 	    (void *)&session_key,         sizeof(session_key));
 
 	PT_WAIT_UNTIL(pt, login_encrypt_data[1] != 0);
-	
+
+	uint8_t errno = 
 	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 0,
 					(void*)(login_encrypt_data+1), 4,
 					(void*)    login_encrypt_data, 4, (void*)login_encrypt_data);
-
-	login_encrypt_data[1] =  soft_crc32(dev_pub, 64, 0);
-	NRF_LOG_HEXDUMP_INFO((char*)login_encrypt_data, 8);
-
-	if(login_encrypt_data[0] != login_encrypt_data[1]) {
-		NRF_LOG_ERROR("LOG FAILED.\n");
-		mi_schedulor_stop(LOG_FAILED);
-	}
-	NRF_LOG_INFO("LOG SUCCESS.\n");
-	PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
 	
-	// log success
+//	login_encrypt_data[1] =  soft_crc32(dev_pub, 64, 0);
+	login_encrypt_data[1] = *(uint32_t*)dev_pub;
 
+  	if(login_encrypt_data[0] == login_encrypt_data[1]) {
+		NRF_LOG_INFO("LOG SUCCESS.\n");
+		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
+	}
+	else {
+		NRF_LOG_ERROR("LOG FAILED.%d\n",errno);
+		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
+	}
+
+	// log success
+	mi_schedulor_stop(LOG_FAILED);
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
@@ -734,19 +780,17 @@ int login_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
-	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
 	reliable_control_block.pdata = app_pub;
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	
-	PT_WAIT_UNTIL(pt, dev_pub[63] != NULL);
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_pub, 64));
 	reliable_control_block.pdata  = dev_pub;
 	reliable_control_block.amount = CEIL_DIV(sizeof(dev_pub), 18);
 	reliable_control_block.last_bytes = sizeof(dev_pub) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 
-	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
 	reliable_control_block.pdata = (void*)login_encrypt_data;
-	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
+	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_LOGIN_INFO));
 
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
@@ -759,12 +803,17 @@ int login_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
+#if EN_LTMK
 	MKPK.id = 0;
-
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+#else
+	MKPK.id = 0;
+	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)LTMK, 32);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+#endif
 
-	PT_WAIT_UNTIL(pt, app_pub[63] != app_pub[62]);
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(app_pub, 64));
 
 	msc_control_block = MSC_XFER(MSC_ECDHE, app_pub, 64, shared_key, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
@@ -805,7 +854,6 @@ int shared_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
-	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
 	reliable_control_block.pdata = app_pub;
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	
@@ -815,7 +863,6 @@ int shared_ble(pt_t *pt)
 	reliable_control_block.last_bytes = sizeof(dev_pub) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 
-	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
 	reliable_control_block.pdata = (void*)&encrypt_share_info;
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_SHARE_INFO));
 
@@ -892,14 +939,12 @@ uint8_t cipher2[64];
 int test_thd(pt_t *pt)
 {
 	PT_BEGIN(pt);
-
+	uint8_t test_crc[] = "1234567890";
 	nrf_gpio_pin_set(PROFILE_PIN);
-//	hkdf_test();
-	sha256_hkdf(   test_str,          32,
-		  (void *)share_salt,         sizeof(share_salt)-1,
-	      (void *)share_info,         sizeof(share_info)-1,
-	    (void *)&session_key,         32);
+	uint32_t crc = soft_crc32(test_crc , 10, 0xFFFFFFFF);
 	nrf_gpio_pin_clear(PROFILE_PIN);
+	NRF_LOG_INFO("CRC32 %04X", crc);
+
 	nrf_gpio_pin_set(PROFILE_PIN);
 //	hkdf_test();
 	sha256_hkdf(   test_str,          32,
@@ -942,11 +987,10 @@ int test_thd(pt_t *pt)
 
 void mi_schedulor(void * p_context)
 {
-
 	schd_time++;
 	uint32_t *p_auth_status = p_context;
 	uint8_t auth_type = *p_auth_status & 0x30;
-
+	
 #ifdef M_TEST
 
 	test_thd(&pt3);
@@ -966,6 +1010,8 @@ void mi_schedulor(void * p_context)
 			shared_login_procedure();
 			break;
 	}
+	
 
 #endif
+
 }

@@ -547,7 +547,6 @@ void hkdf_test(void)
 			0x1d,0x87
 	};
 	unsigned char out_key[82];
-//	sha256_hkdf(key_material,32,salt,19,info,19,out_key,64);
 
 	sha256_hkdf(key_material,sizeof(key_material),salt,sizeof(salt),info,sizeof(info),out_key,82);
 

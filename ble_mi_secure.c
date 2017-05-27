@@ -93,14 +93,12 @@ static void on_write(ble_evt_t * p_ble_evt)
 			if (pframe->f.ctrl.mode == MODE_CMD) {
 				fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->f.ctrl.type;
 				reliable_control_block.mode = MODE_CMD;
-				reliable_control_block.type = cmd;
+				reliable_control_block.cmd = cmd;
 				switch (cmd) {
-					case DEV_CERT:
-					case DEV_MANU_CERT:
 					case DEV_PUBKEY:
-					case DEV_SIGNATURE:
+					case DEV_LOGIN_INFO:
 					case DEV_SHARE_INFO:
-						reliable_control_block.amount = *(uint16_t*)pframe->f.ctrl.arg;
+						reliable_control_block.rx_num = *(uint16_t*)pframe->f.ctrl.arg;
 						break;
 					default:
 						NRF_LOG_ERROR("Unkown reliable CMD.\n");
@@ -109,7 +107,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 			else {
 				fctrl_ack_t ack = (fctrl_ack_t)pframe->f.ctrl.type;
 				reliable_control_block.mode = MODE_ACK;
-				reliable_control_block.type = ack;
+				reliable_control_block.ack = ack;
 				switch (ack) {
 					case A_SUCCESS:
 					case A_READY:
@@ -361,7 +359,7 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("can't send cmd\n");
+		NRF_LOG_INFO("can't send cmd: %d\n", cmd);
 	}
 
 	return errno;
@@ -397,7 +395,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_RAW_INFO("Can't send sn %d :%X\n", sn, errno);
+		NRF_LOG_RAW_INFO("Can't send pkg %d: %X\n", sn, errno);
 	}
 
 	return errno;
@@ -405,13 +403,10 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
 
 int reliable_xfer_ack(fctrl_ack_t ack, ...)
 {
-	ble_gatts_hvx_params_t hvx_params;
-	reliable_xfer_frame_t       frame;
+	ble_gatts_hvx_params_t hvx_params = {0};
+	reliable_xfer_frame_t       frame = {0};
 	uint16_t                 data_len;
 	uint32_t                    errno;
-
-    memset(&hvx_params, 0, sizeof(hvx_params));
-    memset(&frame,      0, sizeof(frame));
 
 	frame.f.ctrl.mode = MODE_ACK;
 	frame.f.ctrl.type =      ack;
@@ -436,7 +431,7 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("can't send ack\n");
+		NRF_LOG_INFO("can't send ack: %d\n", ack);
 	}
 
 	return errno;

@@ -116,9 +116,11 @@ typedef enum {
 
 typedef struct {
 	uint16_t        amount;
+	uint16_t        rx_num;
 	uint16_t       curr_sn;
 	uint8_t           mode;
-	uint8_t           type;
+	uint8_t            cmd;
+	uint8_t            ack;
 	uint8_t         *pdata;
 	uint8_t     last_bytes;
 	r_xfer_stat_t   status;

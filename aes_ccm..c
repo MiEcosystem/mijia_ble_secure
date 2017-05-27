@@ -189,10 +189,6 @@ static uint8_t aes_ccmBaseTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
     
     encTmp.bf.A[14] = counter>>8;
     encTmp.bf.A[15] = counter & 0xff;
-
-//    if ( opt == AES_DECRYPTION ) {
-//        msgLen = mStrLen - micLen;
-//    }
     
     msgLen = mStrLen;
     if (msgLen & 0x0f) {
@@ -344,7 +340,7 @@ static uint8_t aes_ccmDecAuthTran(uint8_t micLen, uint8_t *key, uint8_t *nonce,
     uint8_t tmpMic[AES_BLOCK_SIZE];
     uint8_t i;
     aes_ccmAuthTran(micLen, key, nonce, mStr, mStrLen, aStr, aStrLen, tmpMic);
-    for ( i=0; i<micLen; i++ ) {
+    for (i = 0; i < micLen; i++ ) {
         if ( mic[i] != tmpMic[i] ) {
             return 1;
         }
@@ -381,7 +377,7 @@ uint8_t aes_ccm_encrypt_raw(
 	uint8_t *mic,  uint8_t micLen,
 	uint8_t *mStr, uint8_t mStrLen)
 {
-	if ( aStr_len > 14 )
+	if ( aStr_len > 30 )
 		return AES_FAIL;
 
     aes_ccmAuthTran(micLen, key, nonce, mStr, mStrLen, aStr, aStr_len, mic);
@@ -396,7 +392,7 @@ uint8_t aes_ccm_decrypt_raw(
 	uint8_t *mic,  uint8_t micLen,
 	uint8_t *mStr, uint8_t mStrLen)
 {
-	if ( aStr_len > 14 )
+	if ( aStr_len > 30 )
 		return AES_FAIL;
 
     aes_ccmDecTran(micLen, key, nonce, mStr, mStrLen, aStr, aStr_len, mic);
@@ -463,6 +459,7 @@ void aes_ecb_test(void)
     NRF_LOG_INFO("Cipher Text:\n");
     NRF_LOG_HEXDUMP_INFO(c, 16);
 }
+
 #define LEN 32
 void aes_ccm_test(void)
 {
@@ -475,12 +472,12 @@ void aes_ccm_test(void)
 	uint8_t d[64] = {0};
     uint8_t  mic[4] = {0};
 	uint8_t astr[4] = {1,2,3,4};
-    aes_ccm_encrypt(k, nonce, astr, sizeof(astr), mic, 4, p, LEN, c);
 
+    aes_ccm_encrypt(k, nonce, astr, sizeof(astr), mic, 4, p, LEN, c);
 	aes_ccm_decrypt(k, nonce, astr, sizeof(astr), mic, 4, c, LEN, d);
 
 //    NRF_LOG_INFO("Clear Text:\r\n");
-//    NRF_LOG_HEXDUMP_INFO(p, 32);
+//    NRF_LOG_HEXDUMP_INFO(p, LEN);
     NRF_LOG_INFO("Cipher Text:\r\n");
     NRF_LOG_HEXDUMP_INFO(c, LEN);
 

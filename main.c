@@ -38,6 +38,8 @@
 #include "ble_mi_secure.h"
 #include "mi_secure.h"
 #include "mibeacon.h"
+#include "aes_ccm.h"
+
 #include "app_util_platform.h"
 #include "bsp.h"
 #include "bsp_btn_ble.h"
@@ -143,7 +145,6 @@ static void gap_params_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
 /**@brief Function for handling the data from the Nordic UART Service.
  *
  * @details This function will process the data received from the Nordic UART BLE Service and send
@@ -154,11 +155,19 @@ static void gap_params_init(void)
  * @param[in] length   Length of the data.
  */
 /**@snippet [Handling the data received over BLE] */
+typedef struct {
+	uint8_t dev_key[16];
+	uint8_t app_key[16];
+	uint8_t reserve[32];
+} session_key_t;
+extern session_key_t session_key;
+uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+                         0x19, 0x1a, 0x1b, 0x1c};
 static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
 {
-    for (uint32_t i = 0; i < length; i++)
-    {
-    }
+	uint8_t msg[length];
+	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 0, p_data+length-4, 4, p_data, length-4, msg);
+	NRF_LOG_HEXDUMP_INFO(msg, length-4);
 }
 /**@snippet [Handling the data received over BLE] */
 

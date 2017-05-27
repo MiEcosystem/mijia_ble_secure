@@ -44,7 +44,7 @@ APP_TIMER_DEF(mi_schd_timer_id);
 
 #define PRINT_MSC_INFO     0
 #define PRINT_MAC          0
-#define PRINT_DEV_PUBKEY   0
+#define PRINT_DEV_PUBKEY   1
 #define PRINT_SHA256       0
 #define PRINT_SIGN         0
 
@@ -95,7 +95,6 @@ struct {
 	uint8_t cipher[sizeof(shared_info)];
 	uint8_t mic[4];
 } encrypt_share_info;
-
 
 uint8_t rand_key[16];
 
@@ -577,6 +576,7 @@ int reg_auth(pt_t *pt)
 	mbedtls_sha256_update(&sha256_ctx, dev_be,  sizeof(dev_be));
 	mbedtls_sha256_update(&sha256_ctx, dev_pub,  sizeof(dev_pub));
 	mbedtls_sha256_finish(&sha256_ctx, dev_sha);
+
 #if (PRINT_MSC_INFO  == 1)
 	NRF_LOG_RAW_INFO("MSC info\t");
 	NRF_LOG_HEXDUMP_INFO(msc_info, 12);
@@ -643,13 +643,13 @@ int reg_ble(pt_t *pt)
 	reliable_control_block.last_bytes = (sizeof(msc_info) + sizeof(dev_pub)) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_cert, m_certs_len.dev));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_cert, m_certs_len.dev-2));
 	reliable_control_block.pdata  = dev_cert;
 	reliable_control_block.amount = CEIL_DIV(m_certs_len.dev, 18);
 	reliable_control_block.last_bytes = m_certs_len.dev % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_CERT));
 	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(manu_cert, m_certs_len.manu));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(manu_cert, m_certs_len.manu-2));
 	reliable_control_block.pdata  = manu_cert;
 	reliable_control_block.amount = CEIL_DIV(m_certs_len.manu, 18);
 	reliable_control_block.last_bytes = m_certs_len.manu % 18;
@@ -764,14 +764,16 @@ int login_auth(pt_t *pt)
   	if(login_encrypt_data[0] == login_encrypt_data[1]) {
 		NRF_LOG_INFO("LOG SUCCESS.\n");
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
+		mi_schedulor_stop(LOG_SUCCESS);
 	}
 	else {
 		NRF_LOG_ERROR("LOG FAILED.%d\n",errno);
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
+		mi_schedulor_stop(LOG_FAILED);
+
 	}
 
 	// log success
-	mi_schedulor_stop(LOG_FAILED);
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
@@ -939,9 +941,9 @@ uint8_t cipher2[64];
 int test_thd(pt_t *pt)
 {
 	PT_BEGIN(pt);
-	uint8_t test_crc[] = "1234567890";
+	uint8_t test_crc[] = "123456789";
 	nrf_gpio_pin_set(PROFILE_PIN);
-	uint32_t crc = soft_crc32(test_crc , 10, 0xFFFFFFFF);
+	uint32_t crc = soft_crc32(test_crc, 9, 0);
 	nrf_gpio_pin_clear(PROFILE_PIN);
 	NRF_LOG_INFO("CRC32 %04X", crc);
 

@@ -15,12 +15,12 @@
 #include "ble_mi_secure.h"
 #include "mi_secure.h"
 
-#define NRF_LOG_MODULE_NAME "ble_mi"
+#define NRF_LOG_MODULE_NAME "BLEM"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
 #define BLE_UUID_MI_AUTH   0x0010                      /**< The UUID of the AUTH   Characteristic. */
-#define BLE_UUID_MI_BUFFER 0x0015                      /**< The UUID of the Buffer Characteristic. */
+#define BLE_UUID_MI_SECURE 0x0015                      /**< The UUID of the Secure Characteristic. */
 #define BLE_UUID_MI_PUBKEY 0x0016                      /**< The UUID of the PubKey Characteristic. */
 
 #define PUBKEY_BYTE 255
@@ -87,8 +87,9 @@ static void on_write(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_write->handle == mi_srv.secure_handles.value_handle)
     {
+		NRF_LOG_HEXDUMP_INFO(p_evt_write->data, p_evt_write->len);
 		reliable_xfer_frame_t *pframe = (void*)p_evt_write->data;
-		uint16_t  curr_sn = pframe->sn;
+		uint16_t  curr_sn = pframe->sn; 
 		if (curr_sn == 0 ) {
 			if (pframe->f.ctrl.mode == MODE_CMD) {
 				fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->f.ctrl.type;
@@ -338,7 +339,7 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
 	uint16_t                 data_len;
 	uint32_t                    errno;
 	uint16_t                      arg;
-	
+
 	frame.f.ctrl.mode = MODE_CMD;
 	frame.f.ctrl.type =      cmd;
 
@@ -357,6 +358,8 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
 
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
+	
+	NRF_LOG_INFO("cmd %d\n", cmd);
 
 	if (errno != NRF_SUCCESS) {
 		NRF_LOG_INFO("can't send cmd: %d\n", cmd);
@@ -377,7 +380,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
 	frame.sn = sn;
 	pdata   += sn - 1;
 
-	if (sn == pxfer->amount) {
+	if (sn == pxfer->tx_num) {
 		data_len = pxfer->last_bytes;
 	}
 	else {
@@ -393,7 +396,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
 
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
-
+	
 	if (errno != NRF_SUCCESS) {
 		NRF_LOG_RAW_INFO("Can't send pkg %d: %X\n", sn, errno);
 	}
@@ -407,7 +410,7 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
 	reliable_xfer_frame_t       frame = {0};
 	uint16_t                 data_len;
 	uint32_t                    errno;
-
+	
 	frame.f.ctrl.mode = MODE_ACK;
 	frame.f.ctrl.type =      ack;
 	data_len = sizeof(frame.sn) + sizeof(frame.f.ctrl.type) + sizeof(frame.f.ctrl.mode);
@@ -500,7 +503,7 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 	char_props = (ble_gatt_char_props_t){0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
-    err_code = char_add(BLE_UUID_MI_BUFFER, NULL, 20, char_props, &mi_srv.secure_handles);
+    err_code = char_add(BLE_UUID_MI_SECURE, NULL, 20, char_props, &mi_srv.secure_handles);
     VERIFY_SUCCESS(err_code);
 
 	// Add the Pubkey Characteristic.

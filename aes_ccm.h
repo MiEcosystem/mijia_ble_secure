@@ -16,4 +16,5 @@ uint8_t aes_ccm_decrypt(
 	uint8_t *mStr, uint8_t mStrLen, uint8_t *result);
 
 uint32_t soft_crc32(const void *pdata, uint32_t data_size, uint32_t crc);
+
 #endif

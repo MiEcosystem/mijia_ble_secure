@@ -16,10 +16,13 @@
 #include "aes_ccm.h"
 #include "mi_secure.h"
 
+#pragma anon_unions
+
 typedef struct {
 	uint8_t dev_key[16];
 	uint8_t app_key[16];
-	uint8_t reserve[32];
+	uint8_t      iv[4];
+	uint8_t reserve[28];
 } session_key_t;
 
 typedef struct {
@@ -34,7 +37,6 @@ typedef struct {
 } msc_info_t;
 
 typedef struct {
-	uint32_t create_time;
 	uint32_t expire_time;
 	uint32_t key_id;
 	uint32_t reserved;
@@ -44,21 +46,43 @@ APP_TIMER_DEF(mi_schd_timer_id);
 
 #define PRINT_MSC_INFO     0
 #define PRINT_MAC          0
-#define PRINT_DEV_PUBKEY   1
+#define PRINT_DEV_PUBKEY   0
 #define PRINT_SHA256       0
 #define PRINT_SIGN         0
 
-#define PROFILE_PIN  25
+#define PROFILE_PIN        25
 #define DATA_IS_VAILD(x,n)   ((x[n-1] != 0) && (x[n-2] != 0))
 #define DATA_IS_INVAILD(x,n) (x[n-1] = x[n-2] = 0)
 #define MSC_XFER(CMD, INPUT, INPUT_L, OUTPUT, OUTPUT_L)                         \
 (msc_xfer_control_block_t) {    .cmd      = CMD,                                \
-								.p_para   = INPUT,                              \
-								.para_len = INPUT_L,                            \
-								.p_data   = OUTPUT,                             \
-								.data_len = OUTPUT_L }
+                                .p_para   = INPUT,                              \
+                                .para_len = INPUT_L,                            \
+                                .p_data   = OUTPUT,                             \
+                                .data_len = OUTPUT_L }
 
 extern uint32_t auth_status;
+
+#define SET_DATA_VAILD(x)        (x = 1)
+#define SET_DATA_INVAILD(x)      (x = 0)
+#define DATA_IS_VAILD_P(x)       (x == 1)
+#define DATA_IS_INVAILD_P(x)     (x == 0)
+
+static struct {
+	uint8_t app_pub    :1 ;
+	uint8_t dev_pub    :1 ;
+	uint8_t msc_info   :1 ;
+	uint8_t dev_sha    :1 ;
+	uint8_t shared_key :1 ;
+	uint8_t LTMK       :1 ;
+	uint8_t session_key:1 ;
+	uint8_t dev_sign   :1 ;
+
+	uint8_t MKPK       :1 ;
+	uint8_t encrypt_data :1 ;
+	uint8_t login_encrypt_data :1 ;
+	uint8_t shared_info :1 ;
+} flags;
+
 ble_gap_addr_t dev_mac;
 uint8_t app_pub[64];
 uint8_t msc_info[12];
@@ -85,9 +109,9 @@ uint32_t login_encrypt_data[2];
 
 struct {
 	union {
-		uint8_t cipher[16];
+		uint8_t cipher[sizeof(shared_key_t)];
 		shared_key_t key;
-	} u;
+	};
 	uint8_t mic[4];
 } shared_info;
 
@@ -102,7 +126,6 @@ static uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18
                          0x19, 0x1a, 0x1b, 0x1c};
 
 msc_info_t tmp_info;
-mbedtls_sha256_context sha256_ctx;
 struct {
 	uint16_t dev;
 	uint16_t manu;
@@ -166,10 +189,11 @@ int mi_schedulor_start(uint32_t *p_context)
 	PT_INIT(&pt3);
 	PT_INIT(&pt4);
 
-	memset(app_pub,      0, 364);
+	memset(&flags, 0, 2);
+	memset(app_pub, 0, 364);
 	login_encrypt_data[1] = 0;
 
-	NRF_LOG_INFO("START\n");
+	NRF_LOG_WARNING("START %d\n\n", *p_context);
 	errno = app_timer_start(mi_schd_timer_id, schd_interval, p_context);
 	APP_ERROR_CHECK(errno);
 	return errno;
@@ -213,7 +237,7 @@ static uint16_t find_lost_sn(reliable_xfer_t *pxfer)
 	uint8_t (*p_pkg)[18] = (void*)pxfer->pdata;
 
 	p_pkg += checked_sn - 1;
-	while (((uint16_t*)p_pkg)[0] != 0 ) {
+	while (((uint16_t*)p_pkg)[0] != 0 && checked_sn <= pxfer->rx_num) {
 		checked_sn++;
 		p_pkg++;
 	}
@@ -241,6 +265,7 @@ static int pthd_resend(pt_t *pt, reliable_xfer_t *pxfer)
 			PT_EXIT(pt);
 		}
 		else {
+			NRF_LOG_ERROR("lost packet %d.\n", sn);
 			PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_LOST, sn) == NRF_SUCCESS);
 			PT_WAIT_UNTIL(pt, pxfer->curr_sn == sn);
 		}
@@ -258,17 +283,17 @@ static int pthd_send(pt_t *pt, reliable_xfer_t *pxfer)
 	static uint16_t sn;
 	sn = 1;
 
-	while(sn <= pxfer->amount) {
+	while(sn <= pxfer->tx_num) {
 		PT_WAIT_UNTIL(pt, reliable_xfer_data(pxfer, sn) == NRF_SUCCESS);
 		sn++;
 	}
-
+	
 	while(pxfer->mode == MODE_ACK && pxfer->ack != A_SUCCESS) {
 		PT_WAIT_UNTIL(pt, pxfer->curr_sn != 0 || pxfer->ack == A_SUCCESS);
 		if (pxfer->ack == A_SUCCESS) {
 			break;
 		}
-		else if(pxfer->curr_sn <= pxfer->amount) {
+		else if(pxfer->curr_sn <= pxfer->tx_num) {
 			PT_WAIT_UNTIL(pt, reliable_xfer_data(pxfer, pxfer->curr_sn) == NRF_SUCCESS);
 		}
 		pxfer->curr_sn = 0;
@@ -297,7 +322,7 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 		reliable_control_block.type = cmd;
 		switch (cmd) {
 			case DEV_CERT:
-				reliable_control_block.amount = *(uint16_t*)pframe->f.ctrl.arg;
+				reliable_control_block.tx_num = *(uint16_t*)pframe->f.ctrl.arg;
 				break;
 			default:
 				NRF_LOG_ERROR("Unkown reliable CMD.\n");
@@ -310,13 +335,13 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 
 //	APP Layer PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 	timer_set(&rxd_timer, 1000);
-	while(pframe->sn > 0 && pframe->sn < reliable_control_block.amount && !timer_expired(&rxd_timer)) {
+	while(pframe->sn > 0 && pframe->sn < reliable_control_block.tx_num && !timer_expired(&rxd_timer)) {
 		memcpy(reliable_control_block.pdata + (pframe->sn - 1) * 18, pframe->f.data, len-sizeof(pframe->sn));
 		timer_set(&rxd_timer, 1000);
 		PT_YIELD(pt);
 	}
 	
-	if (pframe->sn == reliable_control_block.amount)
+	if (pframe->sn == reliable_control_block.tx_num)
 		memcpy(reliable_control_block.pdata + (pframe->sn - 1) * 18, pframe->f.data, len-sizeof(pframe->sn));
 	else {
 		rl_xfer_mode = 3;
@@ -353,7 +378,7 @@ int reliable_rxd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	PT_WAIT_UNTIL(pt, pxfer->rx_num != 0 && pxfer->cmd == data_type);
 	PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 
-	timer_set(&timeout_timer, 10000);
+	timer_set(&timeout_timer, 2000);
 	PT_WAIT_UNTIL(pt, pxfer->rx_num == pxfer->curr_sn || timer_expired(&timeout_timer));
 
 	PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, pxfer));
@@ -369,13 +394,13 @@ int reliable_txd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	PT_BEGIN(pt);
 
 	/* Send data. */
-	PT_WAIT_UNTIL(pt, reliable_xfer_cmd(data_type, pxfer->amount) == NRF_SUCCESS);
+	PT_WAIT_UNTIL(pt, reliable_xfer_cmd(data_type, pxfer->tx_num) == NRF_SUCCESS);
 
 	PT_WAIT_UNTIL(pt, pxfer->mode == MODE_ACK && pxfer->ack == A_READY);
 
 	PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, pxfer));
 
-	pxfer->amount = 0;
+	pxfer->tx_num = 0;
 	PT_END(pt);
 }
 
@@ -396,14 +421,14 @@ static int reliable_xfer_test(pt_t *pt)
 		PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, &reliable_control_block));
 
 		/* Send data. */
-		reliable_control_block.amount = rx_amount;
-		PT_WAIT_UNTIL(pt, reliable_xfer_cmd(DEV_CERT, reliable_control_block.amount) == NRF_SUCCESS);
+		reliable_control_block.tx_num = rx_amount;
+		PT_WAIT_UNTIL(pt, reliable_xfer_cmd(DEV_CERT, reliable_control_block.tx_num) == NRF_SUCCESS);
 
 		PT_WAIT_UNTIL(pt, reliable_control_block.mode == MODE_ACK && reliable_control_block.ack == A_READY);
 
 		PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, &reliable_control_block));
 
-		reliable_control_block.amount = 0;
+		reliable_control_block.tx_num = 0;
 		/* And we loop. */
 	}
 
@@ -564,17 +589,18 @@ int reg_auth(pt_t *pt)
     #endif
 
 	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_pub, 64));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
 
-	uint8_t dev_be[6];
+	uint8_t dev_mac_be[6];
 	for (int i = 0; i<6; i++)
-		dev_be[i] = dev_mac.addr[5-i];
+		dev_mac_be[i] = dev_mac.addr[5-i];
 
+	mbedtls_sha256_context sha256_ctx;
 	mbedtls_sha256_init(&sha256_ctx);
 	mbedtls_sha256_starts(&sha256_ctx, 0 );
-	mbedtls_sha256_update(&sha256_ctx, msc_info,  sizeof(msc_info));
-	mbedtls_sha256_update(&sha256_ctx, dev_be,  sizeof(dev_be));
-	mbedtls_sha256_update(&sha256_ctx, dev_pub,  sizeof(dev_pub));
+	mbedtls_sha256_update(&sha256_ctx, msc_info,    sizeof(msc_info));
+	mbedtls_sha256_update(&sha256_ctx, dev_mac_be,  sizeof(dev_mac_be));
+	mbedtls_sha256_update(&sha256_ctx, dev_pub,     sizeof(dev_pub));
 	mbedtls_sha256_finish(&sha256_ctx, dev_sha);
 
 #if (PRINT_MSC_INFO  == 1)
@@ -594,7 +620,7 @@ int reg_auth(pt_t *pt)
 	NRF_LOG_HEXDUMP_INFO(dev_sha, 32);
 #endif
 
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(shared_key, 32));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.shared_key));
 	sha256_hkdf(  shared_key,         sizeof(shared_key),
 			(void *)reg_salt,         sizeof(reg_salt)-1,
 	        (void *)reg_info,         sizeof(reg_info)-1,
@@ -636,30 +662,36 @@ int reg_ble(pt_t *pt)
 
 	reliable_control_block.pdata = app_pub;
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
+	SET_DATA_VAILD(flags.app_pub);
+	NRF_LOG_INFO("app_pub recived.\n");
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_pub, 64));
 	reliable_control_block.pdata  = msc_info;
-	reliable_control_block.amount = CEIL_DIV(sizeof(msc_info) + sizeof(dev_pub), 18);
+	reliable_control_block.tx_num = CEIL_DIV(sizeof(msc_info) + sizeof(dev_pub), 18);
 	reliable_control_block.last_bytes = (sizeof(msc_info) + sizeof(dev_pub)) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
-	
+	NRF_LOG_INFO("dev_pub send.\n");
+
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_cert, m_certs_len.dev-2));
 	reliable_control_block.pdata  = dev_cert;
-	reliable_control_block.amount = CEIL_DIV(m_certs_len.dev, 18);
+	reliable_control_block.tx_num = CEIL_DIV(m_certs_len.dev, 18);
 	reliable_control_block.last_bytes = m_certs_len.dev % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_CERT));
+	NRF_LOG_INFO("dev_cert send.\n");
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(manu_cert, m_certs_len.manu-2));
 	reliable_control_block.pdata  = manu_cert;
-	reliable_control_block.amount = CEIL_DIV(m_certs_len.manu, 18);
+	reliable_control_block.tx_num = CEIL_DIV(m_certs_len.manu, 18);
 	reliable_control_block.last_bytes = m_certs_len.manu % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_MANU_CERT));
+	NRF_LOG_INFO("manu_cert send.\n");
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(encrypt_data.mic, 4));
 	reliable_control_block.pdata  = (void*)&encrypt_data;
-	reliable_control_block.amount = CEIL_DIV(sizeof(encrypt_data), 18);
+	reliable_control_block.tx_num = CEIL_DIV(sizeof(encrypt_data), 18);
 	reliable_control_block.last_bytes = sizeof(encrypt_data) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_SIGNATURE));
+	NRF_LOG_INFO("encrypt_data send.\n");
 
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
@@ -679,6 +711,7 @@ int reg_msc(pt_t *pt)
 
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.dev_pub);
 
 	msc_control_block = MSC_XFER(MSC_CERTS_LEN, NULL, 0, (void*)&m_certs_len, sizeof(m_certs_len));
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
@@ -692,10 +725,11 @@ int reg_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_MANU_CERT, NULL, 0, manu_cert, m_certs_len.manu);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(app_pub, 64));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.app_pub));
 
 	msc_control_block = MSC_XFER(MSC_ECDHE, app_pub, 64, shared_key, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.shared_key);
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_sha, 32));
 
@@ -715,7 +749,7 @@ int reg_msc(pt_t *pt)
 #else
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(LTMK, 32));
 	
-	MKPK.id = 0;
+	MKPK.id = 1;
 	memcpy(MKPK.cipher, LTMK, 32);
 	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32, NULL, 0);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
@@ -751,7 +785,7 @@ int login_auth(pt_t *pt)
 	        (void *)log_info,         sizeof(log_info)-1,
 	    (void *)&session_key,         sizeof(session_key));
 
-	PT_WAIT_UNTIL(pt, login_encrypt_data[1] != 0);
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.login_encrypt_data));
 
 	uint8_t errno = 
 	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 0,
@@ -760,14 +794,16 @@ int login_auth(pt_t *pt)
 	
 //	login_encrypt_data[1] =  soft_crc32(dev_pub, 64, 0);
 	login_encrypt_data[1] = *(uint32_t*)dev_pub;
-
+//	NRF_LOG_HEXDUMP_INFO(shared_key, 64);
+//	NRF_LOG_HEXDUMP_INFO(session_key.dev_key, 16);
+	 
   	if(login_encrypt_data[0] == login_encrypt_data[1]) {
 		NRF_LOG_INFO("LOG SUCCESS.\n");
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
 		mi_schedulor_stop(LOG_SUCCESS);
 	}
 	else {
-		NRF_LOG_ERROR("LOG FAILED.%d\n",errno);
+		NRF_LOG_ERROR("LOG FAILED.%d\n", errno);
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
 		mi_schedulor_stop(LOG_FAILED);
 
@@ -784,16 +820,17 @@ int login_ble(pt_t *pt)
 	
 	reliable_control_block.pdata = app_pub;
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
-	
+	SET_DATA_VAILD(flags.app_pub);
+
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_pub, 64));
 	reliable_control_block.pdata  = dev_pub;
-	reliable_control_block.amount = CEIL_DIV(sizeof(dev_pub), 18);
+	reliable_control_block.tx_num = CEIL_DIV(sizeof(dev_pub), 18);
 	reliable_control_block.last_bytes = sizeof(dev_pub) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 
 	reliable_control_block.pdata = (void*)login_encrypt_data;
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_LOGIN_INFO));
-
+	SET_DATA_VAILD(flags.login_encrypt_data);
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
@@ -810,12 +847,12 @@ int login_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 #else
-	MKPK.id = 0;
+	MKPK.id = 1;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)LTMK, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 #endif
 
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(app_pub, 64));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.app_pub));
 
 	msc_control_block = MSC_XFER(MSC_ECDHE, app_pub, 64, shared_key, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
@@ -861,7 +898,7 @@ int shared_ble(pt_t *pt)
 	
 	PT_WAIT_UNTIL(pt, dev_pub[63] != dev_pub[62]);
 	reliable_control_block.pdata  = dev_pub;
-	reliable_control_block.amount = CEIL_DIV(sizeof(dev_pub), 18);
+	reliable_control_block.tx_num = CEIL_DIV(sizeof(dev_pub), 18);
 	reliable_control_block.last_bytes = sizeof(dev_pub) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 
@@ -878,8 +915,7 @@ int verify_key(shared_key_t *pkey)
 {
 	time_t curr_time = time(NULL);
 
-	if (curr_time >= pkey->create_time &&
-		curr_time <= pkey->expire_time + RTC_TIME_DRIFT)
+	if (curr_time <= pkey->expire_time + RTC_TIME_DRIFT)
 		return 1;
 	else
 		return 0;
@@ -906,10 +942,10 @@ int shared_auth(pt_t *pt)
 
 	aes_ccm_decrypt(LTMK, nonce, NULL, 0,
 					shared_info.mic,    sizeof(shared_info.mic),
-					shared_info.u.cipher , sizeof(shared_info.u.cipher),
+					shared_info.cipher , sizeof(shared_info.cipher),
 					(void*)&shared_info);
 	
-	if (verify_key(&shared_info.u.key) == false) {
+	if (verify_key(&shared_info.key) == false) {
 		NRF_LOG_ERROR("SHARED LOG FAILED.\n");
 		mi_schedulor_stop(SHARED_LOG_FAILED);
 	}
@@ -990,6 +1026,7 @@ int test_thd(pt_t *pt)
 void mi_schedulor(void * p_context)
 {
 	schd_time++;
+//	NRF_LOG_RAW_INFO("schd time: %dms\n", schd_time*10);
 	uint32_t *p_auth_status = p_context;
 	uint8_t auth_type = *p_auth_status & 0x30;
 	

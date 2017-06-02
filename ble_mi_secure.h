@@ -115,7 +115,7 @@ typedef enum {
 } r_xfer_stat_t;
 
 typedef struct {
-	uint16_t        amount;
+	uint16_t        tx_num;
 	uint16_t        rx_num;
 	uint16_t       curr_sn;
 	uint8_t           mode;

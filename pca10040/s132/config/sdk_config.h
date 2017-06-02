@@ -3646,7 +3646,7 @@
 // <i> Must be power of 2
 
 #ifndef NRF_LOG_DEFERRED_BUFSIZE
-#define NRF_LOG_DEFERRED_BUFSIZE 512
+#define NRF_LOG_DEFERRED_BUFSIZE 1024
 #endif
 
 #endif //NRF_LOG_DEFERRED
@@ -3671,7 +3671,7 @@
 // <i> Logger backend RAM usage is determined by this value.
 
 #ifndef NRF_LOG_BACKEND_MAX_STRING_LENGTH
-#define NRF_LOG_BACKEND_MAX_STRING_LENGTH 256
+#define NRF_LOG_BACKEND_MAX_STRING_LENGTH 512
 #endif
 
 // <o> NRF_LOG_TIMESTAMP_DIGITS - Number of digits for timestamp 

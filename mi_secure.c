@@ -2,8 +2,6 @@
 #include <time.h>
 #include "app_timer.h"
 #include "pt.h"
-#include "ble_mi_secure.h"
-#include "mi_secure.h"
 #include "nrf_drv_twi_patched.h"
 #include "nrf_gpio.h"
 #include "app_util.h"
@@ -15,6 +13,7 @@
 #include "sha256_hkdf.h"
 #include "aes_ccm.h"
 #include "mi_secure.h"
+#include "ble_mi_secure.h"
 
 #pragma anon_unions
 
@@ -83,7 +82,6 @@ static struct {
 	uint8_t shared_info :1 ;
 } flags;
 
-ble_gap_addr_t dev_mac;
 uint8_t app_pub[64];
 uint8_t msc_info[12];
 uint8_t dev_pub[64];
@@ -582,16 +580,17 @@ int reg_auth(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
-    #if (NRF_SD_BLE_API_VERSION == 3)
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
+
+	ble_gap_addr_t   dev_mac;
+	uint8_t          dev_mac_be[6];
+
+	#if (NRF_SD_BLE_API_VERSION == 3)
         sd_ble_gap_addr_get(&dev_mac);
     #else
         sd_ble_gap_address_get(&dev_mac);
     #endif
 
-	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
-
-	uint8_t dev_mac_be[6];
 	for (int i = 0; i<6; i++)
 		dev_mac_be[i] = dev_mac.addr[5-i];
 

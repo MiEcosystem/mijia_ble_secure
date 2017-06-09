@@ -445,11 +445,6 @@
               <FilePath>..\..\..\ble_mi_secure.c</FilePath>
             </File>
             <File>
-              <FileName>mibeacon.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\mibeacon.c</FilePath>
-            </File>
-            <File>
               <FileName>mi_secure.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mi_secure.c</FilePath>
@@ -618,6 +613,21 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>mi_arch.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_arch.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_beacon.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_beacon.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_crypto.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_crypto.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -2532,11 +2542,6 @@
               <FilePath>..\..\..\ble_mi_secure.c</FilePath>
             </File>
             <File>
-              <FileName>mibeacon.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\mibeacon.c</FilePath>
-            </File>
-            <File>
               <FileName>mi_secure.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mi_secure.c</FilePath>
@@ -2555,6 +2560,21 @@
               <FileName>time.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\time.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_arch.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_arch.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_beacon.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_beacon.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_crypto.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_crypto.c</FilePath>
             </File>
           </Files>
         </Group>

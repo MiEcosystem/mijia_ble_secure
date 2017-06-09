@@ -33,11 +33,12 @@
 #include "softdevice_handler.h"
 #include "app_timer.h"
 #include "app_button.h"
+#include "fstorage.h"
 #include "ble_nus.h"
 
 #include "ble_mi_secure.h"
 #include "mi_secure.h"
-#include "mibeacon.h"
+#include "mi_beacon.h"
 #include "aes_ccm.h"
 
 #include "app_util_platform.h"
@@ -91,13 +92,14 @@
 static ble_nus_t                        m_nus;                                      /**< Structure to identify the Nordic UART Service. */
 static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;    /**< Handle of the current connection. */
 
-static ble_uuid_t                       m_adv_uuids[] = {{BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}};  /**< Universally unique service identifier. */
+static ble_uuid_t                       m_adv_uuids[] = {{BLE_UUID_MI_SERVICE, BLE_UUID_TYPE_BLE}};  /**< Universally unique service identifier. */
 
 /* Indicates if operation on TWI has ended. */
 volatile bool m_twi0_xfer_done = false;
 
 /* TWI instance. */
 const nrf_drv_twi_t TWI0 = NRF_DRV_TWI_INSTANCE(0);
+
 
 /**@brief Function for assert macro callback.
  *
@@ -423,7 +425,7 @@ static void sys_evt_dispatch(uint32_t sys_evt)
 {
     // Dispatch the system event to the fstorage module, where it will be
     // dispatched to the Flash Data Storage (FDS) module.
-//    fs_sys_event_handler(sys_evt);
+    fs_sys_event_handler(sys_evt);
 
     // Dispatch to the Advertising module last, since it will check if there are any
     // pending flash operations in fstorage. Let fstorage process system events first,
@@ -519,103 +521,60 @@ void bsp_event_handler(bsp_event_t event)
 
 /**@brief Function for initializing the Advertising functionality.
  */
-static void advertising_init2(void)
-{
-    uint32_t               err_code;
-    ble_advdata_t          advdata;
-    ble_advdata_t          scanrsp;
-    ble_adv_modes_config_t options;
-
-    // Build advertising data struct to pass into @ref ble_advertising_init.
-    memset(&advdata, 0, sizeof(advdata));
-    advdata.name_type          = BLE_ADVDATA_FULL_NAME;
-    advdata.include_appearance = false;
-    advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
-
-    memset(&scanrsp, 0, sizeof(scanrsp));
-    scanrsp.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
-    scanrsp.uuids_complete.p_uuids  = m_adv_uuids;
-
-    memset(&options, 0, sizeof(options));
-    options.ble_adv_fast_enabled  = true;
-    options.ble_adv_fast_interval = APP_ADV_INTERVAL;
-    options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;
-
-    err_code = ble_advertising_init(&advdata, &scanrsp, &options, on_adv_evt, NULL);
-    APP_ERROR_CHECK(err_code);
-}
-
 static void advertising_init(void)
 {
     uint32_t               err_code;
-
-    uint8_t                data[20];
+    uint8_t                data[27];
     uint8_t                tmp8;
-    uint8_t                totalLen;
-    mi_sts_t               status;
-    mibeacon_capability_t  cap;
-    uint16_t               productID;
+    uint8_t                total_len;
+	ble_gap_addr_t         dev_mac;
 
-    /*-----------------------------------------------------------------------------------
-     * Set Mi Beacon
-     *---------------------------------------------------------------------------------*/
-    tmp8 = 1;
-    status = mibeacon_set(MIBEACON_ITEM_FACTORY_NEW, &tmp8, sizeof(uint8_t));
-    if (status != MI_SUCCESS) {
-        // ERROR
-        return;
-    }
-	
-    tmp8 = 4;
-    status = mibeacon_set(MIBEACON_ITEM_VERSION, &tmp8, sizeof(tmp8));
-    if (status != MI_SUCCESS) {
-        // ERROR
-        return;
-    }
-    
-    cap.value = 0;
-    cap.bf.connectable = 1;
-    cap.bf.encryptable = 1;
-    cap.bf.bondAbility = MIBEACON_BOND_PREBINDING;
-    status = mibeacon_set(MIBEACON_ITEM_CAP_INCLUDE, (uint8_t*)&cap, 1);
-    if (status != MI_SUCCESS) {
-        // ERROR
-        return;
-    }
+	mibeacon_capability_t cap = {.connectable = 1,
+	                             .encryptable = 1,
+	                             .bondAbility = 1};
 
-    // Product ID only need to set once
-    productID = APP_PRODUCT_ID;
-    status = mibeacon_set(MIBEACON_ITEM_PRODUCT_ID, (uint8_t*)&productID, 2);
-    if (status != MI_SUCCESS) {
-        // ERROR
-        return;
-    }
-		
-    // Set MAC Address Include
-    ble_gap_addr_t dev_mac;
 	#if (NRF_SD_BLE_API_VERSION == 3)
         sd_ble_gap_addr_get(&dev_mac);
     #else
         sd_ble_gap_address_get(&dev_mac);
     #endif
-    mibeacon_set(MIBEACON_ITEM_MAC_INCLUDE, dev_mac.addr, 6);
 
-    status = mibeacon_append(data, 0, &totalLen);
-    if (status != MI_SUCCESS) {
-        // ERROR
-        return;
-    }
+	mi_service_data_t  mi_data = {0}; 
+	mi_data.frame_ctrl.factory_new = 1;
+	mi_data.frame_ctrl.is_encrypt  = 1;
+	mi_data.frame_ctrl.version     = 4;
+	mi_data.pid  = 0x009C;
+//	mi_data.p_capability = &cap;
+//	mi_data.p_mac = dev_mac.addr;
+
+	mibeacon_event_t event = {0};
+	event.type = 0x100B;
+	struct {
+		uint8_t action;
+		uint8_t method;
+		uint16_t user_id;
+		time_t  time;
+	} evt_data;
+	evt_data.action = 1;
+	evt_data.method = 2;
+	evt_data.user_id = 0xFFFF;
+	evt_data.time = time(NULL);
+	event.data_len = sizeof(evt_data);
+	event.pdata = (uint8_t*)&evt_data;
+	
+	mi_data.p_event = &event;
+	mi_service_data_set(&mi_data, data, &total_len);
 
     /* Indicating Mi Service */
 	ble_advdata_service_data_t serviceData;
     serviceData.service_uuid = BLE_UUID_MI_SERVICE;
-    serviceData.data.size = totalLen;
+    serviceData.data.size = total_len;
     serviceData.data.p_data = data;
 
     // Build advertising data struct to pass into @ref ble_advertising_init.
     ble_advdata_t          advdata;
     memset(&advdata, 0, sizeof(advdata));
-    advdata.name_type          = BLE_ADVDATA_FULL_NAME;
+    advdata.name_type          = BLE_ADVDATA_NO_NAME;
     advdata.include_appearance = false;
     advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
     advdata.p_service_data_array = &serviceData;
@@ -700,7 +659,7 @@ void twi0_init (void)
     nrf_drv_twi_enable(&TWI0);
 }
 void time_init(struct tm * time_ptr);
-void aes_ccm_test(void);
+void mibeacon_test();
 /**@brief Application main function.
  */
 int main(void)
@@ -714,8 +673,10 @@ int main(void)
 	
     // Initialize.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
-	
+
 	twi0_init();
+	time_init(NULL);
+
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
     gap_params_init();
@@ -727,7 +688,6 @@ int main(void)
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
-	time_init(NULL);
 	mi_schedulor_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
 
 #ifdef M_TEST

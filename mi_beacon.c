@@ -4,6 +4,11 @@
 #include "mi_arch.h"
 #include "mi_beacon.h"
 
+
+
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+
 static uint8_t  frame_cnt;
 static uint8_t  beacon_key[16] = "DUMMY KEY";
 static struct {
@@ -102,16 +107,28 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 			beacon_nonce.cnt = frame_cnt;
 			arch_rand_get(beacon_nonce.rand,   3);
 			uint8_t mic[4];
+			uint8_t aad = 0x11;
+
+			NRF_LOG_RAW_INFO("Plain text:");
+			NRF_LOG_HEXDUMP_INFO((uint8_t*)p_frame_ctrl + 5,*output_len - 5);
+			NRF_LOG_RAW_INFO("Nonce:");
+			NRF_LOG_HEXDUMP_INFO(&beacon_nonce,12);
+			NRF_LOG_RAW_INFO("Key:");
+			NRF_LOG_HEXDUMP_INFO(beacon_key,16);
+
 			aes_ccm_encrypt(beacon_key, (uint8_t*)&beacon_nonce,
-							NULL,           0,
+							&aad, sizeof(aad),
 							mic,  sizeof(mic),
 				(uint8_t*)p_frame_ctrl + 5, *output_len - 5, (uint8_t*)p_frame_ctrl + 5);
-			
+
 			memcpy(output, beacon_nonce.rand, 3);
 			output += 3;
 			memcpy(output, mic, sizeof(mic));
-			
+
 			*output_len += 3 + sizeof(mic);
+
+			NRF_LOG_RAW_INFO("Cipher + MIC:");
+			NRF_LOG_HEXDUMP_INFO((uint8_t*)p_frame_ctrl + 5, *output_len - 5);
 		}
 		else {
 			return -1;

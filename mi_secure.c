@@ -14,15 +14,9 @@
 #include "aes_ccm.h"
 #include "mi_secure.h"
 #include "ble_mi_secure.h"
+#include "mi_crypto.h"
 
 #pragma anon_unions
-
-typedef struct {
-	uint8_t dev_key[16];
-	uint8_t app_key[16];
-	uint8_t      iv[4];
-	uint8_t reserve[28];
-} session_key_t;
 
 typedef struct {
     uint8_t  vid;
@@ -52,6 +46,7 @@ APP_TIMER_DEF(mi_schd_timer_id);
 #define PROFILE_PIN        25
 #define DATA_IS_VAILD(x,n)   ((x[n-1] != 0) && (x[n-2] != 0))
 #define DATA_IS_INVAILD(x,n) (x[n-1] = x[n-2] = 0)
+
 #define MSC_XFER(CMD, INPUT, INPUT_L, OUTPUT, OUTPUT_L)                         \
 (msc_xfer_control_block_t) {    .cmd      = CMD,                                \
                                 .p_para   = INPUT,                              \
@@ -620,11 +615,12 @@ int reg_auth(pt_t *pt)
 #endif
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.shared_key));
+nrf_gpio_pin_clear(PROFILE_PIN);
 	sha256_hkdf(  shared_key,         sizeof(shared_key),
 			(void *)reg_salt,         sizeof(reg_salt)-1,
 	        (void *)reg_info,         sizeof(reg_info)-1,
 	    (void *)&session_key,         sizeof(session_key));
-
+nrf_gpio_pin_set(PROFILE_PIN);
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_sign, 64));
 	aes_ccm_encrypt(session_key.dev_key, nonce, NULL, 0, encrypt_data.mic, 4, dev_sign, 64, encrypt_data.cipher);
 	
@@ -651,6 +647,7 @@ int reg_auth(pt_t *pt)
 	
 	// fs_store(rand_key);
 	// log encrypt procedure
+	
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
@@ -755,7 +752,7 @@ int reg_msc(pt_t *pt)
 	
 #endif
 	
-	
+	mi_schedulor_stop(REG_SUCCESS);
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
@@ -967,6 +964,7 @@ void shared_login_procedure()
 
 void aes_ecb_test();
 void aes_ccm_test();
+void aes_ccm_test2();
 uint8_t test_str[] = {12, 1,2,3,4,5,6,7,8,9,0,1,2,
 					   1, 0,
 					  16, 0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30,
@@ -976,14 +974,23 @@ uint8_t cipher2[64];
 int test_thd(pt_t *pt)
 {
 	PT_BEGIN(pt);
-	uint8_t test_crc[] = "123456789";
-	nrf_gpio_pin_set(PROFILE_PIN);
-	uint32_t crc = soft_crc32(test_crc, 9, 0);
-	nrf_gpio_pin_clear(PROFILE_PIN);
-	NRF_LOG_INFO("CRC32 %04X", crc);
+	int i;
 
+//	i = 1000;
+//	nrf_gpio_pin_set(PROFILE_PIN);
+//	while(i--)
+//	aes_ccm_test();
+//	nrf_gpio_pin_clear(PROFILE_PIN);
+
+//	i = 1000;
+//	nrf_gpio_pin_set(PROFILE_PIN);
+//	while(i--)
+//	aes_ccm_test2();
+//	nrf_gpio_pin_clear(PROFILE_PIN);
+
+	i = 1000;
 	nrf_gpio_pin_set(PROFILE_PIN);
-//	hkdf_test();
+	while(i--)
 	sha256_hkdf(   test_str,          32,
 		  (void *)share_salt,         sizeof(share_salt)-1,
 	      (void *)share_info,         sizeof(share_info)-1,
@@ -1036,6 +1043,8 @@ void mi_schedulor(void * p_context)
 //	reliable_xfer_test(&pt2);
 
 #else
+	
+	nrf_gpio_pin_set(PROFILE_PIN);
 
 	switch (auth_type) {
 		case REG_START:
@@ -1049,6 +1058,7 @@ void mi_schedulor(void * p_context)
 			break;
 	}
 	
+	nrf_gpio_pin_clear(PROFILE_PIN);
 
 #endif
 

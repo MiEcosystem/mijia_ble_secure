@@ -418,53 +418,49 @@ uint8_t aes_ccm_decrypt(
     }
     return AES_FAIL;
 }
+#ifdef M_TEST
+static uint8_t k[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+			0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
+static uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+			0x18, 0x19, 0x1a, 0x1b, 0x1c};
+static uint8_t p[64] = "HELLOWORLD!@#$%^helloworld123456";
+static uint8_t c[64] = {0};
+static uint8_t d[64] = {0};
+static uint8_t  mic[4] = {0};
+static uint8_t astr[4] = {1,2,3,4};
 
 void aes_ecb_test(void)
 {
-    uint8_t p[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-                0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
-    uint8_t k[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-                0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
-    uint8_t c[32] = {0};
 
-    NRF_LOG_INFO("Plain Text:\n");
-    NRF_LOG_HEXDUMP_INFO(p, sizeof(p));
+//    NRF_LOG_INFO("Plain Text:\n");
+//    NRF_LOG_HEXDUMP_INFO(p, sizeof(p));
 
     nrf_aes_ecb_encrypt(k, p, c);
 
-    NRF_LOG_INFO("Cipher Text:\n");
-    NRF_LOG_HEXDUMP_INFO(c, 16);
+//    NRF_LOG_INFO("Cipher Text:\n");
+//    NRF_LOG_HEXDUMP_INFO(c, 16);
 }
 
 #define LEN 32
 void aes_ccm_test(void)
 {
-    uint8_t k[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-                0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
-    uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-                0x18, 0x19, 0x1a, 0x1b, 0x1c};
-    uint8_t p[64] = "HELLOWORLD!@#$%^helloworld123456";
-    uint8_t c[64] = {0};
-	uint8_t d[64] = {0};
-    uint8_t  mic[4] = {0};
-	uint8_t astr[4] = {1,2,3,4};
 
     aes_ccm_encrypt(k, nonce, astr, sizeof(astr), mic, 4, p, LEN, c);
-	aes_ccm_decrypt(k, nonce, astr, sizeof(astr), mic, 4, c, LEN, d);
+//	aes_ccm_decrypt(k, nonce, astr, sizeof(astr), mic, 4, c, LEN, d);
 
 //    NRF_LOG_INFO("Clear Text:\r\n");
 //    NRF_LOG_HEXDUMP_INFO(p, LEN);
-    NRF_LOG_INFO("Cipher Text:\r\n");
-    NRF_LOG_HEXDUMP_INFO(c, LEN);
+//    NRF_LOG_INFO("Cipher Text:\r\n");
+//    NRF_LOG_HEXDUMP_INFO(c, LEN);
 
-	NRF_LOG_INFO("AES128-CCM TEST: ");
-	if(memcmp(d, p, LEN) == 0) {
-		NRF_LOG_RAW_INFO(" PASS \n");
-	}
-	else {
-		NRF_LOG_RAW_INFO(" FAIL \n");
-	}
+//	NRF_LOG_INFO("AES128-CCM TEST: ");
+//	if(memcmp(d, p, LEN) == 0) {
+//		NRF_LOG_RAW_INFO(" PASS \n");
+//	}
+//	else {
+//		NRF_LOG_RAW_INFO(" FAIL \n");
+//	}
 	
 }
-
+#endif
 

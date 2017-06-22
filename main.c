@@ -54,7 +54,7 @@
 
 #define RTT_CTRL_CLEAR                  "[2J"
 
-#define IS_SRVC_CHANGED_CHARACT_PRESENT 1                                           /**< Include the service_changed characteristic. If not enabled, the server's database cannot be changed for the lifetime of the device. */
+#define IS_SRVC_CHANGED_CHARACT_PRESENT 0                                           /**< Include the service_changed characteristic. If not enabled, the server's database cannot be changed for the lifetime of the device. */
 
 #if (NRF_SD_BLE_API_VERSION == 3)
 #define NRF_BLE_MAX_MTU_SIZE            GATT_MTU_SIZE_DEFAULT                       /**< MTU size used in the softdevice enabling and to reply to a BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST event. */
@@ -70,8 +70,6 @@
 #else
 #define DEVICE_NAME                     "Secure_nRF51"                              /**< Name of device. Will be included in the advertising data. */
 #endif
-
-#define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS      0                                           /**< The advertising timeout (in units of seconds). */
@@ -157,19 +155,23 @@ static void gap_params_init(void)
  * @param[in] length   Length of the data.
  */
 /**@snippet [Handling the data received over BLE] */
-typedef struct {
-	uint8_t dev_key[16];
-	uint8_t app_key[16];
-	uint8_t reserve[32];
-} session_key_t;
-extern session_key_t session_key;
-uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-                         0x19, 0x1a, 0x1b, 0x1c};
+//typedef struct {
+//	uint8_t dev_key[16];
+//	uint8_t app_key[16];
+//	uint8_t reserve[32];
+//} session_key_t;
+//extern session_key_t session_key;
+//uint8_t nonce2[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+//                         0x19, 0x1a, 0x1b, 0x1c};
+//uint8_t msg[20];
 static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
 {
-	uint8_t msg[length];
-	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 0, p_data+length-4, 4, p_data, length-4, msg);
-	NRF_LOG_HEXDUMP_INFO(msg, length-4);
+//	NRF_LOG_HEXDUMP_INFO(p_data, length);
+//	aes_ccm_decrypt(session_key.app_key, nonce2, NULL, 0, p_data+length-4, 4, p_data, length-4, msg);
+//	NRF_LOG_HEXDUMP_INFO(msg, length-4);
+//	aes_ccm_encrypt(session_key.dev_key, nonce2, NULL, 0, msg+length-4, 4, msg, length-4, msg);
+//	NRF_LOG_HEXDUMP_INFO(msg, length);
+//	ble_nus_string_send(&m_nus, msg, length);
 }
 /**@snippet [Handling the data received over BLE] */
 
@@ -410,7 +412,7 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 	ble_mi_on_ble_evt(p_ble_evt);
     on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
-    bsp_btn_ble_on_ble_evt(p_ble_evt);
+    bsp_btn_ble_on_ble_evt(p_ble_evt); 
 
 }
 
@@ -541,12 +543,13 @@ static void advertising_init(void)
 
 	mi_service_data_t  mi_data = {0}; 
 	mi_data.frame_ctrl.factory_new = 1;
-	mi_data.frame_ctrl.is_encrypt  = 1;
 	mi_data.frame_ctrl.version     = 4;
 	mi_data.pid  = 0x009C;
-//	mi_data.p_capability = &cap;
-//	mi_data.p_mac = dev_mac.addr;
 
+#if 1
+	mi_data.p_capability = &cap;
+	mi_data.p_mac = dev_mac.addr;
+#else
 	mibeacon_event_t event = {0};
 	event.type = 0x100B;
 	struct {
@@ -562,7 +565,12 @@ static void advertising_init(void)
 	event.data_len = sizeof(evt_data);
 	event.pdata = (uint8_t*)&evt_data;
 	
+	mi_data.frame_ctrl.is_encrypt  = 1;
 	mi_data.p_event = &event;
+	uint8_t key[16] = "DUMMY KEY";
+	set_beacon_key(key);
+#endif
+	
 	mi_service_data_set(&mi_data, data, &total_len);
 
     /* Indicating Mi Service */
@@ -570,7 +578,7 @@ static void advertising_init(void)
     serviceData.service_uuid = BLE_UUID_MI_SERVICE;
     serviceData.data.size = total_len;
     serviceData.data.p_data = data;
-
+	
     // Build advertising data struct to pass into @ref ble_advertising_init.
     ble_advdata_t          advdata;
     memset(&advdata, 0, sizeof(advdata));
@@ -691,7 +699,6 @@ int main(void)
 	mi_schedulor_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
 
 #ifdef M_TEST
-	aes_ccm_test();
 	mi_schedulor_start(0);
 #endif
 

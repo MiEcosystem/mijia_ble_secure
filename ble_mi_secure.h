@@ -107,6 +107,9 @@ typedef enum {
 	RXFER_READY = 0x01,
 	RXFER_BUSY,
 
+	RXFER_WAIT_CMD,
+	RXFER_WAIT_ACK,
+
 	RXFER_TXD,
 	RXFER_RXD,
 
@@ -115,7 +118,9 @@ typedef enum {
 } r_xfer_stat_t;
 
 typedef struct {
+	uint16_t    max_tx_num;
 	uint16_t        tx_num;
+	uint16_t    max_rx_num;
 	uint16_t        rx_num;
 	uint16_t       curr_sn;
 	uint8_t           mode;
@@ -123,7 +128,7 @@ typedef struct {
 	uint8_t            ack;
 	uint8_t         *pdata;
 	uint8_t     last_bytes;
-	r_xfer_stat_t   status;
+	r_xfer_stat_t    state;
 } reliable_xfer_t;
 
 /**@brief Xiaomi Service event handler type. */

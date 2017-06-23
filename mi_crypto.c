@@ -54,6 +54,7 @@ int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output)
 int mi_session_decrypt(uint8_t *input, uint8_t len, uint8_t *output)
 {
 	session_app_cnt++;
+	
 	session_nonce.counter = session_app_cnt;
 	aes_ccm_decrypt((void*)session_key_app, (void*)&session_nonce, NULL, 0,
 	                input+len, 4, input, len, output);

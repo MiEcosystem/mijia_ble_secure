@@ -2681,7 +2681,7 @@
                 <FileArmAds>
                   <Cads>
                     <interw>2</interw>
-                    <Optim>2</Optim>
+                    <Optim>4</Optim>
                     <oTime>1</oTime>
                     <SplitLS>2</SplitLS>
                     <OneElfS>2</OneElfS>
@@ -2736,7 +2736,7 @@
                 <FileArmAds>
                   <Cads>
                     <interw>2</interw>
-                    <Optim>2</Optim>
+                    <Optim>4</Optim>
                     <oTime>1</oTime>
                     <SplitLS>2</SplitLS>
                     <OneElfS>2</OneElfS>

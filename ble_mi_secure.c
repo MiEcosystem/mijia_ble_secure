@@ -24,6 +24,7 @@
 #define BLE_UUID_MI_PUBKEY 0x0016                      /**< The UUID of the PubKey Characteristic. */
 
 #define PUBKEY_BYTE 255
+#define FRAME_CTRL  0
 
 static void auth_handler(uint8_t *pdata, uint8_t len);
 static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
@@ -88,10 +89,14 @@ static void on_write(ble_evt_t * p_ble_evt)
     else if (p_evt_write->handle == mi_srv.secure_handles.value_handle)
     {
 		NRF_LOG_HEXDUMP_INFO(p_evt_write->data, p_evt_write->len);
+
 		reliable_xfer_frame_t *pframe = (void*)p_evt_write->data;
-		uint16_t  curr_sn = pframe->sn; 
-		if (curr_sn == 0 ) {
-			if (pframe->f.ctrl.mode == MODE_CMD) {
+		uint16_t  curr_sn = pframe->sn;
+		
+		if (curr_sn == FRAME_CTRL ) {
+			if (pframe->f.ctrl.mode == MODE_CMD &&
+				reliable_control_block.state == RXFER_WAIT_CMD) 
+			{
 				fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->f.ctrl.type;
 				reliable_control_block.mode = MODE_CMD;
 				reliable_control_block.cmd = cmd;
@@ -105,7 +110,8 @@ static void on_write(ble_evt_t * p_ble_evt)
 						NRF_LOG_ERROR("Unkown reliable CMD.\n");
 				}
 			}
-			else {
+			else if (reliable_control_block.state == RXFER_WAIT_ACK) 
+			{
 				fctrl_ack_t ack = (fctrl_ack_t)pframe->f.ctrl.type;
 				reliable_control_block.mode = MODE_ACK;
 				reliable_control_block.ack = ack;
@@ -122,9 +128,25 @@ static void on_write(ble_evt_t * p_ble_evt)
 				}
 			}
 		}
-		else {
-			if (reliable_control_block.pdata != NULL) {
+		else if (reliable_control_block.state == RXFER_RXD)
+		{
+			if (curr_sn == reliable_control_block.max_rx_num &&
+				p_evt_write->len <= reliable_control_block.last_bytes + 2) 
+			{
 				reliable_xfer_rxd(&reliable_control_block, p_evt_write->data, p_evt_write->len);
+			}
+			else if (curr_sn < reliable_control_block.rx_num &&
+					 p_evt_write->len == 20)
+			{
+				reliable_xfer_rxd(&reliable_control_block, p_evt_write->data, 20);
+			}
+			else if (curr_sn == reliable_control_block.rx_num)
+			{
+				reliable_xfer_rxd(&reliable_control_block, p_evt_write->data, p_evt_write->len);
+			}
+			else
+			{
+				NRF_LOG_ERROR("illegal reliable data.\n");
 			}
 			reliable_control_block.curr_sn = curr_sn;
 		}
@@ -326,10 +348,12 @@ int fast_xfer_send(fast_xfer_t *pxfer)
 static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 {
 	reliable_xfer_frame_t      *pframe = (void*)pdata;
-	uint8_t                   data_len = len - sizeof(pframe->sn);
+	int8_t                    data_len = len - sizeof(pframe->sn);
 
-	memcpy(pxfer->pdata + (pframe->sn - 1) * 18, pframe->f.data, data_len);
-
+	if (data_len > 0)
+		memcpy(pxfer->pdata + (pframe->sn - 1) * 18, pframe->f.data, data_len);
+	else
+		NRF_LOG_ERROR("bad rxd data len. \n");
 }
 
 int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
@@ -461,9 +485,11 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
             on_write(p_ble_evt);
             break;
 
-		case BLE_EVT_TX_COMPLETE:
+		case BLE_GATTS_EVT_HVC:
 			break;
 
+		case BLE_GATTS_EVT_TIMEOUT:
+			break;
         default:
             // No implementation needed.
             break;

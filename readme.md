@@ -1,4 +1,4 @@
-#### Hardware Platform£º 
+#### Hardware Platform
 * nRF51-DK PCA10028 
 * nRF52-DK PCA10040
 
@@ -10,7 +10,7 @@
 | aesccm | 16      | 93         | 360        |
 | -      | 32      | 128        | 500        |
 | hkdf   | 32      | 490        | 3400       |
-| -      | 64      | 780        | 5800       |
+| -      | 64      | 780        | 7000       |
 
 #### How to use
 

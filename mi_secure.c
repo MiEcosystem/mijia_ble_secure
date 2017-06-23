@@ -188,6 +188,7 @@ int mi_schedulor_start(uint32_t *p_context)
 
 	NRF_LOG_WARNING("START %d\n\n", *p_context);
 	errno = app_timer_start(mi_schd_timer_id, schd_interval, p_context);
+	mi_schedulor(p_context);
 	APP_ERROR_CHECK(errno);
 	return errno;
 }
@@ -361,6 +362,21 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 #endif
 
 static timer_t timeout_timer;
+int format_rx_cb(reliable_xfer_t *pxfer, void *p_rxd, uint16_t rxd_bytes)
+{
+	pxfer->pdata = p_rxd;
+	pxfer->max_rx_num = CEIL_DIV(rxd_bytes, 18);
+	pxfer->last_bytes  = rxd_bytes % 18;
+	return 0;
+}
+
+int format_tx_cb(reliable_xfer_t *pxfer, void *p_txd, uint16_t txd_bytes)
+{
+	pxfer->pdata = p_txd;
+	pxfer->max_tx_num = CEIL_DIV(txd_bytes, 18);
+	pxfer->last_bytes  = txd_bytes % 18;
+	return 0;
+}
 
 pt_t pt_r_rxd_thd;
 int reliable_rxd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
@@ -368,15 +384,22 @@ int reliable_rxd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	PT_BEGIN(pt);
 
 	/* Recive data */
+	pxfer->state = RXFER_WAIT_CMD;
 	PT_WAIT_UNTIL(pt, pxfer->rx_num != 0 && pxfer->cmd == data_type);
-	PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
-
+	if (pxfer->rx_num <= pxfer->max_rx_num && pxfer->pdata != NULL) {
+		PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
+		pxfer->state = RXFER_RXD;
+	} else {
+		PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_CANCEL) == NRF_SUCCESS);
+		pxfer->rx_num = 0;
+		PT_RESTART(pt);
+	}
 	timer_set(&timeout_timer, 2000);
 	PT_WAIT_UNTIL(pt, pxfer->rx_num == pxfer->curr_sn || timer_expired(&timeout_timer));
 
 	PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, pxfer));
 
-	pxfer->status = RXFER_DONE;
+	pxfer->state = RXFER_DONE;
 	pxfer->rx_num = 0;
 	PT_END(pt);
 }
@@ -389,10 +412,12 @@ int reliable_txd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	/* Send data. */
 	PT_WAIT_UNTIL(pt, reliable_xfer_cmd(data_type, pxfer->tx_num) == NRF_SUCCESS);
 
+	pxfer->state = RXFER_WAIT_ACK;
 	PT_WAIT_UNTIL(pt, pxfer->mode == MODE_ACK && pxfer->ack == A_READY);
 
 	PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, pxfer));
 
+	pxfer->state = RXFER_DONE;
 	pxfer->tx_num = 0;
 	PT_END(pt);
 }
@@ -537,7 +562,7 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 	PT_BEGIN(pt);
 
 	static timer_t  msc_timer;
-
+	static uint8_t  retry_times = 0;
 	msc_encode_twi_buf(p_cb);
 
 	/* 4 = 2bytes lengh + 1byte cmd + 1byte chk  */
@@ -559,9 +584,19 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 	PT_WAIT_UNTIL(pt, m_twi0_xfer_done);
 	
 	msc_decode_twi_buf(p_cb);
-	if (p_cb->status != 0) {
-		NRF_LOG_ERROR("Error 0x%02X\n RETRY...\n", p_cb->status);
-		PT_RESTART(pt);
+	if (p_cb->status != 0 ) {
+		if (retry_times < 5) {
+			retry_times++;
+			NRF_LOG_ERROR("CMD 0x%02X Error 0x%02X\n RETRY...\n", p_cb->cmd, p_cb->status);
+			PT_RESTART(pt);
+		} else {
+			retry_times = 0;
+			NRF_LOG_ERROR("Cann't run MSC CMD 0x%02X\n", p_cb->cmd);
+			/* Blocking here, 
+			   TODO: add error status handler    */
+			PT_WAIT_UNTIL(pt, 0);
+		}
+		
 	}
 
 	NRF_LOG_INFO("Finish MSC cmd 0x%02X\n\n", p_cb->cmd);
@@ -615,12 +650,11 @@ int reg_auth(pt_t *pt)
 #endif
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.shared_key));
-nrf_gpio_pin_clear(PROFILE_PIN);
 	sha256_hkdf(  shared_key,         sizeof(shared_key),
 			(void *)reg_salt,         sizeof(reg_salt)-1,
 	        (void *)reg_info,         sizeof(reg_info)-1,
 	    (void *)&session_key,         sizeof(session_key));
-nrf_gpio_pin_set(PROFILE_PIN);
+
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_sign, 64));
 	aes_ccm_encrypt(session_key.dev_key, nonce, NULL, 0, encrypt_data.mic, 4, dev_sign, 64, encrypt_data.cipher);
 	
@@ -656,7 +690,7 @@ int reg_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
-	reliable_control_block.pdata = app_pub;
+	format_rx_cb(&reliable_control_block, app_pub, sizeof(app_pub));
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	SET_DATA_VAILD(flags.app_pub);
 	NRF_LOG_INFO("app_pub recived.\n");
@@ -814,7 +848,7 @@ int login_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
-	reliable_control_block.pdata = app_pub;
+	format_rx_cb(&reliable_control_block, app_pub, sizeof(app_pub));
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	SET_DATA_VAILD(flags.app_pub);
 
@@ -824,7 +858,7 @@ int login_ble(pt_t *pt)
 	reliable_control_block.last_bytes = sizeof(dev_pub) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 
-	reliable_control_block.pdata = (void*)login_encrypt_data;
+	format_rx_cb(&reliable_control_block, login_encrypt_data, sizeof(login_encrypt_data));
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_LOGIN_INFO));
 	SET_DATA_VAILD(flags.login_encrypt_data);
 	PT_WAIT_UNTIL(pt, 0);
@@ -889,7 +923,7 @@ int shared_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
-	reliable_control_block.pdata = app_pub;
+	format_rx_cb(&reliable_control_block, app_pub, sizeof(app_pub));
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	
 	PT_WAIT_UNTIL(pt, dev_pub[63] != dev_pub[62]);
@@ -898,7 +932,7 @@ int shared_ble(pt_t *pt)
 	reliable_control_block.last_bytes = sizeof(dev_pub) % 18;
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 
-	reliable_control_block.pdata = (void*)&encrypt_share_info;
+	format_rx_cb(&reliable_control_block, &encrypt_share_info, sizeof(encrypt_share_info));
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_SHARE_INFO));
 
 	PT_WAIT_UNTIL(pt, 0);

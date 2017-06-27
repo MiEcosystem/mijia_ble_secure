@@ -88,23 +88,23 @@ static void on_write(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_write->handle == mi_srv.secure_handles.value_handle)
     {
-		NRF_LOG_HEXDUMP_INFO(p_evt_write->data, p_evt_write->len);
+		NRF_LOG_RAW_HEXDUMP_INFO(p_evt_write->data, p_evt_write->len > 16 ? 16 : p_evt_write->len);
 
 		reliable_xfer_frame_t *pframe = (void*)p_evt_write->data;
 		uint16_t  curr_sn = pframe->sn;
 		
 		if (curr_sn == FRAME_CTRL ) {
-			if (pframe->f.ctrl.mode == MODE_CMD &&
+			if (pframe->ctrl.mode == MODE_CMD &&
 				reliable_control_block.state == RXFER_WAIT_CMD) 
 			{
-				fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->f.ctrl.type;
+				fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->ctrl.type;
 				reliable_control_block.mode = MODE_CMD;
 				reliable_control_block.cmd = cmd;
 				switch (cmd) {
 					case DEV_PUBKEY:
 					case DEV_LOGIN_INFO:
 					case DEV_SHARE_INFO:
-						reliable_control_block.rx_num = *(uint16_t*)pframe->f.ctrl.arg;
+						reliable_control_block.rx_num = *(uint16_t*)pframe->ctrl.arg;
 						break;
 					default:
 						NRF_LOG_ERROR("Unkown reliable CMD.\n");
@@ -112,7 +112,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 			}
 			else if (reliable_control_block.state == RXFER_WAIT_ACK) 
 			{
-				fctrl_ack_t ack = (fctrl_ack_t)pframe->f.ctrl.type;
+				fctrl_ack_t ack = (fctrl_ack_t)pframe->ctrl.type;
 				reliable_control_block.mode = MODE_ACK;
 				reliable_control_block.ack = ack;
 				switch (ack) {
@@ -121,7 +121,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 						reliable_control_block.curr_sn = 0;
 						break;						
 					case A_LOST:
-						reliable_control_block.curr_sn = *(uint16_t*)pframe->f.ctrl.arg;
+						reliable_control_block.curr_sn = *(uint16_t*)pframe->ctrl.arg;
 						break;
 					default:
 						NRF_LOG_ERROR("Unkown reliable ACK.\n");
@@ -240,7 +240,8 @@ static void auth_handler(uint8_t *pdata, uint8_t len)
 		case REG_START:
 		case LOG_START:
 		case SHARED_LOG_START:
-			mi_schedulor_start(&auth_status);
+		case UPDATA_APPNONCE_REQ:
+			mi_scheduler_start(&auth_status);
 			break;
 	}
 
@@ -264,9 +265,7 @@ void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 		pxfer->full_len = curr_len;
 
 	uint8_t *addr = pxfer->data + sizeof(pxfer->data) - curr_len;
-	memcpy(addr,
-		   pframe->data,
-		   data_len);
+	memcpy(addr, pframe->data, data_len);
 
 	pxfer->curr_len += data_len;
 	
@@ -351,7 +350,7 @@ static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t le
 	int8_t                    data_len = len - sizeof(pframe->sn);
 
 	if (data_len > 0)
-		memcpy(pxfer->pdata + (pframe->sn - 1) * 18, pframe->f.data, data_len);
+		memcpy(pxfer->pdata + (pframe->sn - 1) * 18, pframe->data, data_len);
 	else
 		NRF_LOG_ERROR("bad rxd data len. \n");
 }
@@ -364,18 +363,18 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
 	uint32_t                    errno;
 	uint16_t                      arg;
 
-	frame.f.ctrl.mode = MODE_CMD;
-	frame.f.ctrl.type =      cmd;
+	frame.ctrl.mode = MODE_CMD;
+	frame.ctrl.type =      cmd;
 
 	va_list ap;
 	va_start(ap, cmd);
 	arg = va_arg(ap, int);
 	if ( arg != 0 ) {
-		*(uint16_t*)frame.f.ctrl.arg = arg;
+		*(uint16_t*)frame.ctrl.arg = arg;
 	}
 	va_end(ap);
 
-	data_len = sizeof(frame.sn) + sizeof(frame.f.ctrl);
+	data_len = sizeof(frame.sn) + sizeof(frame.ctrl);
     hvx_params.handle = mi_srv.secure_handles.value_handle;
     hvx_params.p_data = (void*)&frame;
     hvx_params.p_len  = &data_len;
@@ -383,7 +382,8 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
 
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 	
-	NRF_LOG_INFO("cmd %d\n", cmd);
+	NRF_LOG_INFO("CMD\n");
+	NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 
 	if (errno != NRF_SUCCESS) {
 		NRF_LOG_INFO("can't send cmd: %d\n", cmd);
@@ -408,10 +408,10 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
 		data_len = pxfer->last_bytes;
 	}
 	else {
-		data_len = sizeof(frame.f.data);
+		data_len = sizeof(frame.data);
 	}
 	
-	memcpy(frame.f.data, pdata, data_len);
+	memcpy(frame.data, pdata, data_len);
 	
 	data_len += sizeof(frame.sn);
     hvx_params.handle = mi_srv.secure_handles.value_handle;
@@ -422,7 +422,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 	
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_RAW_INFO("Can't send pkg %d: %X\n", sn, errno);
+		NRF_LOG_RAW_INFO("Cann't send pkg %d: %X\n", sn, errno);
 	}
 
 	return errno;
@@ -435,17 +435,17 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
 	uint16_t                 data_len;
 	uint32_t                    errno;
 	
-	frame.f.ctrl.mode = MODE_ACK;
-	frame.f.ctrl.type =      ack;
-	data_len = sizeof(frame.sn) + sizeof(frame.f.ctrl.type) + sizeof(frame.f.ctrl.mode);
+	frame.ctrl.mode = MODE_ACK;
+	frame.ctrl.type =      ack;
+	data_len = sizeof(frame.sn) + sizeof(frame.ctrl.type) + sizeof(frame.ctrl.mode);
 
 	if (ack == A_LOST) {
 		va_list ap;
 		va_start(ap, ack);
 		uint16_t arg = va_arg(ap, int);
 		if ( arg != 0 ) {
-			*(uint16_t*)frame.f.ctrl.arg = arg;
-			data_len += sizeof(frame.f.ctrl.arg);
+			*(uint16_t*)frame.ctrl.arg = arg;
+			data_len += sizeof(frame.ctrl.arg);
 		}
 		va_end(ap);
 	}
@@ -456,7 +456,8 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
 
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
-
+	NRF_LOG_INFO("ACK\n");
+	NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 	if (errno != NRF_SUCCESS) {
 		NRF_LOG_INFO("can't send ack: %d\n", ack);
 	}

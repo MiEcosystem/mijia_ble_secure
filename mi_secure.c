@@ -16,7 +16,13 @@
 #include "ble_mi_secure.h"
 #include "mi_crypto.h"
 
-#pragma anon_unions
+#if defined(__CC_ARM)
+  #pragma anon_unions
+#elif defined(__ICCARM__)
+  #pragma language=extended
+#elif defined(__GNUC__)
+  /* anonymous unions are enabled by default */
+#endif
 
 typedef struct {
     uint8_t  vid;
@@ -120,6 +126,12 @@ static uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18
 
 msc_info_t tmp_info;
 struct {
+	uint8_t pt1 :1;
+	uint8_t pt2 :1;
+	uint8_t pt3 :1;
+	uint8_t reserve: 5;
+} pt_flags;
+struct {
 	uint16_t dev;
 	uint16_t manu;
 	uint16_t root;
@@ -145,7 +157,6 @@ typedef struct {
 
 static int schd_time;
 static uint32_t  schd_interval = 64;
-static pt_t mi_schd;
 static pt_t pt1, pt2, pt3, pt4;
 
 static int timer_expired(timer_t *t)
@@ -157,13 +168,13 @@ static void timer_set(timer_t *t, int interval_ms)
 extern fast_xfer_t fast_control_block;
 extern reliable_xfer_t reliable_control_block;
 
-void mi_schedulor(void * p_context);
+void mi_scheduler(void * p_context);
 
-int mi_schedulor_init(uint32_t interval)
+int mi_scheduler_init(uint32_t interval)
 {
 	int32_t errno;
 	schd_interval = interval;
-	errno = app_timer_create(&mi_schd_timer_id, APP_TIMER_MODE_REPEATED, mi_schedulor);
+	errno = app_timer_create(&mi_schd_timer_id, APP_TIMER_MODE_REPEATED, mi_scheduler);
 	APP_ERROR_CHECK(errno);
 
 	nrf_gpio_cfg_output(PROFILE_PIN);
@@ -171,7 +182,7 @@ int mi_schedulor_init(uint32_t interval)
 	return 0;
 }
 
-int mi_schedulor_start(uint32_t *p_context)
+int mi_scheduler_start(uint32_t *p_context)
 {
 	int32_t errno;
 
@@ -182,18 +193,21 @@ int mi_schedulor_start(uint32_t *p_context)
 	PT_INIT(&pt3);
 	PT_INIT(&pt4);
 
-	memset(&flags, 0, 2);
+	memset((char*)&flags, 0, sizeof(flags));
+	memset((char*)&pt_flags, 0xFF, sizeof(pt_flags));
+
 	memset(app_pub, 0, 364);
 	login_encrypt_data[1] = 0;
 
-	NRF_LOG_WARNING("START %d\n\n", *p_context);
+	NRF_LOG_WARNING("\nSTART %X\n\n", *p_context);
 	errno = app_timer_start(mi_schd_timer_id, schd_interval, p_context);
-	mi_schedulor(p_context);
 	APP_ERROR_CHECK(errno);
+
+	mi_scheduler(p_context);
 	return errno;
 }
 
-int mi_schedulor_stop(int type)
+int mi_scheduler_stop(int type)
 {
 	int32_t errno;
 	errno = app_timer_stop(mi_schd_timer_id);
@@ -310,13 +324,13 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 	PT_BEGIN(pt);
 	rl_xfer_mode = 1;
 	// exchange data head : data type + data pkg cnt
-	if (pframe->sn == 0 && pframe->f.ctrl.mode == MODE_CMD) {
-		fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->f.ctrl.type;
+	if (pframe->sn == 0 && pframe->ctrl.mode == MODE_CMD) {
+		fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->ctrl.type;
 		reliable_control_block.mode = MODE_CMD;
 		reliable_control_block.type = cmd;
 		switch (cmd) {
 			case DEV_CERT:
-				reliable_control_block.tx_num = *(uint16_t*)pframe->f.ctrl.arg;
+				reliable_control_block.tx_num = *(uint16_t*)pframe->ctrl.arg;
 				break;
 			default:
 				NRF_LOG_ERROR("Unkown reliable CMD.\n");
@@ -330,13 +344,13 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 //	APP Layer PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 	timer_set(&rxd_timer, 1000);
 	while(pframe->sn > 0 && pframe->sn < reliable_control_block.tx_num && !timer_expired(&rxd_timer)) {
-		memcpy(reliable_control_block.pdata + (pframe->sn - 1) * 18, pframe->f.data, len-sizeof(pframe->sn));
+		memcpy(reliable_control_block.pdata + (pframe->sn - 1) * 18, pframe->data, len-sizeof(pframe->sn));
 		timer_set(&rxd_timer, 1000);
 		PT_YIELD(pt);
 	}
 	
 	if (pframe->sn == reliable_control_block.tx_num)
-		memcpy(reliable_control_block.pdata + (pframe->sn - 1) * 18, pframe->f.data, len-sizeof(pframe->sn));
+		memcpy(reliable_control_block.pdata + (pframe->sn - 1) * 18, pframe->data, len-sizeof(pframe->sn));
 	else {
 		rl_xfer_mode = 3;
 		PT_EXIT(pt);
@@ -352,7 +366,7 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 		else {
 			reliable_xfer_ack(A_LOST, sn);
 			PT_WAIT_UNTIL(pt, pframe->sn == sn);
-			memcpy(reliable_control_block.pdata + (sn - 1) * 18, pframe->f.data, len-sizeof(sn));
+			memcpy(reliable_control_block.pdata + (sn - 1) * 18, pframe->data, len-sizeof(sn));
 		}
 	}
 
@@ -373,7 +387,7 @@ int format_rx_cb(reliable_xfer_t *pxfer, void *p_rxd, uint16_t rxd_bytes)
 int format_tx_cb(reliable_xfer_t *pxfer, void *p_txd, uint16_t txd_bytes)
 {
 	pxfer->pdata = p_txd;
-	pxfer->max_tx_num = CEIL_DIV(txd_bytes, 18);
+	pxfer->tx_num = CEIL_DIV(txd_bytes, 18);
 	pxfer->last_bytes  = txd_bytes % 18;
 	return 0;
 }
@@ -610,7 +624,7 @@ int reg_auth(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.msc_info));
 
 	ble_gap_addr_t   dev_mac;
 	uint8_t          dev_mac_be[6];
@@ -660,10 +674,9 @@ int reg_auth(pt_t *pt)
 	
 	PT_WAIT_UNTIL(pt, auth_status != REG_START);
 	if (auth_status != REG_SUCCESS) {
-		mi_schedulor_stop(REG_FAILED);
-		
-		NRF_LOG_INFO("Auth failed.\n");
-		PT_WAIT_UNTIL(pt, 0);
+		NRF_LOG_ERROR("Auth failed.\n");
+		mi_scheduler_stop(REG_FAILED);
+		PT_EXIT(pt);
 	}
 
 	while(rand_key[0] < 16) {
@@ -682,7 +695,7 @@ int reg_auth(pt_t *pt)
 	// fs_store(rand_key);
 	// log encrypt procedure
 	
-	PT_WAIT_UNTIL(pt, 0);
+//	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
 
@@ -693,43 +706,37 @@ int reg_ble(pt_t *pt)
 	format_rx_cb(&reliable_control_block, app_pub, sizeof(app_pub));
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	SET_DATA_VAILD(flags.app_pub);
-	NRF_LOG_INFO("app_pub recived.\n");
+	NRF_LOG_INFO("app_pub recived "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_pub, 64));
-	reliable_control_block.pdata  = msc_info;
-	reliable_control_block.tx_num = CEIL_DIV(sizeof(msc_info) + sizeof(dev_pub), 18);
-	reliable_control_block.last_bytes = (sizeof(msc_info) + sizeof(dev_pub)) % 18;
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.msc_info));
+	format_tx_cb(&reliable_control_block, msc_info, sizeof(msc_info) + sizeof(dev_pub));
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
-	NRF_LOG_INFO("dev_pub send.\n");
+	NRF_LOG_INFO("dev_pub send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_cert, m_certs_len.dev-2));
-	reliable_control_block.pdata  = dev_cert;
-	reliable_control_block.tx_num = CEIL_DIV(m_certs_len.dev, 18);
-	reliable_control_block.last_bytes = m_certs_len.dev % 18;
+	format_tx_cb(&reliable_control_block, dev_cert, m_certs_len.dev);
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_CERT));
-	NRF_LOG_INFO("dev_cert send.\n");
+	NRF_LOG_INFO("dev_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(manu_cert, m_certs_len.manu-2));
-	reliable_control_block.pdata  = manu_cert;
-	reliable_control_block.tx_num = CEIL_DIV(m_certs_len.manu, 18);
-	reliable_control_block.last_bytes = m_certs_len.manu % 18;
+	format_tx_cb(&reliable_control_block, manu_cert, m_certs_len.manu);
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_MANU_CERT));
-	NRF_LOG_INFO("manu_cert send.\n");
+	NRF_LOG_INFO("manu_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(encrypt_data.mic, 4));
-	reliable_control_block.pdata  = (void*)&encrypt_data;
-	reliable_control_block.tx_num = CEIL_DIV(sizeof(encrypt_data), 18);
-	reliable_control_block.last_bytes = sizeof(encrypt_data) % 18;
+	format_tx_cb(&reliable_control_block, &encrypt_data, sizeof(encrypt_data));
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_SIGNATURE));
-	NRF_LOG_INFO("encrypt_data send.\n");
+	NRF_LOG_INFO("encrypt_data send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 
-	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
 
 int reg_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
+
+	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
 	msc_control_block = MSC_XFER(MSC_INFO, NULL, 0, (void*)&tmp_info, 26);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
@@ -739,9 +746,7 @@ int reg_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_ID, NULL, 0, msc_info, 8);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
-	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	SET_DATA_VAILD(flags.dev_pub);
+	SET_DATA_VAILD(flags.msc_info);
 
 	msc_control_block = MSC_XFER(MSC_CERTS_LEN, NULL, 0, (void*)&m_certs_len, sizeof(m_certs_len));
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
@@ -786,16 +791,27 @@ int reg_msc(pt_t *pt)
 	
 #endif
 	
-	mi_schedulor_stop(REG_SUCCESS);
-	PT_WAIT_UNTIL(pt, 0);
+//	mi_scheduler_stop(REG_SUCCESS);
 	PT_END(pt);
 }
 
 void reg_procedure()
 {
-	reg_msc(&pt1);
-	reg_ble(&pt2);
-	reg_auth(&pt3);
+	if (pt_flags.pt1 == 1)
+		pt_flags.pt1 = PT_SCHEDULE(reg_msc(&pt1));
+
+	if (pt_flags.pt2 == 1)
+		pt_flags.pt2 = PT_SCHEDULE(reg_ble(&pt2));
+
+	if (pt_flags.pt3 == 1)
+		pt_flags.pt3 = PT_SCHEDULE(reg_auth(&pt3));
+	
+	if (pt_flags.pt1 == 0 &&
+		pt_flags.pt2 == 0 &&
+		pt_flags.pt3 == 0 )
+	{
+		mi_scheduler_stop(0);
+	}
 }
 
 int login_auth(pt_t *pt)
@@ -830,12 +846,12 @@ int login_auth(pt_t *pt)
   	if(login_encrypt_data[0] == login_encrypt_data[1]) {
 		NRF_LOG_INFO("LOG SUCCESS.\n");
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
-		mi_schedulor_stop(LOG_SUCCESS);
+		mi_scheduler_stop(LOG_SUCCESS);
 	}
 	else {
 		NRF_LOG_ERROR("LOG FAILED.%d\n", errno);
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
-		mi_schedulor_stop(LOG_FAILED);
+		mi_scheduler_stop(LOG_FAILED);
 
 	}
 
@@ -853,9 +869,7 @@ int login_ble(pt_t *pt)
 	SET_DATA_VAILD(flags.app_pub);
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_pub, 64));
-	reliable_control_block.pdata  = dev_pub;
-	reliable_control_block.tx_num = CEIL_DIV(sizeof(dev_pub), 18);
-	reliable_control_block.last_bytes = sizeof(dev_pub) % 18;
+	format_tx_cb(&reliable_control_block, dev_pub, sizeof(dev_pub));
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 
 	format_rx_cb(&reliable_control_block, login_encrypt_data, sizeof(login_encrypt_data));
@@ -977,7 +991,7 @@ int shared_auth(pt_t *pt)
 	
 	if (verify_key(&shared_info.key) == false) {
 		NRF_LOG_ERROR("SHARED LOG FAILED.\n");
-		mi_schedulor_stop(SHARED_LOG_FAILED);
+		mi_scheduler_stop(SHARED_LOG_FAILED);
 	}
 
 	NRF_LOG_INFO("SHARED LOG SUCCESS.\n");
@@ -996,6 +1010,13 @@ void shared_login_procedure()
 	shared_auth(&pt3);
 }
 
+
+void update_nonce_procedure(uint8_t type)
+{
+	
+	return ;
+}
+#ifdef M_TEST
 void aes_ecb_test();
 void aes_ccm_test();
 void aes_ccm_test2();
@@ -1003,18 +1024,17 @@ uint8_t test_str[] = {12, 1,2,3,4,5,6,7,8,9,0,1,2,
 					   1, 0,
 					  16, 0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30,
                       16, 1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6};
-//uint8_t cipher[20];
-uint8_t cipher2[64];
+
 int test_thd(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	int i;
 
-//	i = 1000;
-//	nrf_gpio_pin_set(PROFILE_PIN);
-//	while(i--)
-//	aes_ccm_test();
-//	nrf_gpio_pin_clear(PROFILE_PIN);
+	i = 1000;
+	nrf_gpio_pin_set(PROFILE_PIN);
+	while(i--)
+	aes_ccm_test();
+	nrf_gpio_pin_clear(PROFILE_PIN);
 
 //	i = 1000;
 //	nrf_gpio_pin_set(PROFILE_PIN);
@@ -1022,73 +1042,55 @@ int test_thd(pt_t *pt)
 //	aes_ccm_test2();
 //	nrf_gpio_pin_clear(PROFILE_PIN);
 
-	i = 1000;
-	nrf_gpio_pin_set(PROFILE_PIN);
-	while(i--)
-	sha256_hkdf(   test_str,          32,
-		  (void *)share_salt,         sizeof(share_salt)-1,
-	      (void *)share_info,         sizeof(share_info)-1,
-	    (void *)&session_key,         64);
-	nrf_gpio_pin_clear(PROFILE_PIN);
+//	i = 1;
+//	nrf_gpio_pin_set(PROFILE_PIN);
+//	while(i--)
+//	sha256_hkdf(   test_str,          32,
+//		  (void *)share_salt,         sizeof(share_salt)-1,
+//	      (void *)share_info,         sizeof(share_info)-1,
+//	    (void *)&session_key,         64);
+//	nrf_gpio_pin_clear(PROFILE_PIN);
 //	msc_control_block = MSC_XFER(MSC_AESCCM_ENC, test_str, sizeof(test_str), cipher, 20);
 //	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 //	NRF_LOG_HEXDUMP_INFO(cipher, 20);
 
 //	PT_YIELD(pt);
 
-//	
-//	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
-//	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-
-//	msc_control_block = MSC_XFER(MSC_SIGN, dev_pub, 32, app_pub, 64);
-//	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-
-//	uint8_t buf[256] = {0xFF};
-//	uint8_t buf2[256] = {0xFF};
-
-//	nrf_gpio_pin_set(PROFILE_PIN);
-//	memset(buf, 0, 256);
-//	nrf_gpio_pin_clear(PROFILE_PIN);
-
-//	nrf_gpio_pin_set(PROFILE_PIN);
-//	aes_ccm_test();
-//	nrf_gpio_pin_clear(PROFILE_PIN);
-
-//	nrf_gpio_pin_set(PROFILE_PIN);
-//	aes_ecb_test();
-//	nrf_gpio_pin_clear(PROFILE_PIN);
-
 	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
+#endif
 
-
-void mi_schedulor(void * p_context)
+void mi_scheduler(void * p_context)
 {
 	schd_time++;
-//	NRF_LOG_RAW_INFO("schd time: %dms\n", schd_time*10);
 	uint32_t *p_auth_status = p_context;
-	uint8_t auth_type = *p_auth_status & 0x30;
+	uint8_t auth_type = *p_auth_status;
 	
 #ifdef M_TEST
 
-	test_thd(&pt3);
 //	fast_xfer_test(&pt1);
 //	reliable_xfer_test(&pt2);
+	test_thd(&pt3);
 
 #else
 	
 	nrf_gpio_pin_set(PROFILE_PIN);
 
 	switch (auth_type) {
-		case REG_START:
+		case REG_TYPE:
+		case REG_SUCCESS:
+		case REG_FAILED:
 			reg_procedure();
 			break;
-		case LOG_START:
+		case LOG_TYPE:
 			login_procedure();
 			break;
-		case SHARED_LOG_START:
+		case SHARED_TYPE:
 			shared_login_procedure();
+			break;
+		case UPDATE_NONCE_TYPE:
+			update_nonce_procedure(auth_type);
 			break;
 	}
 	

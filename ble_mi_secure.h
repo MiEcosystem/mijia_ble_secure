@@ -29,19 +29,39 @@
 extern "C" {
 #endif
 
+#if defined(__CC_ARM)
+  #pragma anon_unions
+#elif defined(__ICCARM__)
+  #pragma language=extended
+#elif defined(__GNUC__)
+  /* anonymous unions are enabled by default */
+#endif
+
 #define MODE_CMD  0
 #define MODE_ACK  1
 
-#define REG_START    	    0x10UL
-#define REG_SUCCESS 	    0x11UL
-#define REG_FAILED	        0x12UL
-#define LOG_START	        0x20UL
-#define LOG_SUCCESS      	0x21UL
-#define LOG_FAILED	        0x22UL
-#define SHARED_LOG_START	0x30UL
-#define SHARED_LOG_SUCCESS	0x31UL
-#define SHARED_LOG_FAILED	0x32UL
-#define SHARED_LOG_EXPIRED	0x33UL
+#define REG_TYPE            0x10UL
+#define REG_START    	    (REG_TYPE)
+#define REG_SUCCESS 	    (REG_TYPE+1)
+#define REG_FAILED	        (REG_TYPE+2)
+
+#define LOG_TYPE 	        0x20UL
+#define LOG_START	        (LOG_TYPE)
+#define LOG_SUCCESS      	(LOG_TYPE+1)
+#define LOG_FAILED	        (LOG_TYPE+2)
+
+#define SHARED_TYPE     	0x30UL
+#define SHARED_LOG_START	(SHARED_TYPE)
+#define SHARED_LOG_SUCCESS	(SHARED_TYPE+1)
+#define SHARED_LOG_FAILED	(SHARED_TYPE+2)
+#define SHARED_LOG_EXPIRED	(SHARED_TYPE+3)
+
+#define UPDATE_NONCE_TYPE   0x80UL
+#define UPDATA_APPNONCE_REQ (UPDATE_NONCE_TYPE)
+#define UPDATA_APPNONCE_RSP (UPDATE_NONCE_TYPE+1)
+#define UPDATA_DEVNONCE_REQ (UPDATE_NONCE_TYPE+2)
+#define UPDATA_DEVNONCE_RSP (UPDATE_NONCE_TYPE+3)
+
 
 #define BLE_UUID_MI_SERVICE 0xFE95                      /**< The UUID of the Xiaomi Service. */
 #define BLE_MI_MAX_DATA_LEN (GATT_MTU_SIZE_DEFAULT - 3) /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Xiaomi  service module. */
@@ -100,7 +120,7 @@ typedef struct {
 	union {
 		uint8_t          data[18];
 		reliable_fctrl_t     ctrl;
-	} f;
+	};
 } reliable_xfer_frame_t;
 
 typedef enum {

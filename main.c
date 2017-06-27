@@ -696,10 +696,10 @@ int main(void)
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
-	mi_schedulor_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
+	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
 
 #ifdef M_TEST
-	mi_schedulor_start(0);
+	mi_scheduler_start(0);
 #endif
 
     // Enter main loop.

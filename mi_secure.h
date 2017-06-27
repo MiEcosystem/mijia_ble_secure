@@ -32,6 +32,34 @@ int mi_scheduler_init(uint32_t interval);
 int mi_scheduler_start(uint32_t *p_context);
 int mi_scheduler_stop(int type);
 
+#define REG_TYPE            0x10UL
+#define REG_START    	    (REG_TYPE)
+#define REG_SUCCESS 	    (REG_TYPE+1)
+#define REG_FAILED	        (REG_TYPE+2)
+
+#define LOG_TYPE 	        0x20UL
+#define LOG_START	        (LOG_TYPE)
+#define LOG_SUCCESS      	(LOG_TYPE+1)
+#define LOG_FAILED	        (LOG_TYPE+2)
+
+#define SHARED_TYPE     	0x30UL
+#define SHARED_LOG_START	(SHARED_TYPE)
+#define SHARED_LOG_SUCCESS	(SHARED_TYPE+1)
+#define SHARED_LOG_FAILED	(SHARED_TYPE+2)
+#define SHARED_LOG_EXPIRED	(SHARED_TYPE+3)
+
+#define UPDATE_NONCE_TYPE   0x80UL
+#define UPDATE_APPNONCE_REQ (UPDATE_NONCE_TYPE)
+#define UPDATE_APPNONCE_RSP (UPDATE_NONCE_TYPE+1)
+#define UPDATE_DEVNONCE_REQ (UPDATE_NONCE_TYPE+2)
+#define UPDATE_DEVNONCE_RSP (UPDATE_NONCE_TYPE+3)
+
+
+void mi_scheduler(void * p_context);
+int mi_scheduler_init(uint32_t interval);
+int mi_scheduler_start(uint32_t status);
+int mi_scheduler_stop(int type);
+
 #ifdef __cplusplus
 }
 #endif

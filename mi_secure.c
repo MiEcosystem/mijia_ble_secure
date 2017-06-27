@@ -60,8 +60,6 @@ APP_TIMER_DEF(mi_schd_timer_id);
                                 .p_data   = OUTPUT,                             \
                                 .data_len = OUTPUT_L }
 
-extern uint32_t auth_status;
-
 #define SET_DATA_VAILD(x)        (x = 1)
 #define SET_DATA_INVAILD(x)      (x = 0)
 #define DATA_IS_VAILD_P(x)       (x == 1)
@@ -156,6 +154,7 @@ typedef struct {
 } timer_t;
 
 static int schd_time;
+static uint32_t schd_status;
 static uint32_t  schd_interval = 64;
 static pt_t pt1, pt2, pt3, pt4;
 
@@ -185,7 +184,6 @@ int mi_scheduler_init(uint32_t interval)
 int mi_scheduler_start(uint32_t *p_context)
 {
 	int32_t errno;
-
 	schd_time = 0;
 
 	PT_INIT(&pt1);
@@ -197,6 +195,7 @@ int mi_scheduler_start(uint32_t *p_context)
 	memset((char*)&pt_flags, 0xFF, sizeof(pt_flags));
 
 	memset(app_pub, 0, 364);
+	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
 	login_encrypt_data[1] = 0;
 
 	NRF_LOG_WARNING("\nSTART %X\n\n", *p_context);
@@ -211,10 +210,10 @@ int mi_scheduler_stop(int type)
 {
 	int32_t errno;
 	errno = app_timer_stop(mi_schd_timer_id);
+	APP_ERROR_CHECK(errno);
+	schd_status = 0;
 	return errno;
 }
-
-
 
 static int fast_xfer_test(pt_t *pt)
 {
@@ -774,7 +773,7 @@ int reg_msc(pt_t *pt)
 	NRF_LOG_HEXDUMP_INFO(dev_sign, 64);
 #endif	
 
-#if EN_LTMK
+#if ENC_LTMK
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(MKPK.mic, 4));
 	
 	MKPK.id = 0;
@@ -818,7 +817,7 @@ int login_auth(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
-#if EN_LTMK
+#if ENC_LTMK
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(MKPK.mic, 4));
     aes_ccm_decrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
 #else
@@ -856,7 +855,6 @@ int login_auth(pt_t *pt)
 	}
 
 	// log success
-	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
 
@@ -875,7 +873,7 @@ int login_ble(pt_t *pt)
 	format_rx_cb(&reliable_control_block, login_encrypt_data, sizeof(login_encrypt_data));
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_LOGIN_INFO));
 	SET_DATA_VAILD(flags.login_encrypt_data);
-	PT_WAIT_UNTIL(pt, 0);
+
 	PT_END(pt);
 }
 
@@ -886,7 +884,7 @@ int login_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
-#if EN_LTMK
+#if ENC_LTMK
 	MKPK.id = 0;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
@@ -901,16 +899,28 @@ int login_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_ECDHE, app_pub, 64, shared_key, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
-	PT_WAIT_UNTIL(pt, 0);
 	PT_END(pt);
 }
 
 
 void login_procedure()
 {
-	login_msc(&pt1);
-	login_ble(&pt2);
-	login_auth(&pt3);
+	if (pt_flags.pt1 == 1)
+		pt_flags.pt1 = PT_SCHEDULE(login_msc(&pt1));
+
+	if (pt_flags.pt2 == 1)
+		pt_flags.pt2 = PT_SCHEDULE(login_ble(&pt2));
+
+	if (pt_flags.pt3 == 1)
+		pt_flags.pt3 = PT_SCHEDULE(login_auth(&pt3));
+	
+	if (pt_flags.pt1 == 0 &&
+		pt_flags.pt2 == 0 &&
+		pt_flags.pt3 == 0 )
+	{
+		mi_scheduler_stop(0);
+	}
+
 }
 
 int shared_msc(pt_t *pt)

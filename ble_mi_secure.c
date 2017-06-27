@@ -21,7 +21,7 @@
 
 #define BLE_UUID_MI_AUTH   0x0010                      /**< The UUID of the AUTH   Characteristic. */
 #define BLE_UUID_MI_SECURE 0x0015                      /**< The UUID of the Secure Characteristic. */
-#define BLE_UUID_MI_PUBKEY 0x0016                      /**< The UUID of the PubKey Characteristic. */
+#define BLE_UUID_MI_FXFER  0x0016                      /**< The UUID of the Fast xfer Characteristic. */
 
 #define PUBKEY_BYTE 255
 #define FRAME_CTRL  0
@@ -30,9 +30,8 @@ static void auth_handler(uint8_t *pdata, uint8_t len);
 static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 
-static ble_mi_t   mi_srv;
-uint32_t auth_status;
-
+static ble_mi_t mi_srv;
+static uint32_t auth_value;
 fast_xfer_t fast_control_block = {.type = PUBKEY};
 reliable_xfer_t reliable_control_block;
 
@@ -165,8 +164,6 @@ static void on_write(ble_evt_t * p_ble_evt)
     }
 }
 
-
-
 /**@brief Function for adding the Characteristic.
  *
  * @param[in]   uuid           UUID of characteristic to be added. (BASE is BLE_TYPE)
@@ -234,14 +231,18 @@ static uint32_t char_add(uint16_t                        uuid,
 
 static void auth_handler(uint8_t *pdata, uint8_t len)
 {
-	memcpy(&auth_status, pdata, len);
+
+	memcpy(&auth_value, pdata, len);
 	
-	switch (auth_status) {
+	switch (auth_value) {
 		case REG_START:
 		case LOG_START:
 		case SHARED_LOG_START:
 		case UPDATA_APPNONCE_REQ:
 			mi_scheduler_start(&auth_status);
+			break;
+		default:
+			NRF_LOG_WARNING("AUTH STATUS %X\n", auth_value);
 			break;
 	}
 
@@ -523,6 +524,7 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 	ble_gatt_char_props_t char_props = {0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
+	char_props.indicate              = 1;
     err_code = char_add(BLE_UUID_MI_AUTH, NULL, 4, char_props, &mi_srv.auth_handles);
     VERIFY_SUCCESS(err_code);
 
@@ -533,12 +535,12 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
     err_code = char_add(BLE_UUID_MI_SECURE, NULL, 20, char_props, &mi_srv.secure_handles);
     VERIFY_SUCCESS(err_code);
 
-	// Add the Pubkey Characteristic.
-	char_props = (ble_gatt_char_props_t){0};
-	char_props.write_wo_resp         = 1;
-	char_props.notify                = 1;
-	err_code = char_add(BLE_UUID_MI_PUBKEY, NULL, 20, char_props, &mi_srv.fast_xfer_handles);
-    VERIFY_SUCCESS(err_code);
+	// Add the Fast xfer Characteristic.
+//	char_props = (ble_gatt_char_props_t){0};
+//	char_props.write_wo_resp         = 1;
+//	char_props.notify                = 1;
+//	err_code = char_add(BLE_UUID_MI_FXFER, NULL, 20, char_props, &mi_srv.fast_xfer_handles);
+//    VERIFY_SUCCESS(err_code);
     
 	return NRF_SUCCESS;
 }
@@ -566,9 +568,13 @@ uint32_t auth_send(uint32_t status)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("can't send auth.\n");
+		NRF_LOG_INFO("Cann't send auth : %d\n", errno);
 	}
 
 	return errno;
 }
 
+uint32_t auth_recv(void)
+{
+	return auth_value;
+}

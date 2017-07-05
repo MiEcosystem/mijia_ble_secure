@@ -11,6 +11,7 @@
 
 static uint8_t  frame_cnt;
 static uint8_t  beacon_key[16] = "DUMMY KEY";
+
 static struct {
 	uint8_t  mac[6];
 	uint16_t pid;

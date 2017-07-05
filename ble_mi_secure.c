@@ -35,7 +35,7 @@ static uint32_t auth_value;
 fast_xfer_t fast_control_block = {.type = PUBKEY};
 reliable_xfer_t reliable_control_block;
 
-/**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S110 SoftDevice.
+/**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S13X SoftDevice.
  *
  * @param[in] p_mi_s    Xiaomi Service structure.
  * @param[in] p_ble_evt Pointer to the event received from BLE stack.
@@ -43,10 +43,12 @@ reliable_xfer_t reliable_control_block;
 static void on_connect(ble_evt_t * p_ble_evt)
 {
     mi_srv.conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+	NRF_LOG_RAW_INFO("Peer MAC: ");
+	NRF_LOG_RAW_HEXDUMP_INFO(p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLE_GAP_ADDR_LEN);
 }
 
 
-/**@brief Function for handling the @ref BLE_GAP_EVT_DISCONNECTED event from the S110 SoftDevice.
+/**@brief Function for handling the @ref BLE_GAP_EVT_DISCONNECTED event from the S13X SoftDevice.
  *
  * @param[in] p_mi_s    Xiaomi Service structure.
  * @param[in] p_ble_evt Pointer to the event received from BLE stack.
@@ -58,7 +60,7 @@ static void on_disconnect(ble_evt_t * p_ble_evt)
 }
 
 
-/**@brief Function for handling the @ref BLE_GATTS_EVT_WRITE event from the S110 SoftDevice.
+/**@brief Function for handling the @ref BLE_GATTS_EVT_WRITE event from the S13X SoftDevice.
  *
  * @param[in] p_mi_s    Xiaomi Service structure.
  * @param[in] p_ble_evt Pointer to the event received from BLE stack.
@@ -204,9 +206,15 @@ static uint32_t char_add(uint16_t                        uuid,
     }
 
     memset(&attr_md, 0, sizeof(attr_md));
+	BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.read_perm);
+	BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.write_perm);
+	if (char_props.read) {
+		BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.read_perm);
+	}
+	if (char_props.write || char_props.write_wo_resp) {
+		BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.write_perm);
+	}
 
-	BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.read_perm);
-	BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.write_perm);
     attr_md.vloc       = p_char_value == NULL ? BLE_GATTS_VLOC_STACK : BLE_GATTS_VLOC_USER;
     attr_md.rd_auth    = 0;
     attr_md.wr_auth    = 0;
@@ -238,8 +246,7 @@ static void auth_handler(uint8_t *pdata, uint8_t len)
 		case REG_START:
 		case LOG_START:
 		case SHARED_LOG_START:
-		case UPDATA_APPNONCE_REQ:
-			mi_scheduler_start(&auth_status);
+			mi_scheduler_start(auth_value);
 			break;
 		default:
 			NRF_LOG_WARNING("AUTH STATUS %X\n", auth_value);
@@ -487,6 +494,9 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
             on_write(p_ble_evt);
             break;
 
+		case BLE_GATTS_EVT_RW_AUTHORIZE_REQUEST:
+			break;		
+
 		case BLE_GATTS_EVT_HVC:
 			break;
 
@@ -503,7 +513,7 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
     uint32_t      err_code;
     ble_uuid_t    ble_uuid;
 
-//    VERIFY_PARAM_NOT_NULL(p_mi_s_init);
+    VERIFY_PARAM_NOT_NULL(p_mi_s_init);
 
     // Initialize the service structure.
     mi_srv.conn_handle             = BLE_CONN_HANDLE_INVALID;
@@ -518,29 +528,29 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
     err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY,
                                         &ble_uuid,
                                         &mi_srv.service_handle);
-    VERIFY_SUCCESS(err_code);
+    APP_ERROR_CHECK(err_code);
 
     // Add the AUTH Characteristic.
 	ble_gatt_char_props_t char_props = {0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
 	char_props.indicate              = 1;
-    err_code = char_add(BLE_UUID_MI_AUTH, NULL, 4, char_props, &mi_srv.auth_handles);
-    VERIFY_SUCCESS(err_code);
+	err_code = char_add(BLE_UUID_MI_AUTH, NULL, 4, char_props, &mi_srv.auth_handles);
+	APP_ERROR_CHECK(err_code);
 
     // Add the Secure AUTH Characteristic.
 	char_props = (ble_gatt_char_props_t){0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
-    err_code = char_add(BLE_UUID_MI_SECURE, NULL, 20, char_props, &mi_srv.secure_handles);
-    VERIFY_SUCCESS(err_code);
+	err_code = char_add(BLE_UUID_MI_SECURE, NULL, 20, char_props, &mi_srv.secure_handles);
+	APP_ERROR_CHECK(err_code);
 
 	// Add the Fast xfer Characteristic.
 //	char_props = (ble_gatt_char_props_t){0};
 //	char_props.write_wo_resp         = 1;
 //	char_props.notify                = 1;
 //	err_code = char_add(BLE_UUID_MI_FXFER, NULL, 20, char_props, &mi_srv.fast_xfer_handles);
-//    VERIFY_SUCCESS(err_code);
+//	VERIFY_SUCCESS(err_code);
     
 	return NRF_SUCCESS;
 }

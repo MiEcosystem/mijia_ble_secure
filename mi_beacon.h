@@ -2,6 +2,26 @@
 #define __MI_BEACON_H__
 #include <stdint.h>
 
+typedef enum {
+	CONNECT_EVT      = 0x0001,
+	SIMPLE_PAIR_EVT  = 0x0002,
+	
+	BUTTON_EVT       = 0x1001,
+	SLEEP_EVT        = 0x1002,
+	RSSI_EVT         = 0x1003,
+	TEMPARATURE_EVT  = 0x1004,
+	WATER_BOIL_EVT   = 0x1005,
+	HUMIDITY_EVT     = 0x1006,
+	LUMINA_EVT       = 0x1007,
+
+	SOIL_PF_EVT      = 0x1008,
+	SOIL_EC_EVT      = 0x1009,
+
+	BATTERY_EVT      = 0x100B,
+
+	LOCK_EVT         = 0x100D,
+} mibeacon_evt_t;
+
 typedef struct {
 	uint8_t				factory_new  :1;
 	uint8_t				is_connect   :1;

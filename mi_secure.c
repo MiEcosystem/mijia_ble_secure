@@ -181,10 +181,11 @@ int mi_scheduler_init(uint32_t interval)
 	return 0;
 }
 
-int mi_scheduler_start(uint32_t *p_context)
+int mi_scheduler_start(uint32_t auth_stat)
 {
 	int32_t errno;
 	schd_time = 0;
+	schd_status = auth_stat;
 
 	PT_INIT(&pt1);
 	PT_INIT(&pt2);
@@ -198,11 +199,11 @@ int mi_scheduler_start(uint32_t *p_context)
 	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
 	login_encrypt_data[1] = 0;
 
-	NRF_LOG_WARNING("\nSTART %X\n\n", *p_context);
-	errno = app_timer_start(mi_schd_timer_id, schd_interval, p_context);
+	NRF_LOG_WARNING("\nSTART %X\n\n", schd_status);
+	errno = app_timer_start(mi_schd_timer_id, schd_interval, &schd_status);
 	APP_ERROR_CHECK(errno);
 
-	mi_scheduler(p_context);
+	mi_scheduler(&schd_status);
 	return errno;
 }
 
@@ -551,7 +552,7 @@ static int msc_decode_twi_buf(msc_xfer_control_block_t *p_cb)
 	uint16_t data_len = len - sizeof(p_cb->status);
 	
 	if (chk != twi_buf[2+len]) {
-		p_cb->status = -1;
+		p_cb->status = 255;
 		return 1;
 	}
 	
@@ -574,7 +575,6 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 
 	PT_BEGIN(pt);
 
-	static timer_t  msc_timer;
 	static uint8_t  retry_times = 0;
 	msc_encode_twi_buf(p_cb);
 
@@ -671,8 +671,8 @@ int reg_auth(pt_t *pt)
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_sign, 64));
 	aes_ccm_encrypt(session_key.dev_key, nonce, NULL, 0, encrypt_data.mic, 4, dev_sign, 64, encrypt_data.cipher);
 	
-	PT_WAIT_UNTIL(pt, auth_status != REG_START);
-	if (auth_status != REG_SUCCESS) {
+	PT_WAIT_UNTIL(pt, auth_recv() != REG_START);
+	if (auth_recv() != REG_SUCCESS) {
 		NRF_LOG_ERROR("Auth failed.\n");
 		mi_scheduler_stop(REG_FAILED);
 		PT_EXIT(pt);
@@ -790,7 +790,6 @@ int reg_msc(pt_t *pt)
 	
 #endif
 	
-//	mi_scheduler_stop(REG_SUCCESS);
 	PT_END(pt);
 }
 
@@ -845,6 +844,8 @@ int login_auth(pt_t *pt)
   	if(login_encrypt_data[0] == login_encrypt_data[1]) {
 		NRF_LOG_INFO("LOG SUCCESS.\n");
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
+
+		mi_encrypt_init(&session_key);
 		mi_scheduler_stop(LOG_SUCCESS);
 	}
 	else {
@@ -1021,11 +1022,6 @@ void shared_login_procedure()
 }
 
 
-void update_nonce_procedure(uint8_t type)
-{
-	
-	return ;
-}
 #ifdef M_TEST
 void aes_ecb_test();
 void aes_ccm_test();
@@ -1040,12 +1036,22 @@ int test_thd(pt_t *pt)
 	PT_BEGIN(pt);
 	int i;
 
-	i = 1000;
-	nrf_gpio_pin_set(PROFILE_PIN);
-	while(i--)
-	aes_ccm_test();
-	nrf_gpio_pin_clear(PROFILE_PIN);
+	uint8_t msg[] = "helloworld";
+	uint8_t cipher[20];
+	uint8_t plain[20] = {0};
+	mi_encrypt_init((void*)&i);
 
+	mi_session_encrypt(msg, 10, cipher);
+	NRF_LOG_RAW_HEXDUMP_INFO(cipher, 16);
+
+	mi_session_decrypt(cipher, 16, plain);
+	NRF_LOG_RAW_HEXDUMP_INFO(plain, 10);
+//	i = 1000;
+//	nrf_gpio_pin_set(PROFILE_PIN);
+//	while(i--)
+//	aes_ccm_test();
+//	nrf_gpio_pin_clear(PROFILE_PIN);
+	
 //	i = 1000;
 //	nrf_gpio_pin_set(PROFILE_PIN);
 //	while(i--)
@@ -1098,9 +1104,6 @@ void mi_scheduler(void * p_context)
 			break;
 		case SHARED_TYPE:
 			shared_login_procedure();
-			break;
-		case UPDATE_NONCE_TYPE:
-			update_nonce_procedure(auth_type);
 			break;
 	}
 	

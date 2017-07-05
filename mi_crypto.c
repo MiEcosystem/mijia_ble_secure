@@ -10,8 +10,12 @@
 #include "aes_ccm.h"
 #include "ccm.h"
 
-#define N   230
 typedef struct {
+	uint16_t low;
+	uint16_t high;
+} counter_t;
+
+typedef struct { 
 	uint8_t   iv[4];
 	uint8_t   reserve[4];
 	uint32_t  counter;
@@ -28,74 +32,93 @@ static struct {
 	uint8_t encrypting  :1;
 	uint8_t decrypting  :1;
 	uint8_t pending     :1;
+	uint8_t processing  :1;
+	
 } m_flags;
 
-static session_nonce_t session_nonce;
-static uint8_t  session_dev_cnt;
-static uint8_t  session_app_cnt;
+static uint32_t  session_dev_cnt;
+static uint32_t  session_app_cnt;
+static uint8_t  dev_iv[4];
+static uint8_t  app_iv[4];
 static uint8_t  session_key_dev[16];
 static uint8_t  session_key_app[16];
 
-
-int set_session_key_and_iv(session_key_t *pkey)
+static int update_cnt(uint32_t* p_cnt, uint16_t cnt_low)
 {
+	uint16_t old_cnt_low = *p_cnt;
+	
+	if (((old_cnt_low ^ cnt_low) & 0x8000) != 0)
+		*p_cnt += 0x10000UL;
+	
+	*(uint16_t*)p_cnt = cnt_low;
+
+	return 0;
+}
+
+int mi_encrypt_init(session_key_t *pkey)
+{
+	if (pkey == NULL)
+		return 1;
+
 	memcpy(session_key_dev, pkey->dev_key, 16);
 	memcpy(session_key_app, pkey->app_key, 16);
-	memcpy(session_nonce.iv, pkey->iv, sizeof(session_nonce.iv));
+	memcpy(dev_iv, pkey->dev_iv, sizeof(dev_iv));
+	memcpy(app_iv, pkey->app_iv, sizeof(dev_iv));
 	session_app_cnt = 0;
 	session_dev_cnt = 0;
+
+	m_flags.initialized = 1;
 	return 0;
 }
 
 int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output)
 {
-	CRITICAL_REGION_ENTER();
-	if (m_flags.encrypting == 1) {
-		NRF_LOG_ERROR("NO REENTER SUPPORT.\n");
+	if (m_flags.initialized != 1)
 		return 1;
-	} else {
-		m_flags.encrypting = 1;
-	}
+
+	CRITICAL_REGION_ENTER();
+	if (m_flags.processing == 1)
+		return 2;
+	else
+		m_flags.processing = 1;
 	CRITICAL_REGION_EXIT();
 
-	session_dev_cnt++;
-
-	if (session_dev_cnt > N) {
-		m_flags.encrypting = 0;
-		mi_scheduler_start(UPDATE_DEVNONCE_REQ);
-		return 2;
-	}
-
-	session_nonce.counter = session_dev_cnt;
-	aes_ccm_encrypt((void*)session_key_dev, (void*)&session_nonce, NULL, 0,
-	                output+len, 4, input, len, output);
-
-	output[0] = session_dev_cnt;
+	session_nonce_t nonce = {0};
+	memcpy(nonce.iv, dev_iv, sizeof(dev_iv));
 	
+	uint16_t cnt_low = (uint16_t)session_dev_cnt;
+	update_cnt(&session_dev_cnt, ++cnt_low);
+	nonce.counter = session_dev_cnt;
+	
+	aes_ccm_encrypt((void*)session_key_dev, (void*)&nonce, NULL, 0,
+	                2+output+len, 4, input, len, 2+output);
 
+	memcpy(output, &session_dev_cnt, 2);
+
+	m_flags.processing = 0;
 	return 0;
 }
 
 int mi_session_decrypt(uint8_t *input, uint8_t len, uint8_t *output)
 {
-	CRITICAL_REGION_ENTER();
-	if (m_flags.decrypting == 1) {
-		NRF_LOG_ERROR("NO REENTER SUPPORT.\n");
+	if (m_flags.initialized != 1)
 		return 1;
-	} else {
-		m_flags.decrypting = 1;
-	}
+
+	CRITICAL_REGION_ENTER();
+	if (m_flags.processing == 1)
+		return 2;
+	else
+		m_flags.processing = 1;
 	CRITICAL_REGION_EXIT();
 
-	session_app_cnt++;
-	
-	session_nonce.counter = session_app_cnt;
-	aes_ccm_decrypt((void*)session_key_app, (void*)&session_nonce, NULL, 0,
-	                input+len, 4, input, len, output);
+	session_nonce_t nonce = {0};
+	memcpy(nonce.iv, app_iv, sizeof(app_iv));
+	update_cnt(&session_app_cnt, *(uint16_t*)input);
+	nonce.counter = session_app_cnt;
+
+	aes_ccm_decrypt((void*)session_key_app, (void*)&nonce, NULL, 0,
+	                2+input+len-6, 4, 2+input, len-6, output);
+
+	m_flags.processing = 0;
 	return 0;
 }
-
-#if 0
-
-
-#endif

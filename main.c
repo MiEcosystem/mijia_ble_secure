@@ -39,7 +39,7 @@
 #include "ble_mi_secure.h"
 #include "mi_secure.h"
 #include "mi_beacon.h"
-#include "aes_ccm.h"
+#include "mi_crypto.h"
 
 #include "app_util_platform.h"
 #include "bsp.h"
@@ -98,7 +98,6 @@ volatile bool m_twi0_xfer_done = false;
 /* TWI instance. */
 const nrf_drv_twi_t TWI0 = NRF_DRV_TWI_INSTANCE(0);
 
-
 /**@brief Function for assert macro callback.
  *
  * @details This function will be called in case of an assert in the SoftDevice.
@@ -127,7 +126,7 @@ static void gap_params_init(void)
     ble_gap_conn_params_t   gap_conn_params;
     ble_gap_conn_sec_mode_t sec_mode;
 
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
+    BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&sec_mode);
 
     err_code = sd_ble_gap_device_name_set(&sec_mode,
                                           (const uint8_t *) DEVICE_NAME,
@@ -155,23 +154,15 @@ static void gap_params_init(void)
  * @param[in] length   Length of the data.
  */
 /**@snippet [Handling the data received over BLE] */
-//typedef struct {
-//	uint8_t dev_key[16];
-//	uint8_t app_key[16];
-//	uint8_t reserve[32];
-//} session_key_t;
-//extern session_key_t session_key;
-//uint8_t nonce2[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-//                         0x19, 0x1a, 0x1b, 0x1c};
-//uint8_t msg[20];
+uint8_t msg[32];
 static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
 {
-//	NRF_LOG_HEXDUMP_INFO(p_data, length);
-//	aes_ccm_decrypt(session_key.app_key, nonce2, NULL, 0, p_data+length-4, 4, p_data, length-4, msg);
-//	NRF_LOG_HEXDUMP_INFO(msg, length-4);
-//	aes_ccm_encrypt(session_key.dev_key, nonce2, NULL, 0, msg+length-4, 4, msg, length-4, msg);
-//	NRF_LOG_HEXDUMP_INFO(msg, length);
-//	ble_nus_string_send(&m_nus, msg, length);
+	NRF_LOG_HEXDUMP_INFO(p_data, length);
+	mi_session_decrypt(p_data, length, msg);
+	NRF_LOG_HEXDUMP_INFO(msg, length-6);
+	mi_session_encrypt(msg, length-6, msg);
+	NRF_LOG_HEXDUMP_INFO(msg, length);
+	ble_nus_string_send(&m_nus, msg, length);
 }
 /**@snippet [Handling the data received over BLE] */
 
@@ -527,7 +518,6 @@ static void advertising_init(void)
 {
     uint32_t               err_code;
     uint8_t                data[27];
-    uint8_t                tmp8;
     uint8_t                total_len;
 	ble_gap_addr_t         dev_mac;
 

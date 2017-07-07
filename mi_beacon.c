@@ -1,9 +1,8 @@
 #include <string.h>
-#include "aes_ccm.h"
+#include "ccm.h"
 #include "mi_type.h"
 #include "mi_arch.h"
 #include "mi_beacon.h"
-
 
 
 #include "nrf_log.h"
@@ -117,10 +116,12 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 			NRF_LOG_RAW_INFO("Key:");
 			NRF_LOG_HEXDUMP_INFO(beacon_key,16);
 
-			aes_ccm_encrypt(beacon_key, (uint8_t*)&beacon_nonce,
-							&aad, sizeof(aad),
-							mic,  sizeof(mic),
-				(uint8_t*)p_frame_ctrl + 5, *output_len - 5, (uint8_t*)p_frame_ctrl + 5);
+			aes_ccm_encrypt_and_tag(beacon_key,
+			                (uint8_t*)&beacon_nonce, sizeof(beacon_nonce),
+							                   &aad, sizeof(aad),
+				         (uint8_t*)p_frame_ctrl + 5, *output_len - 5,
+			             (uint8_t*)p_frame_ctrl + 5,
+							                    mic, 4);
 
 			memcpy(output, beacon_nonce.rand, 3);
 			output += 3;

@@ -11,7 +11,7 @@
 #include "nrf_log_ctrl.h"
 
 #include "sha256_hkdf.h"
-#include "aes_ccm.h"
+#include "ccm.h"
 #include "mi_secure.h"
 #include "ble_mi_secure.h"
 #include "mi_crypto.h"
@@ -119,8 +119,8 @@ struct {
 
 uint8_t rand_key[16];
 
-static uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-                         0x19, 0x1a, 0x1b, 0x1c};
+static uint8_t nonce[12] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+                         0x19, 0x1a, 0x1b};
 
 msc_info_t tmp_info;
 struct {
@@ -669,8 +669,10 @@ int reg_auth(pt_t *pt)
 	    (void *)&session_key,         sizeof(session_key));
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_sign, 64));
-	aes_ccm_encrypt(session_key.dev_key, nonce, NULL, 0, encrypt_data.mic, 4, dev_sign, 64, encrypt_data.cipher);
-	
+
+	aes_ccm_encrypt_and_tag(session_key.dev_key, nonce, sizeof(nonce), NULL, 0,
+	                        dev_sign, 64, encrypt_data.cipher, encrypt_data.mic, 4);
+
 	PT_WAIT_UNTIL(pt, auth_recv() != REG_START);
 	if (auth_recv() != REG_SUCCESS) {
 		NRF_LOG_ERROR("Auth failed.\n");
@@ -818,7 +820,13 @@ int login_auth(pt_t *pt)
 
 #if ENC_LTMK
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(MKPK.mic, 4));
-    aes_ccm_decrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
+	aes_ccm_auth_decrypt(       rand_key,
+	                               nonce,  sizeof(nonce),
+	                                NULL,  0,
+	                         MKPK.cipher,  sizeof(MKPK.cipher),
+	                                LTMK,
+	                            MKPK.mic,  4);
+
 #else
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(LTMK, 32));
 #endif
@@ -832,9 +840,12 @@ int login_auth(pt_t *pt)
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.login_encrypt_data));
 
 	uint8_t errno = 
-	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 0,
-					(void*)(login_encrypt_data+1), 4,
-					(void*)    login_encrypt_data, 4, (void*)login_encrypt_data);
+	aes_ccm_auth_decrypt(session_key.app_key,
+	                               nonce,  sizeof(nonce),
+	                                NULL,  0,
+               (void*)login_encrypt_data,  4,
+	           (void*)login_encrypt_data,
+	       (void*)(login_encrypt_data+1),  4);
 	
 //	login_encrypt_data[1] =  soft_crc32(dev_pub, 64, 0);
 	login_encrypt_data[1] = *(uint32_t*)dev_pub;
@@ -981,7 +992,14 @@ int shared_auth(pt_t *pt)
 	PT_BEGIN(pt);
 	// fs_read rand_key();
 	PT_WAIT_UNTIL(pt, MKPK.mic[3] != 0);
-	aes_ccm_decrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
+	aes_ccm_auth_decrypt(rand_key,
+	                               nonce,  sizeof(nonce),
+	                                NULL,  0,
+	                         MKPK.cipher,  sizeof(MKPK.cipher),
+	                                LTMK,
+	                            MKPK.mic,  4);
+
+//	aes_ccm_decrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, MKPK.cipher, 32, LTMK);
 
 	PT_WAIT_UNTIL(pt, shared_key[31] != shared_key[30]);
 	sha256_hkdf(  shared_key,         sizeof(shared_key),
@@ -990,15 +1008,30 @@ int shared_auth(pt_t *pt)
 	    (void *)&session_key,         sizeof(session_key));
 
 	PT_WAIT_UNTIL(pt, encrypt_share_info.mic[3] != 0);
-	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 0,
-					encrypt_share_info.mic,    sizeof(encrypt_share_info.mic),
-					encrypt_share_info.cipher, sizeof(encrypt_share_info.cipher),
-	                (void*)&shared_info);
 
-	aes_ccm_decrypt(LTMK, nonce, NULL, 0,
-					shared_info.mic,    sizeof(shared_info.mic),
-					shared_info.cipher , sizeof(shared_info.cipher),
-					(void*)&shared_info);
+	aes_ccm_auth_decrypt(session_key.app_key,
+	                               nonce,  sizeof(nonce),
+	                                NULL,  0,
+	           encrypt_share_info.cipher,  sizeof(encrypt_share_info.cipher),
+	                 (void*)&shared_info,
+	              encrypt_share_info.mic,  sizeof(encrypt_share_info.mic));
+
+	aes_ccm_auth_decrypt(LTMK,
+	                               nonce,  sizeof(nonce),
+	                                NULL,  0,
+	                  shared_info.cipher,  sizeof(shared_info.cipher),
+	                 (void*)&shared_info,
+	                     shared_info.mic,  sizeof(shared_info.mic));
+
+//	aes_ccm_decrypt(session_key.app_key, nonce, NULL, 0,
+//					encrypt_share_info.mic,    sizeof(encrypt_share_info.mic),
+//					encrypt_share_info.cipher, sizeof(encrypt_share_info.cipher),
+//	                (void*)&shared_info);
+
+//	aes_ccm_decrypt(LTMK, nonce, NULL, 0,
+//					shared_info.mic,    sizeof(shared_info.mic),
+//					shared_info.cipher , sizeof(shared_info.cipher),
+//					(void*)&shared_info);
 	
 	if (verify_key(&shared_info.key) == false) {
 		NRF_LOG_ERROR("SHARED LOG FAILED.\n");

@@ -57,6 +57,7 @@ static void on_disconnect(ble_evt_t * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
     mi_srv.conn_handle = BLE_CONN_HANDLE_INVALID;
+	mi_scheduler_stop(0);
 }
 
 
@@ -206,8 +207,7 @@ static uint32_t char_add(uint16_t                        uuid,
     }
 
     memset(&attr_md, 0, sizeof(attr_md));
-	BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.read_perm);
-	BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&attr_md.write_perm);
+
 	if (char_props.read) {
 		BLE_GAP_CONN_SEC_MODE_SET_OPEN(&attr_md.read_perm);
 	}
@@ -534,7 +534,6 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 	ble_gatt_char_props_t char_props = {0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
-	char_props.indicate              = 1;
 	err_code = char_add(BLE_UUID_MI_AUTH, NULL, 4, char_props, &mi_srv.auth_handles);
 	APP_ERROR_CHECK(err_code);
 
@@ -545,7 +544,7 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 	err_code = char_add(BLE_UUID_MI_SECURE, NULL, 20, char_props, &mi_srv.secure_handles);
 	APP_ERROR_CHECK(err_code);
 
-	// Add the Fast xfer Characteristic.
+//	// Add the Fast xfer Characteristic.
 //	char_props = (ble_gatt_char_props_t){0};
 //	char_props.write_wo_resp         = 1;
 //	char_props.notify                = 1;

@@ -36,6 +36,10 @@
 #include "fstorage.h"
 #include "ble_nus.h"
 
+#define NRF_LOG_MODULE_NAME "MAIN"
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+
 #include "ble_mi_secure.h"
 #include "mi_secure.h"
 #include "mi_beacon.h"
@@ -46,9 +50,7 @@
 #include "bsp_btn_ble.h"
 #include "nrf_drv_twi_patched.h"
 
-#define NRF_LOG_MODULE_NAME "MAIN"
-#include "nrf_log.h"
-#include "nrf_log_ctrl.h"
+#include "ble_lock.h"
 
 #define APP_PRODUCT_ID                  0x009C
 
@@ -158,7 +160,8 @@ uint8_t msg[32];
 static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
 {
 	NRF_LOG_HEXDUMP_INFO(p_data, length);
-	mi_session_decrypt(p_data, length, msg);
+	if (mi_session_decrypt(p_data, length, msg) != 0)
+		return;
 	NRF_LOG_HEXDUMP_INFO(msg, length-6);
 	mi_session_encrypt(msg, length-6, msg);
 	NRF_LOG_HEXDUMP_INFO(msg, length);
@@ -188,6 +191,8 @@ static void services_init(void)
 
 	err_code = ble_mi_init(&mi_init);
 	APP_ERROR_CHECK(err_code);
+
+	ble_lock_init();
 }
 
 
@@ -403,8 +408,9 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 	ble_mi_on_ble_evt(p_ble_evt);
     on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
-    bsp_btn_ble_on_ble_evt(p_ble_evt); 
+    bsp_btn_ble_on_ble_evt(p_ble_evt);
 
+	ble_lock_on_ble_evt(p_ble_evt);
 }
 
 /**@brief Function for dispatching a system event to interested modules.

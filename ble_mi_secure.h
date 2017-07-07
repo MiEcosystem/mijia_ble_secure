@@ -56,13 +56,6 @@ extern "C" {
 #define SHARED_LOG_FAILED	(SHARED_TYPE+2)
 #define SHARED_LOG_EXPIRED	(SHARED_TYPE+3)
 
-#define UPDATE_NONCE_TYPE   0x80UL
-#define UPDATA_APPNONCE_REQ (UPDATE_NONCE_TYPE)
-#define UPDATA_APPNONCE_RSP (UPDATE_NONCE_TYPE+1)
-#define UPDATA_DEVNONCE_REQ (UPDATE_NONCE_TYPE+2)
-#define UPDATA_DEVNONCE_RSP (UPDATE_NONCE_TYPE+3)
-
-
 #define BLE_UUID_MI_SERVICE 0xFE95                      /**< The UUID of the Xiaomi Service. */
 #define BLE_MI_MAX_DATA_LEN (GATT_MTU_SIZE_DEFAULT - 3) /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Xiaomi  service module. */
 

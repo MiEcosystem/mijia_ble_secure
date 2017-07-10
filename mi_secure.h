@@ -43,6 +43,8 @@ extern "C" {
 #define SHARED_LOG_FAILED   (SHARED_TYPE+2)
 #define SHARED_LOG_EXPIRED  (SHARED_TYPE+3)
 
+int get_mi_authorization();
+
 void mi_scheduler(void * p_context);
 int mi_scheduler_init(uint32_t interval);
 int mi_scheduler_start(uint32_t status);

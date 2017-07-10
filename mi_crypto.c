@@ -7,7 +7,6 @@
 #include "mi_secure.h"
 #include "mi_type.h"
 #include "mi_crypto.h"
-#include "aes_ccm.h"
 #include "ccm.h"
 
 typedef struct {

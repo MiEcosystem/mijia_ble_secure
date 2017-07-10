@@ -172,7 +172,7 @@
             <AdsLven>1</AdsLven>
             <AdsLsxf>1</AdsLsxf>
             <RvctClst>0</RvctClst>
-            <GenPPlst>1</GenPPlst>
+            <GenPPlst>0</GenPPlst>
             <AdsCpuType>"Cortex-M4"</AdsCpuType>
             <RvctDeviceName></RvctDeviceName>
             <mOS>0</mOS>
@@ -297,8 +297,8 @@
               </OCR_RVCT8>
               <OCR_RVCT9>
                 <Type>0</Type>
-                <StartAddress>0x20002128</StartAddress>
-                <Size>0xded8</Size>
+                <StartAddress>0x20002158</StartAddress>
+                <Size>0xdea8</Size>
               </OCR_RVCT9>
               <OCR_RVCT10>
                 <Type>0</Type>
@@ -438,11 +438,6 @@
               <FileName>sdk_config.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\config\sdk_config.h</FilePath>
-            </File>
-            <File>
-              <FileName>ble_mi_secure.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
             </File>
             <File>
               <FileName>mi_beacon.c</FileName>
@@ -628,6 +623,11 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>ble_mi_secure.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
             </File>
             <File>
               <FileName>ble_lock.c</FileName>
@@ -2578,11 +2578,6 @@
               <FilePath>..\config\sdk_config.h</FilePath>
             </File>
             <File>
-              <FileName>ble_mi_secure.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
-            </File>
-            <File>
               <FileName>mi_beacon.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mi_beacon.c</FilePath>
@@ -2766,6 +2761,11 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>ble_mi_secure.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
             </File>
             <File>
               <FileName>ble_lock.c</FileName>

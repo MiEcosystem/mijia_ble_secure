@@ -226,8 +226,6 @@ static uint32_t char_add(uint16_t                        uuid,
 
     attr_char_value.p_uuid    = &ble_uuid;
     attr_char_value.p_attr_md = &attr_md;
-    attr_char_value.init_len  = 1;
-    attr_char_value.init_offs = 0;
     attr_char_value.max_len   = char_len;
     attr_char_value.p_value   = p_char_value ? p_char_value : NULL;
 

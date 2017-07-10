@@ -1,3 +1,4 @@
+#include <string.h>
 #include "nrf_soc.h"
 #include "ble_gap.h"
 #include "mi_type.h"

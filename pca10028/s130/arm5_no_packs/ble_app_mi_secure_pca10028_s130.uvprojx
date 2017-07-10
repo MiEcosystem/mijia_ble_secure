@@ -297,8 +297,8 @@
               </OCR_RVCT8>
               <OCR_RVCT9>
                 <Type>0</Type>
-                <StartAddress>0x20001fe8</StartAddress>
-                <Size>0x6018</Size>
+                <StartAddress>0x20002018</StartAddress>
+                <Size>0x5fe8</Size>
               </OCR_RVCT9>
               <OCR_RVCT10>
                 <Type>0</Type>
@@ -628,6 +628,11 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>ble_lock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\ble_lock.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -2575,6 +2580,11 @@
               <FileName>ccm.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\ccm.c</FilePath>
+            </File>
+            <File>
+              <FileName>ble_lock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\ble_lock.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -4859,6 +4869,11 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>ble_lock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\ble_lock.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -163,16 +163,16 @@ typedef struct
  * @details This structure contains status information related to the service.
  */
 typedef struct {
-    uint8_t                  uuid_type;               /**< UUID type for Xiaomi Service Base UUID. */
-    uint16_t                 service_handle;          /**< Handle of Xiaomi Service (as provided by the SoftDevice). */
+	uint8_t                  uuid_type;               /**< UUID type for Xiaomi Service Base UUID. */
+	uint16_t                 service_handle;          /**< Handle of Xiaomi Service (as provided by the SoftDevice). */
 
-    ble_gatts_char_handles_t auth_handles;            /**< Handles related to the characteristic (as provided by the SoftDevice). */
-    ble_gatts_char_handles_t secure_handles;
-    ble_gatts_char_handles_t fast_xfer_handles;              
+	ble_gatts_char_handles_t auth_handles;            /**< Handles related to the characteristic (as provided by the SoftDevice). */
+	ble_gatts_char_handles_t secure_handles;
+	ble_gatts_char_handles_t fast_xfer_handles;              
               
-    uint16_t                 conn_handle;             /**< Handle of the current connection (as provided by the SoftDevice). BLE_CONN_HANDLE_INVALID if not in a connection. */
-    bool                     is_notification_enabled; /**< Variable to indicate if the peer has enabled notification of the RX characteristic.*/
-    ble_mi_data_handler_t    data_handler;            /**< Event handler to be called for handling received data. */
+	uint16_t                 conn_handle;             /**< Handle of the current connection (as provided by the SoftDevice). BLE_CONN_HANDLE_INVALID if not in a connection. */
+	bool                     is_notification_enabled; /**< Variable to indicate if the peer has enabled notification of the RX characteristic.*/
+	ble_mi_data_handler_t    data_handler;            /**< Event handler to be called for handling received data. */
 } ble_mi_t;
 
 /**@brief Function for initializing the Xiaomi Service.

@@ -89,17 +89,19 @@ int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output)
 		m_flags.processing = 1;
 	CRITICAL_REGION_EXIT();
 
+	uint8_t tmp[len];
+	memcpy(tmp, input, len);
+	
 	session_nonce_t nonce = {0};
 	memcpy(nonce.iv, dev_iv, sizeof(dev_iv));
-	
 	uint16_t cnt_low = (uint16_t)session_dev_cnt;
 	update_cnt(&session_dev_cnt, ++cnt_low);
 	nonce.counter = session_dev_cnt;
-
+	
 	aes_ccm_encrypt_and_tag(session_key_dev, (void*)&nonce, sizeof(nonce), NULL, 0,
-	                        input, len, 2+output, 2+output+len, 4);
+	                        tmp, len, 2+output, 2+output+len, 4);
 
-	memcpy(output, &session_dev_cnt, 2);
+	*(uint16_t*)output = session_dev_cnt;
 
 	m_flags.processing = 0;
 	return 0;
@@ -123,8 +125,8 @@ int mi_session_decrypt(uint8_t *input, uint8_t len, uint8_t *output)
 	nonce.counter = session_app_cnt;
 
 	uint32_t ret;
-	ret = aes_ccm_encrypt_and_tag(session_key_app, (void*)&nonce, sizeof(nonce), NULL, 0,
-	                      2+input, len-6, output, 2+input+len-6, 4);
+	ret = aes_ccm_auth_decrypt(session_key_app, (void*)&nonce, sizeof(nonce), NULL, 0,
+	                           2+input, len-6, output, 2+input+len-6, 4);
 
 	m_flags.processing = 0;
 	return ret;

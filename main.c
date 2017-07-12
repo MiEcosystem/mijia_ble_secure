@@ -159,13 +159,22 @@ static void gap_params_init(void)
 uint8_t msg[32];
 static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
 {
+	uint32_t errno;
+
 	NRF_LOG_HEXDUMP_INFO(p_data, length);
-	if (mi_session_decrypt(p_data, length, msg) != 0)
-		return;
-	NRF_LOG_HEXDUMP_INFO(msg, length-6);
-	mi_session_encrypt(msg, length-6, msg);
-	NRF_LOG_HEXDUMP_INFO(msg, length);
+	errno = mi_session_decrypt(p_data, length, msg);
+
+	if (errno != NRF_SUCCESS) {
+		length = 1;
+		msg[0] = 0xFF;
+	} else {
+		NRF_LOG_HEXDUMP_INFO(msg, length-6);
+		mi_session_encrypt(msg, length-6, msg);
+		NRF_LOG_HEXDUMP_INFO(msg, length);
+	}
+	
 	ble_nus_string_send(&m_nus, msg, length);
+
 }
 /**@snippet [Handling the data received over BLE] */
 
@@ -691,13 +700,14 @@ int main(void)
     conn_params_init();
 
     NRF_LOG_RAW_INFO("Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
-    err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
-    APP_ERROR_CHECK(err_code);
 
 	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
 
 #ifdef M_TEST
 	mi_scheduler_start(0);
+#else
+    err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
+    APP_ERROR_CHECK(err_code);
 #endif
     // Enter main loop.
 

@@ -27,22 +27,30 @@
 extern "C" {
 #endif
 
-#define REG_TYPE            0x10UL
-#define REG_START           (REG_TYPE)
-#define REG_SUCCESS         (REG_TYPE+1)
-#define REG_FAILED          (REG_TYPE+2)
+#define REG_TYPE                       0x10UL
+#define REG_START                      (REG_TYPE)
+#define REG_SUCCESS                    (REG_TYPE+1)
+#define REG_FAILED                     (REG_TYPE+2)
 
-#define LOG_TYPE            0x20UL
-#define LOG_START           (LOG_TYPE)
-#define LOG_SUCCESS         (LOG_TYPE+1)
-#define LOG_FAILED          (LOG_TYPE+2)
+#define LOG_TYPE                       0x20UL
+#define LOG_START                      (LOG_TYPE)
+#define LOG_SUCCESS                    (LOG_TYPE+1)
+#define LOG_FAILED                     (LOG_TYPE+2)
 
-#define SHARED_TYPE         0x30UL
-#define SHARED_LOG_START    (SHARED_TYPE)
-#define SHARED_LOG_SUCCESS  (SHARED_TYPE+1)
-#define SHARED_LOG_FAILED   (SHARED_TYPE+2)
-#define SHARED_LOG_EXPIRED  (SHARED_TYPE+3)
+#define SHARED_TYPE                    0x30UL
+#define SHARED_LOG_START               (SHARED_TYPE)
+#define SHARED_LOG_START_W_CERT        (SHARED_TYPE+4)
+#define SHARED_LOG_SUCCESS             (SHARED_TYPE+1)
+#define SHARED_LOG_FAILED              (SHARED_TYPE+2)
+#define SHARED_LOG_EXPIRED             (SHARED_TYPE+3)
 
+typedef enum {
+	UNAUTHORIZATION = 0,
+	OWNER_AUTHORIZATION,
+	SHARE_AUTHORIZATION
+} mi_author_stat_t;
+
+void set_mi_authorization(mi_author_stat_t status);
 int get_mi_authorization();
 
 void mi_scheduler(void * p_context);

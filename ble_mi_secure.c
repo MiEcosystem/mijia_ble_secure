@@ -43,6 +43,8 @@ reliable_xfer_t reliable_control_block;
 static void on_connect(ble_evt_t * p_ble_evt)
 {
     mi_srv.conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+	set_mi_authorization(UNAUTHORIZATION);
+
 	NRF_LOG_RAW_INFO("Peer MAC: ");
 	NRF_LOG_RAW_HEXDUMP_INFO(p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLE_GAP_ADDR_LEN);
 }

@@ -35,18 +35,18 @@
 
 static uint8_t lock_operation[7];
 static uint8_t lock_state[7];
-
+static uint8_t lock_logs[20];
 
 static struct {
-    uint16_t                 service_handle;
+	uint16_t                 service_handle;
 	uint8_t                  uuid_type;
 
-    ble_gatts_char_handles_t operation_handles;
-    ble_gatts_char_handles_t state_handles;
-    ble_gatts_char_handles_t log_handles;              
+	ble_gatts_char_handles_t operation_handles;
+	ble_gatts_char_handles_t state_handles;
+	ble_gatts_char_handles_t log_handles;              
               
-    uint16_t                 conn_handle;             /**< Handle of the current connection (as provided by the SoftDevice). BLE_CONN_HANDLE_INVALID if not in a connection. */
-    bool                     is_notification_enabled; /**< Variable to indicate if the peer has enabled notification of the RX characteristic.*/
+	uint16_t                 conn_handle;             /**< Handle of the current connection (as provided by the SoftDevice). BLE_CONN_HANDLE_INVALID if not in a connection. */
+	bool                     is_notification_enabled; /**< Variable to indicate if the peer has enabled notification of the RX characteristic.*/
 } lock_srv;
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S13X SoftDevice.
@@ -104,24 +104,24 @@ static void on_write(ble_evt_t * p_ble_evt)
 static void on_auth_read(ble_evt_t * p_ble_evt)
 {
 	ble_gatts_evt_read_t * p_evt_r = &p_ble_evt->evt.gatts_evt.params.authorize_request.request.read;
-
+	ble_gatts_rw_authorize_reply_params_t reply = {0};
 	if (p_evt_r->handle == lock_srv.state_handles.value_handle)
 	{
-		if (get_mi_authorization() == 0) {
-			ble_gatts_rw_authorize_reply_params_t reply = {
+		if (get_mi_authorization() == UNAUTHORIZATION) {
+			reply = (ble_gatts_rw_authorize_reply_params_t) {
 				.type = BLE_GATTS_AUTHORIZE_TYPE_READ,
 				.params.read.gatt_status = BLE_GATT_STATUS_ATTERR_READ_NOT_PERMITTED
 			};
-			sd_ble_gatts_rw_authorize_reply(lock_srv.conn_handle, &reply);
 		} else {
-			ble_gatts_rw_authorize_reply_params_t reply = {
+			reply = (ble_gatts_rw_authorize_reply_params_t) {
 				.type = BLE_GATTS_AUTHORIZE_TYPE_READ,
 				.params.read.gatt_status = BLE_GATT_STATUS_SUCCESS,
 				.params.read.p_data      = lock_state,
 				.params.read.len         = sizeof(lock_state)
 			};
-			sd_ble_gatts_rw_authorize_reply(lock_srv.conn_handle, &reply);
 		}
+		uint32_t errno = sd_ble_gatts_rw_authorize_reply(lock_srv.conn_handle, &reply);
+		APP_ERROR_CHECK(errno);
     }
     else if (p_evt_r->handle == lock_srv.log_handles.value_handle)
 	{
@@ -140,26 +140,25 @@ static void on_auth_read(ble_evt_t * p_ble_evt)
 static void on_auth_write(ble_evt_t * p_ble_evt)
 {
     ble_gatts_evt_write_t * p_evt_w = &p_ble_evt->evt.gatts_evt.params.authorize_request.request.write;
-	
+	ble_gatts_rw_authorize_reply_params_t reply = {0};
 	if (p_evt_w->handle == lock_srv.operation_handles.value_handle)
     {
-		if (get_mi_authorization() == 0) {
-			ble_gatts_rw_authorize_reply_params_t reply = {
+		if (get_mi_authorization() == UNAUTHORIZATION) {
+			reply = (ble_gatts_rw_authorize_reply_params_t) {
 				.type = BLE_GATTS_AUTHORIZE_TYPE_WRITE,
 				.params.write.gatt_status = BLE_GATT_STATUS_ATTERR_WRITE_NOT_PERMITTED
 			};
-			sd_ble_gatts_rw_authorize_reply(lock_srv.conn_handle, &reply);
 		} else {
-			ble_gatts_rw_authorize_reply_params_t reply = {
+			reply = (ble_gatts_rw_authorize_reply_params_t) {
 				.type = BLE_GATTS_AUTHORIZE_TYPE_WRITE,
 				.params.write.gatt_status = BLE_GATT_STATUS_SUCCESS,
 				.params.write.update      = 1,
 				.params.write.len         = p_evt_w->len,
 				.params.write.p_data      = p_evt_w->data
 			};
-			uint32_t errno = sd_ble_gatts_rw_authorize_reply(lock_srv.conn_handle, &reply);
-			APP_ERROR_CHECK(errno);
 		}
+		uint32_t errno = sd_ble_gatts_rw_authorize_reply(lock_srv.conn_handle, &reply);
+		APP_ERROR_CHECK(errno);
     }
     else
     {
@@ -270,6 +269,7 @@ void ble_lock_on_ble_evt(ble_evt_t * p_ble_evt)
 
 		case BLE_GATTS_EVT_TIMEOUT:
 			break;
+
         default:
             // No implementation needed.
             break;
@@ -306,14 +306,32 @@ uint32_t ble_lock_init()
 	// Add the Lock operation Characteristic.
 	ble_gatt_char_props_t char_props = {0};
 	char_props.write                 = 1;
-	err_code = char_add(BLE_UUID_LOCK_OPERATION, lock_operation, 7, char_props, &lock_srv.operation_handles);
+	err_code = char_add(BLE_UUID_LOCK_OPERATION, lock_operation, sizeof(lock_operation),
+	                    char_props, &lock_srv.operation_handles);
 	APP_ERROR_CHECK(err_code);
 
     // Add the Lock state Characteristic.
 	char_props = (ble_gatt_char_props_t){0};
 	char_props.read                  = 1;
 	char_props.notify                = 1;
-	err_code = char_add(BLE_UUID_LOCK_STATE, lock_state, 7, char_props, &lock_srv.state_handles);
+	err_code = char_add(BLE_UUID_LOCK_STATE, lock_state, sizeof(lock_state),
+	                    char_props, &lock_srv.state_handles);
+	APP_ERROR_CHECK(err_code);
+
+    // Add the Lock state Characteristic.
+	char_props = (ble_gatt_char_props_t){0};
+	char_props.read                  = 1;
+	char_props.notify                = 1;
+	err_code = char_add(BLE_UUID_LOCK_STATE, lock_state, sizeof(lock_state),
+	                    char_props, &lock_srv.state_handles);
+	APP_ERROR_CHECK(err_code);
+
+    // Add the Lock logs Characteristic.
+	char_props = (ble_gatt_char_props_t){0};
+	char_props.read                  = 1;
+	char_props.notify                = 1;
+	err_code = char_add(BLE_UUID_LOCK_STATE, lock_state, sizeof(lock_state),
+	                    char_props, &lock_srv.state_handles);
 	APP_ERROR_CHECK(err_code);
 
 	return NRF_SUCCESS;

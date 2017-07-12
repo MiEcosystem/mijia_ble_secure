@@ -21,7 +21,6 @@
 #define BLE_LOCK_H__
 
 #include "ble.h"
-#include "ble_srv_common.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -47,7 +46,7 @@ extern "C" {
  */
 uint32_t ble_lock_init();
 
-/**@brief Function for handling the Xiaomi Service's BLE events.
+/**@brief Function for handling the Lock Service's BLE events.
  *
  * @details The Lock Service expects the application to call this function each time an
  * event is received from the SoftDevice. This function processes the event if it
@@ -57,18 +56,6 @@ uint32_t ble_lock_init();
  * @param[in] p_ble_evt   Event received from the SoftDevice.
  */
 void ble_lock_on_ble_evt(ble_evt_t * p_ble_evt);
-
-/**@brief Function for sending Auth status to the peer.
- *
- * @details This function sends the input status as an AUTH characteristic notification to the
- *          peer.
- *
- * @param[in] status    Status to be sent.
- *
- * @retval NRF_SUCCESS If the status was sent successfully. Otherwise, an error code is returned.
- */
-uint32_t auth_send(uint32_t status);
-uint32_t auth_recv(void);
 
 #ifdef __cplusplus
 }

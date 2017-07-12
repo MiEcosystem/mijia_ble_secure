@@ -117,10 +117,6 @@
       <TargetDriverDllRegistry>
         <SetRegEntry>
           <Number>0</Number>
-          <Key>DLGUARM</Key>
-        </SetRegEntry>
-        <SetRegEntry>
-          <Number>0</Number>
           <Key>ARMRTXEVENTFLAGS</Key>
           <Name>-L70 -Z18 -C0 -M0 -T1</Name>
         </SetRegEntry>
@@ -137,7 +133,7 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>JL2CM3</Key>
-          <Name>-U682044559 -O78 -S2 -ZTIFSpeedSel5000 -A0 -C0 -JU1 -JI127.0.0.1 -JP0 -RST0 -N00("ARM CoreSight SW-DP") -D00(2BA01477) -L00(0) -TO18 -TC10000000 -TP21 -TDS8007 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -TB1 -TFE0 -FO15 -FD20000000 -FC2000 -FN2 -FF0nrf52xxx.flm -FS00 -FL0200000 -FP0($$Device:nRF52832_xxAA$Flash\nrf52xxx.flm) -FF1nrf52xxx_uicr.flm -FS110001000 -FL11000 -FP1($$Device:nRF52832_xxAA$Flash\nrf52xxx_uicr.flm)</Name>
+          <Name>-U682627825 -O78 -S2 -ZTIFSpeedSel5000 -A0 -C0 -JU1 -JI127.0.0.1 -JP0 -RST0 -N00("ARM CoreSight SW-DP") -D00(2BA01477) -L00(0) -TO18 -TC10000000 -TP21 -TDS8007 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -TB1 -TFE0 -FO15 -FD20000000 -FC2000 -FN2 -FF0nrf52xxx.flm -FS00 -FL0200000 -FP0($$Device:nRF52832_xxAA$Flash\nrf52xxx.flm) -FF1nrf52xxx_uicr.flm -FS110001000 -FL11000 -FP1($$Device:nRF52832_xxAA$Flash\nrf52xxx_uicr.flm)</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -317,7 +313,6 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>DLGUARM</Key>
-          <Name>8鮫</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -345,104 +340,7 @@
           <Name>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000 -FN1 -FF0nrf52xxx -FS00 -FL0200000 -FP0($$Device:nRF52832_xxAA$Flash\nrf52xxx))</Name>
         </SetRegEntry>
       </TargetDriverDllRegistry>
-      <Breakpoint>
-        <Bp>
-          <Number>0</Number>
-          <Type>0</Type>
-          <LineNumber>50</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>150232</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\..\..\ccm.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\nrf52832_xxaa\../../../ccm.c\50</Expression>
-        </Bp>
-        <Bp>
-          <Number>1</Number>
-          <Type>0</Type>
-          <LineNumber>985</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>159216</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\..\..\mi_secure.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\\../../../mi_secure.c\985</Expression>
-        </Bp>
-        <Bp>
-          <Number>2</Number>
-          <Type>0</Type>
-          <LineNumber>286</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>134408</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>E:\Nordic_SDK\nRF5_SDK_12.3.0_d7731ad\examples\ble_peripheral\ble_app_mi_secure\aes_ccm.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\nrf52832_xxaa\../../../aes_ccm.c\286</Expression>
-        </Bp>
-        <Bp>
-          <Number>3</Number>
-          <Type>0</Type>
-          <LineNumber>177</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>134748</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>E:\Nordic_SDK\nRF5_SDK_12.3.0_d7731ad\examples\ble_peripheral\ble_app_mi_secure\aes_ccm.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\nrf52832_xxaa\../../../aes_ccm.c\177</Expression>
-        </Bp>
-        <Bp>
-          <Number>4</Number>
-          <Type>0</Type>
-          <LineNumber>404</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>0</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>0</BreakIfRCount>
-          <Filename>..\..\..\main.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression></Expression>
-        </Bp>
-        <Bp>
-          <Number>5</Number>
-          <Type>0</Type>
-          <LineNumber>413</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>0</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>0</BreakIfRCount>
-          <Filename>..\..\..\main.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression></Expression>
-        </Bp>
-      </Breakpoint>
+      <Breakpoint/>
       <WatchWindow1>
         <Ww>
           <count>0</count>
@@ -459,17 +357,25 @@
         <Mm>
           <WinNumber>1</WinNumber>
           <SubType>0</SubType>
-          <ItemText>msc_tx_data</ItemText>
+          <ItemText>0x200021BA</ItemText>
           <AccSizeX>0</AccSizeX>
         </Mm>
       </MemoryWindow1>
+      <MemoryWindow2>
+        <Mm>
+          <WinNumber>2</WinNumber>
+          <SubType>0</SubType>
+          <ItemText>0x20002210</ItemText>
+          <AccSizeX>0</AccSizeX>
+        </Mm>
+      </MemoryWindow2>
       <Tracepoint>
         <THDelay>0</THDelay>
       </Tracepoint>
       <DebugFlag>
         <trace>0</trace>
         <periodic>0</periodic>
-        <aLwin>1</aLwin>
+        <aLwin>0</aLwin>
         <aCover>0</aCover>
         <aSer1>0</aSer1>
         <aSer2>0</aSer2>

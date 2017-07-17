@@ -262,7 +262,7 @@ void ble_lock_on_ble_evt(ble_evt_t * p_ble_evt)
 				on_auth_read(p_ble_evt);
 			else if (p_ble_evt->evt.gatts_evt.params.authorize_request.type == BLE_GATTS_AUTHORIZE_TYPE_WRITE)
 				on_auth_write(p_ble_evt);
-			break;		
+			break;
 
 		case BLE_GATTS_EVT_HVC:
 			break;

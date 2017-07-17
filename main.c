@@ -673,8 +673,7 @@ void twi0_init (void)
 }
 void time_init(struct tm * time_ptr);
 void mibeacon_test();
-uint8_t get_lock_opcode(uint8_t *p_opcode);
-uint32_t send_lock_stat(uint8_t status);
+
 /**@brief Application main function.
  */
 int main(void)
@@ -682,6 +681,7 @@ int main(void)
     uint32_t err_code;
     bool erase_bonds;
 	uint8_t  lock_opcode = 1;
+
 	err_code = NRF_LOG_INIT(NULL);
     APP_ERROR_CHECK(err_code);
 	NRF_LOG_RAW_INFO(RTT_CTRL_CLEAR);

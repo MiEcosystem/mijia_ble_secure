@@ -43,6 +43,15 @@ reliable_xfer_t reliable_control_block;
 static void on_connect(ble_evt_t * p_ble_evt)
 {
     mi_srv.conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+	ble_gap_conn_params_t conn_param = {
+		.min_conn_interval = MSEC_TO_UNITS(10, UNIT_1_25_MS),
+		.max_conn_interval = MSEC_TO_UNITS(20, UNIT_1_25_MS),
+		.slave_latency     = 0,
+		.conn_sup_timeout  = MSEC_TO_UNITS(4000, UNIT_10_MS)
+	};
+
+	sd_ble_gap_conn_param_update(mi_srv.conn_handle, &conn_param);
+	
 	set_mi_authorization(UNAUTHORIZATION);
 
 	NRF_LOG_RAW_INFO("Peer MAC: ");

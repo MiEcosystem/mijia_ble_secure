@@ -54,8 +54,8 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 	}
 	/*  encode frame_ctrl and product_id */
 	memcpy(output, (uint8_t*)input, 4);
-	*output_len = 4;
 	output += 4;
+	*output_len = 4;
 	
 	output[0] = (uint8_t) ++frame_cnt;
 	output += 1;
@@ -65,7 +65,7 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 	{
 		p_frame_ctrl->mac_include = 1;
 		memcpy(output, input->p_mac, BLE_MAC_LEN);
-		output     += BLE_MAC_LEN;
+		output      += BLE_MAC_LEN;
 		*output_len += BLE_MAC_LEN;
 	}
 	
@@ -73,7 +73,7 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 	{
 		p_frame_ctrl->cap_include = 1;
 		memcpy(output, input->p_capability, sizeof(*input->p_capability));
-		output     += sizeof(*input->p_capability);
+		output      += sizeof(*input->p_capability);
 		*output_len += sizeof(*input->p_capability);
 	}
 
@@ -81,7 +81,7 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 	{
 		p_frame_ctrl->evt_include = 1;
 		event_encode(input->p_event, output);
-		output += 3 + input->p_event->data_len;
+		output      += 3 + input->p_event->data_len;
 		*output_len += 3 + input->p_event->data_len;
 	}
 
@@ -89,7 +89,7 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 	{
 		p_frame_ctrl->manu_data_include = 1;
 		manu_data_encode(input->p_manu_data, output);
-		output += 1 + input->p_manu_data->data_len;
+		output      += 1 + input->p_manu_data->data_len;
 		*output_len += 1 + input->p_manu_data->data_len;
 	}
 
@@ -97,7 +97,7 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 	{
 		p_frame_ctrl->manu_title_include = 1;
 		manu_data_encode(input->p_manu_title, output);
-		output += 1 + input->p_manu_title->data_len;
+		output      += 1 + input->p_manu_title->data_len;
 		*output_len += 1 + input->p_manu_title->data_len;
 	}
 
@@ -117,11 +117,11 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 			NRF_LOG_HEXDUMP_INFO(beacon_key,16);
 
 			aes_ccm_encrypt_and_tag(beacon_key,
-			                (uint8_t*)&beacon_nonce, sizeof(beacon_nonce),
-							                   &aad, sizeof(aad),
-				         (uint8_t*)p_frame_ctrl + 5, *output_len - 5,
-			             (uint8_t*)p_frame_ctrl + 5,
-							                    mic, 4);
+	                (uint8_t*)&beacon_nonce, sizeof(beacon_nonce),
+	                                   &aad, sizeof(aad),
+	             (uint8_t*)p_frame_ctrl + 5, *output_len - 5,
+	             (uint8_t*)p_frame_ctrl + 5,
+	                                    mic, 4);
 
 			memcpy(output, beacon_nonce.rand, 3);
 			output += 3;

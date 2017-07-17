@@ -13,13 +13,11 @@ typedef enum {
 	WATER_BOIL_EVT   = 0x1005,
 	HUMIDITY_EVT     = 0x1006,
 	LUMINA_EVT       = 0x1007,
-
 	SOIL_PF_EVT      = 0x1008,
 	SOIL_EC_EVT      = 0x1009,
+	BATTERY_EVT      = 0x100A,
 
-	BATTERY_EVT      = 0x100B,
-
-	LOCK_EVT         = 0x100D,
+	LOCK_EVT         = 0x100E,
 } mibeacon_evt_t;
 
 typedef struct {
@@ -61,7 +59,7 @@ typedef struct {
 
 typedef struct {
 	mibeacon_frame_ctrl_t frame_ctrl;
-	uint16_t                     pid;
+	uint16_t              pid;
 	uint8_t               frame_cnt_lsb;
 	uint8_t               *p_mac;
 	mibeacon_capability_t *p_capability;

@@ -40,22 +40,6 @@ extern "C" {
 #define MODE_CMD  0
 #define MODE_ACK  1
 
-#define REG_TYPE            0x10UL
-#define REG_START    	    (REG_TYPE)
-#define REG_SUCCESS 	    (REG_TYPE+1)
-#define REG_FAILED	        (REG_TYPE+2)
-
-#define LOG_TYPE 	        0x20UL
-#define LOG_START	        (LOG_TYPE)
-#define LOG_SUCCESS      	(LOG_TYPE+1)
-#define LOG_FAILED	        (LOG_TYPE+2)
-
-#define SHARED_TYPE     	0x30UL
-#define SHARED_LOG_START	(SHARED_TYPE)
-#define SHARED_LOG_SUCCESS	(SHARED_TYPE+1)
-#define SHARED_LOG_FAILED	(SHARED_TYPE+2)
-#define SHARED_LOG_EXPIRED	(SHARED_TYPE+3)
-
 #define BLE_UUID_MI_SERVICE 0xFE95                      /**< The UUID of the Xiaomi Service. */
 #define BLE_MI_MAX_DATA_LEN (GATT_MTU_SIZE_DEFAULT - 3) /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Xiaomi  service module. */
 

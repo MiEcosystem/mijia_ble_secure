@@ -181,9 +181,6 @@ int get_mi_authorization()
 }
 
 
-
-
-
 int mi_scheduler_init(uint32_t interval)
 {
 	int32_t errno;
@@ -868,20 +865,19 @@ int login_auth(pt_t *pt)
 //	NRF_LOG_HEXDUMP_INFO(session_key.dev_key, 16);
 	 
   	if(encrypt_login_data[0] == encrypt_login_data[1]) {
-		NRF_LOG_INFO("LOG SUCCESS.\n");
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
+		NRF_LOG_INFO("LOG SUCCESS. schd_time : %d\n", schd_time);
 		set_mi_authorization(OWNER_AUTHORIZATION);
 		mi_encrypt_init(&session_key);
 		mi_scheduler_stop(LOG_SUCCESS);
 	}
 	else {
-		NRF_LOG_ERROR("LOG FAILED.%d\n", errno);
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
+		NRF_LOG_ERROR("LOG FAILED. %d\n", errno);
 		mi_scheduler_stop(LOG_FAILED);
 
 	}
 
-	// log success
 	PT_END(pt);
 }
 
@@ -1239,6 +1235,7 @@ void mi_scheduler(void * p_context)
 			login_procedure();
 			break;
 		case SHARED_TYPE:
+		case SHARED_LOG_START_W_CERT:
 			shared_login_procedure();
 			break;
 	}

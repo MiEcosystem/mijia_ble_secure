@@ -53,6 +53,8 @@ typedef struct
     int is224;                  /*!< 0 => SHA-256, else SHA-224 */
 }
 mbedtls_sha256_context;
+
+uint32_t soft_crc32(const void *buf, size_t size, uint32_t crc);
 /**
  * \brief          Initialize SHA-256 context
  *

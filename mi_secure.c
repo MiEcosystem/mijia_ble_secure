@@ -49,8 +49,6 @@ APP_TIMER_DEF(mi_schd_timer_id);
 #define PRINT_SIGN         0
 
 #define PROFILE_PIN        25
-#define DATA_IS_VAILD(x,n)   ((x[n-1] != 0) && (x[n-2] != 0))
-#define DATA_IS_INVAILD(x,n) (x[n-1] = x[n-2] = 0)
 
 #define MSC_XFER(CMD, INPUT, INPUT_L, OUTPUT, OUTPUT_L)                         \
 (msc_xfer_control_block_t) {    .cmd      = CMD,                                \
@@ -65,14 +63,14 @@ APP_TIMER_DEF(mi_schd_timer_id);
 #define DATA_IS_INVAILD_P(x)     (x == 0)
 
 static struct {
+	uint8_t msc_info   :1 ;
 	uint8_t app_pub    :1 ;
 	uint8_t dev_pub    :1 ;
-	uint8_t msc_info   :1 ;
-	uint8_t dev_sha    :1 ;
 	uint8_t eph_key    :1 ;
+	uint8_t dev_sha    :1 ;
+	uint8_t dev_sign   :1 ;
 	uint8_t LTMK       :1 ;
 	uint8_t session_key:1 ;
-	uint8_t dev_sign   :1 ;
 
 	uint8_t MKPK       :1 ;
 	uint8_t dev_cert   :1 ;
@@ -104,7 +102,14 @@ struct {
 	uint8_t mic[4];
 } encrypt_reg_data;
 
-uint32_t encrypt_login_data[2];
+
+struct {
+	union {
+		uint8_t cipher[4];
+		uint32_t crc32;
+	};
+	uint8_t mic[4];
+} encrypt_login_data;
 
 struct {
 	uint8_t cipher[12+16];
@@ -143,6 +148,8 @@ const uint8_t log_salt[] = "smartcfg-login-salt";
 const uint8_t log_info[] = "smartcfg-login-info";
 const uint8_t share_salt[] = "smartcfg-share-salt";
 const uint8_t share_info[] = "smartcfg-share-info";
+const uint8_t cloud_salt[] = "smartcfg-cloud-salt";
+const uint8_t cloud_info[] = "smartcfg-cloud-info";
 const uint8_t mk_salt[] = "smartcfg-masterkey-salt";
 const uint8_t mk_info[] = "smartcfg-masterkey-info";
 
@@ -209,7 +216,6 @@ int mi_scheduler_start(uint32_t auth_stat)
 
 	memset(app_pub, 0, 364);
 	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
-	encrypt_login_data[1] = 0;
 
 	NRF_LOG_WARNING("\nSTART %X\n\n", schd_status);
 	errno = app_timer_start(mi_schd_timer_id, schd_interval, &schd_status);
@@ -525,7 +531,7 @@ extern volatile bool m_twi0_xfer_done;
 extern const nrf_drv_twi_t TWI0;
 
 static nrf_drv_twi_xfer_desc_t twi0_xfer;
-static uint8_t twi_buf[512];
+static uint8_t twi_buf[515];
 msc_xfer_control_block_t msc_control_block;
 
 static uint8_t calc_data_xor(uint8_t *pdata, uint16_t len)
@@ -539,9 +545,9 @@ static uint8_t calc_data_xor(uint8_t *pdata, uint16_t len)
 static int msc_encode_twi_buf(msc_xfer_control_block_t *p_cb)
 {
 	uint16_t para_len = p_cb->p_para == NULL ? 0 : p_cb->para_len;
-	uint16_t cmd_len  = para_len + sizeof(msc_cmd_t);
+	uint16_t cmd_len  = para_len + 1;
 
-	if (para_len > 512) {
+	if (cmd_len > 512) {
 		NRF_LOG_ERROR("MSC para len error.\n");
 		return 1;
 	}
@@ -560,17 +566,25 @@ static int msc_encode_twi_buf(msc_xfer_control_block_t *p_cb)
 static int msc_decode_twi_buf(msc_xfer_control_block_t *p_cb)
 {
 	uint16_t len = (twi_buf[0]<<8) | twi_buf[1];        // contain data + status
-	uint8_t  chk = calc_data_xor(twi_buf, 2+len);
 	uint16_t data_len = len - sizeof(p_cb->status);
 	
-	if (chk != twi_buf[2+len]) {
-		p_cb->status = 255;
-		return 1;
-	}
-	
+		
 	if(data_len != p_cb->data_len) {
 		NRF_LOG_ERROR("MSC return data len error.\n");
+		return 1;
 	}
+
+	uint8_t  chk = calc_data_xor(twi_buf, 2+len);
+
+	if (chk != twi_buf[2+len]) {
+		p_cb->status = 255;
+		return 2;
+	}
+
+    if (p_cb->status == 0x0f) {
+		NRF_LOG_ERROR("MSC received invaild packet.\n");
+        return 3;
+    }
 
 	p_cb->status = twi_buf[2+data_len];
 
@@ -589,7 +603,7 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 
 	static uint8_t  retry_times = 0;
 	msc_encode_twi_buf(p_cb);
-
+	NRF_LOG_INFO("Start MSC cmd 0x%02X @ schd_time %d\n", p_cb->cmd, schd_time);
 	/* 4 = 2bytes lengh + 1byte cmd + 1byte chk  */
 	twi0_xfer = (nrf_drv_twi_xfer_desc_t)NRF_DRV_TWI_XFER_DESC_TX(MSC_ADDR, twi_buf, p_cb->para_len+4);
 	m_twi0_xfer_done = false;
@@ -654,9 +668,9 @@ int reg_auth(pt_t *pt)
 	mbedtls_sha256_starts(&sha256_ctx, 0 );
 	mbedtls_sha256_update(&sha256_ctx, msc_info,    sizeof(msc_info));
 	mbedtls_sha256_update(&sha256_ctx, dev_mac_be,  sizeof(dev_mac_be));
-	mbedtls_sha256_update(&sha256_ctx, dev_pub,     sizeof(dev_pub));
+	mbedtls_sha256_update(&sha256_ctx, dev_pub,     64);
 	mbedtls_sha256_finish(&sha256_ctx, dev_sha);
-
+	SET_DATA_VAILD(flags.dev_sha);
 #if (PRINT_MSC_INFO  == 1)
 	NRF_LOG_RAW_INFO("MSC info\t");
 	NRF_LOG_HEXDUMP_INFO(msc_info, 12);
@@ -680,11 +694,12 @@ int reg_auth(pt_t *pt)
 	        (void *)reg_info,         sizeof(reg_info)-1,
 	    (void *)&session_key,         sizeof(session_key));
 
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_sign, 64));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_sign));
 
 	aes_ccm_encrypt_and_tag(session_key.dev_key, nonce, sizeof(nonce), NULL, 0,
 	                        dev_sign, 64, encrypt_reg_data.cipher, encrypt_reg_data.mic, 4);
 	SET_DATA_VAILD(flags.encrypt_reg_data);
+
 	PT_WAIT_UNTIL(pt, auth_recv() != REG_START);
 	if (auth_recv() != REG_SUCCESS) {
 		NRF_LOG_ERROR("Auth failed.\n");
@@ -702,7 +717,7 @@ int reg_auth(pt_t *pt)
 	        (void *) mk_salt,         sizeof(mk_salt)-1,
 	        (void *) mk_info,         sizeof(mk_info)-1,
 	                    LTMK,         sizeof(LTMK));
-
+	SET_DATA_VAILD(flags.LTMK);
 //	aes_ccm_encrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, LTMK, 32, MKPK.cipher);
 	
 	// fs_store(rand_key);
@@ -748,12 +763,12 @@ int reg_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
-	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
+	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
 //	msc_control_block = MSC_XFER(MSC_INFO, NULL, 0, (void*)&tmp_info, 26);
 //	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-
+//	SET_DATA_VAILD(flags.msc_info);
 //	memcpy(msc_info+8, (uint8_t*)&tmp_info.sw_ver, 4);
 
 	msc_control_block = MSC_XFER(MSC_ID, NULL, 0, msc_info, 8);
@@ -780,10 +795,12 @@ int reg_msc(pt_t *pt)
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.eph_key);
 
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_sha, 32));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_sha));
 
 	msc_control_block = MSC_XFER(MSC_SIGN, dev_sha, 32, dev_sign, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.dev_sign);
+
 #if (PRINT_SIGN == 1)
 	NRF_LOG_HEXDUMP_INFO(dev_sign, 64);
 #endif	
@@ -796,13 +813,13 @@ int reg_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32+4, NULL, 0);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 #else
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(LTMK, 32));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.LTMK));
 	
 	MKPK.id = 1;
 	memcpy(MKPK.cipher, LTMK, 32);
 	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32, NULL, 0);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	
+	SET_DATA_VAILD(flags.LTMK);
 #endif
 	
 	PT_END(pt);
@@ -841,7 +858,7 @@ int login_auth(pt_t *pt)
 	                            MKPK.mic,  4);
 
 #else
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(LTMK, 32));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.LTMK));
 #endif
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.eph_key));
 
@@ -856,15 +873,16 @@ int login_auth(pt_t *pt)
 	aes_ccm_auth_decrypt(session_key.app_key,
 	                               nonce,  sizeof(nonce),
 	                                NULL,  0,
-	           (void*)encrypt_login_data,  4,
-	           (void*)encrypt_login_data,
-	       (void*)(encrypt_login_data+1),  4);
-	
-	encrypt_login_data[1] = *(uint32_t*)dev_pub;
-//	NRF_LOG_HEXDUMP_INFO(eph_key, 64);
-//	NRF_LOG_HEXDUMP_INFO(session_key.dev_key, 16);
-	 
-  	if(encrypt_login_data[0] == encrypt_login_data[1]) {
+	           encrypt_login_data.cipher,  sizeof(encrypt_login_data.cipher),
+	    (void*)&encrypt_login_data.crc32,
+	              encrypt_login_data.mic,  4);
+#if 1
+	uint32_t crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
+#else
+	uint32_t crc32 = *(uint32_t*)dev_pub;
+#endif
+
+  	if(crc32 == encrypt_login_data.crc32) {
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
 		NRF_LOG_INFO("LOG SUCCESS. schd_time : %d\n", schd_time);
 		set_mi_authorization(OWNER_AUTHORIZATION);
@@ -875,7 +893,6 @@ int login_auth(pt_t *pt)
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
 		NRF_LOG_ERROR("LOG FAILED. %d\n", errno);
 		mi_scheduler_stop(LOG_FAILED);
-
 	}
 
 	PT_END(pt);
@@ -889,11 +906,11 @@ int login_ble(pt_t *pt)
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
 	SET_DATA_VAILD(flags.app_pub);
 
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(dev_pub, 64));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
 	format_tx_cb(&reliable_control_block, dev_pub, sizeof(dev_pub));
 	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
 
-	format_rx_cb(&reliable_control_block, encrypt_login_data, sizeof(encrypt_login_data));
+	format_rx_cb(&reliable_control_block, &encrypt_login_data, sizeof(encrypt_login_data));
 	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_LOGIN_INFO));
 	SET_DATA_VAILD(flags.encrypt_login_data);
 
@@ -904,9 +921,9 @@ int login_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
-	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
+	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-
+	SET_DATA_VAILD(flags.dev_pub);
 #if ENC_LTMK
 	MKPK.id = 0;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
@@ -916,6 +933,7 @@ int login_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)LTMK, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 #endif
+	SET_DATA_VAILD(flags.LTMK);
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.app_pub));
 
@@ -949,7 +967,7 @@ void login_procedure()
 
 
 #define  RTC_TIME_DRIFT  300
-int verify_share_info(void * pinfo)
+int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 {
 	time_t curr_time = time(NULL);
 	uint32_t errno;
@@ -964,7 +982,13 @@ int verify_share_info(void * pinfo)
 	memcpy(adata, msc_info, 8);
 	adata[8] = 0x01;
 
-	errno = aes_ccm_auth_decrypt(LTMK,
+	session_key_t cloud_key = {0};
+	sha256_hkdf(      p_LTMK,         32,
+	      (void *)cloud_salt,         sizeof(cloud_salt)-1,
+	      (void *)cloud_info,         sizeof(cloud_info)-1,
+	      (void *)&cloud_key,         sizeof(cloud_key));
+
+	errno = aes_ccm_auth_decrypt(cloud_key.dev_key,
 	                 virtual_key.nonce, 12,
 	                             adata,  9,
 	           (void*)&virtual_key.key, 16,
@@ -991,7 +1015,7 @@ int shared_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
-	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, sizeof(dev_pub));
+	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.dev_pub);
 
@@ -1004,6 +1028,7 @@ int shared_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)LTMK, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 #endif
+	SET_DATA_VAILD(flags.LTMK);
 
 	if (auth_recv() == SHARED_LOG_START_W_CERT) {
 		msc_control_block = MSC_XFER(MSC_CERTS_LEN, NULL, 0, (void*)&m_certs_len, sizeof(m_certs_len));
@@ -1024,7 +1049,7 @@ int shared_msc(pt_t *pt)
 	mbedtls_sha256_context sha256_ctx;
 	mbedtls_sha256_init(&sha256_ctx);
 	mbedtls_sha256_starts(&sha256_ctx, 0 );
-	mbedtls_sha256_update(&sha256_ctx, dev_pub,     sizeof(dev_pub));
+	mbedtls_sha256_update(&sha256_ctx, dev_pub, 64);
 	mbedtls_sha256_finish(&sha256_ctx, dev_sha);
 
 	msc_control_block = MSC_XFER(MSC_SIGN, dev_sha, 32, dev_sign, 64);
@@ -1106,17 +1131,17 @@ int shared_auth(pt_t *pt)
 	           encrypt_share_data.cipher,  sizeof(encrypt_share_data.cipher),
 	                 (void*)&shared_info,
 	              encrypt_share_data.mic,  sizeof(encrypt_share_data.mic));
-	
+
 	if (errno != 0 ) {
 		NRF_LOG_ERROR("Invaild encrypt share info.\n");
 		PT_EXIT(pt);
 	}
 	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(LTMK, 32));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.LTMK));
 
-// verify the virtual key 
+// verify the virtual key
 
-	if (verify_share_info(&shared_info) != 0) {
+	if (verify_share_info(&shared_info, LTMK) != 0) {
 		NRF_LOG_ERROR("SHARED LOG FAILED.\n");
 		PT_WAIT_UNTIL(pt, auth_send(SHARED_LOG_FAILED) == NRF_SUCCESS);
 	} else {
@@ -1213,7 +1238,7 @@ void mi_scheduler(void * p_context)
 {
 	schd_time++;
 	uint32_t *p_auth_status = p_context;
-	uint8_t auth_type = *p_auth_status;
+	uint8_t auth_type = *p_auth_status & 0xF0;
 	
 #ifdef M_TEST
 
@@ -1227,15 +1252,12 @@ void mi_scheduler(void * p_context)
 
 	switch (auth_type) {
 		case REG_TYPE:
-		case REG_SUCCESS:
-		case REG_FAILED:
 			reg_procedure();
 			break;
 		case LOG_TYPE:
 			login_procedure();
 			break;
 		case SHARED_TYPE:
-		case SHARED_LOG_START_W_CERT:
 			shared_login_procedure();
 			break;
 	}

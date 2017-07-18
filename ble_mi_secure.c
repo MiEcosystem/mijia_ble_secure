@@ -132,7 +132,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 					case A_SUCCESS:
 					case A_READY:
 						reliable_control_block.curr_sn = 0;
-						break;						
+						break;
 					case A_LOST:
 						reliable_control_block.curr_sn = *(uint16_t*)pframe->ctrl.arg;
 						break;
@@ -255,10 +255,11 @@ static void auth_handler(uint8_t *pdata, uint8_t len)
 		case REG_START:
 		case LOG_START:
 		case SHARED_LOG_START:
+		case SHARED_LOG_START_W_CERT:
 			mi_scheduler_start(auth_value);
 			break;
 		default:
-			NRF_LOG_WARNING("AUTH STATUS %X\n", auth_value);
+			NRF_LOG_WARNING("UNKNOW START STATUS %X\n", auth_value);
 			break;
 	}
 

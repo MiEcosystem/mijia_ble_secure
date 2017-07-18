@@ -628,7 +628,6 @@ static void buttons_leds_init(bool * p_erase_bonds)
     *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
 }
 
-
 /**@brief Function for placing the application in low power state while waiting for events.
  */
 static void power_manage(void)
@@ -708,9 +707,11 @@ int main(void)
 #else
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
+
+	sd_ble_gap_tx_power_set(-30);
+
 #endif
     // Enter main loop.
-
     for (;;)
     {
 		if (get_lock_opcode(&lock_opcode) == 0) {
@@ -732,7 +733,7 @@ int main(void)
 
 				default:
 					NRF_LOG_ERROR("lock opcode error %d", lock_opcode);
-				
+
 			}
 			
 			send_lock_stat(lock_opcode);

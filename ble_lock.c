@@ -318,21 +318,13 @@ uint32_t ble_lock_init()
 	                    char_props, &lock_srv.state_handles);
 	APP_ERROR_CHECK(err_code);
 
-    // Add the Lock state Characteristic.
-	char_props = (ble_gatt_char_props_t){0};
-	char_props.read                  = 1;
-	char_props.notify                = 1;
-	err_code = char_add(BLE_UUID_LOCK_STATE, lock_state, sizeof(lock_state),
-	                    char_props, &lock_srv.state_handles);
-	APP_ERROR_CHECK(err_code);
-
     // Add the Lock logs Characteristic.
-	char_props = (ble_gatt_char_props_t){0};
-	char_props.read                  = 1;
-	char_props.notify                = 1;
-	err_code = char_add(BLE_UUID_LOCK_STATE, lock_state, sizeof(lock_state),
-	                    char_props, &lock_srv.state_handles);
-	APP_ERROR_CHECK(err_code);
+//	char_props = (ble_gatt_char_props_t){0};
+//	char_props.read                  = 1;
+//	char_props.notify                = 1;
+//	err_code = char_add(BLE_UUID_LOCK_STATE, lock_state, sizeof(lock_state),
+//	                    char_props, &lock_srv.state_handles);
+//	APP_ERROR_CHECK(err_code);
 
 	return NRF_SUCCESS;
 }

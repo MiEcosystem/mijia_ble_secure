@@ -574,7 +574,7 @@ static int msc_decode_twi_buf(msc_xfer_control_block_t *p_cb)
 
 	p_cb->status = twi_buf[2+data_len];
 
-	if (p_cb->p_data != NULL);
+	if (p_cb->p_data != NULL)
 		memcpy(p_cb->p_data, twi_buf+2, data_len);
 	
 	return 0;

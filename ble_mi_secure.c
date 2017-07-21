@@ -43,19 +43,22 @@ reliable_xfer_t reliable_control_block;
 static void on_connect(ble_evt_t * p_ble_evt)
 {
     mi_srv.conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-	ble_gap_conn_params_t conn_param = {
+	ble_gap_conn_params_t conn_param = p_ble_evt->evt.gap_evt.params.connected.conn_params;
+	ble_gap_conn_params_t pref_conn_param = {
 		.min_conn_interval = MSEC_TO_UNITS(10, UNIT_1_25_MS),
 		.max_conn_interval = MSEC_TO_UNITS(20, UNIT_1_25_MS),
 		.slave_latency     = 0,
 		.conn_sup_timeout  = MSEC_TO_UNITS(4000, UNIT_10_MS)
 	};
 
-	sd_ble_gap_conn_param_update(mi_srv.conn_handle, &conn_param);
+	sd_ble_gap_conn_param_update(mi_srv.conn_handle, &pref_conn_param);
 	
 	set_mi_authorization(UNAUTHORIZATION);
 
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Connected Peer MAC: ");
 	NRF_LOG_RAW_HEXDUMP_INFO(p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLE_GAP_ADDR_LEN);
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Conn param default: min %d, max %d\n",
+	                 conn_param.min_conn_interval, conn_param.min_conn_interval);
 }
 
 
@@ -504,6 +507,13 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
             on_disconnect(p_ble_evt);
             break;
 
+        case BLE_GAP_EVT_CONN_PARAM_UPDATE:
+			ble_gap_conn_params_t conn_param = 
+				p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params;
+            NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_BLUE"Conn param update : min %d, max %d\n",
+			                 conn_param.min_conn_interval, conn_param.min_conn_interval);
+            break;
+
         case BLE_GATTS_EVT_WRITE:
             on_write(p_ble_evt);
             break;
@@ -516,8 +526,9 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
 
 		case BLE_GATTS_EVT_TIMEOUT:
 			break;
+
         default:
-            // No implementation needed.
+//			NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"BLE EVT %X\n", p_ble_evt->header.evt_id);
             break;
     }
 }

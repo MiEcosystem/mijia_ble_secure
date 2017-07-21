@@ -44,7 +44,7 @@ extern "C" {
  * @retval NRF_SUCCESS If the service was successfully initialized. Otherwise, an error code is returned.
  * @retval NRF_ERROR_NULL If either of the pointers p_mi_s or p_mi_s_init is NULL.
  */
-uint32_t ble_lock_init();
+uint32_t ble_lock_init(void);
 
 /**@brief Function for handling the Lock Service's BLE events.
  *

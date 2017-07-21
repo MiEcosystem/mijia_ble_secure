@@ -123,7 +123,8 @@ static void on_write(ble_evt_t * p_ble_evt)
 						NRF_LOG_ERROR("Unkown reliable CMD.\n");
 				}
 			}
-			else if (reliable_control_block.state == RXFER_WAIT_ACK) 
+			else if (pframe->ctrl.mode == MODE_ACK &&
+				     reliable_control_block.state == RXFER_WAIT_ACK) 
 			{
 				fctrl_ack_t ack = (fctrl_ack_t)pframe->ctrl.type;
 				reliable_control_block.mode = MODE_ACK;
@@ -140,28 +141,32 @@ static void on_write(ble_evt_t * p_ble_evt)
 						NRF_LOG_ERROR("Unkown reliable ACK.\n");
 				}
 			}
+			else {
+				NRF_LOG_ERROR("detected malware connected!\n");
+				// malware 
+				// TODO: handle this exception...
+			}
 		}
 		else if (reliable_control_block.state == RXFER_RXD)
 		{
-			if (curr_sn == reliable_control_block.max_rx_num &&
-				p_evt_write->len <= reliable_control_block.last_bytes + 2) 
-			{
-				reliable_xfer_rxd(&reliable_control_block, p_evt_write->data, p_evt_write->len);
-			}
-			else if (curr_sn < reliable_control_block.rx_num &&
-					 p_evt_write->len == 20)
+			reliable_control_block.curr_sn = curr_sn;
+			if (curr_sn < reliable_control_block.rx_num &&
+				p_evt_write->len == 20)
 			{
 				reliable_xfer_rxd(&reliable_control_block, p_evt_write->data, 20);
 			}
-			else if (curr_sn == reliable_control_block.rx_num)
+			else if (curr_sn == reliable_control_block.rx_num &&
+			         p_evt_write->len <= reliable_control_block.last_bytes + 2)
 			{
-				reliable_xfer_rxd(&reliable_control_block, p_evt_write->data, p_evt_write->len);
+				reliable_xfer_rxd(&reliable_control_block, p_evt_write->data, 
+				                   p_evt_write->len);
 			}
 			else
 			{
-				NRF_LOG_ERROR("illegal reliable data.\n");
+				NRF_LOG_ERROR("recv illegal reliable data.\n");
+				reliable_control_block.curr_sn = 0;
+				// TODO: handle this exception...
 			}
-			reliable_control_block.curr_sn = curr_sn;
 		}
     }
     else if (p_evt_write->handle == mi_srv.fast_xfer_handles.value_handle)
@@ -369,7 +374,7 @@ static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t le
 	if (data_len > 0)
 		memcpy(pxfer->pdata + (pframe->sn - 1) * 18, pframe->data, data_len);
 	else
-		NRF_LOG_ERROR("bad rxd data len. \n");
+		NRF_LOG_ERROR("rxd data len error. \n");
 }
 
 int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)

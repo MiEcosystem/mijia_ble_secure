@@ -671,7 +671,7 @@ void twi0_init (void)
     nrf_drv_twi_enable(&TWI0);
 }
 void time_init(struct tm * time_ptr);
-void mibeacon_test();
+void mibeacon_test(void);
 
 /**@brief Application main function.
  */

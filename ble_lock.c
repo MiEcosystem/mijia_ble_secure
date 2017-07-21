@@ -276,7 +276,7 @@ void ble_lock_on_ble_evt(ble_evt_t * p_ble_evt)
     }
 }
 
-uint32_t ble_lock_init()
+uint32_t ble_lock_init(void)
 {
 	uint32_t      err_code;
 	ble_uuid_t    ble_uuid;

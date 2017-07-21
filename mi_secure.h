@@ -51,7 +51,7 @@ typedef enum {
 } mi_author_stat_t;
 
 void set_mi_authorization(mi_author_stat_t status);
-int get_mi_authorization();
+int get_mi_authorization(void);
 
 void mi_scheduler(void * p_context);
 int mi_scheduler_init(uint32_t interval);

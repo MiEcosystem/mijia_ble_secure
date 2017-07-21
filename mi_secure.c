@@ -182,7 +182,7 @@ void set_mi_authorization(mi_author_stat_t status)
 	mi_authorization_status = status;
 }
 
-int get_mi_authorization()
+int get_mi_authorization(void)
 {
 	return mi_authorization_status;
 }
@@ -260,21 +260,24 @@ static int fast_xfer_test(pt_t *pt)
 static uint16_t find_lost_sn(reliable_xfer_t *pxfer)
 {
 	static uint16_t checked_sn = 1;
-	uint8_t (*p_pkg)[18] = (void*)pxfer->pdata;
+	uint8_t (*p_pkt)[18] = (void*)pxfer->pdata;
 
-	p_pkg += checked_sn - 1;
-	while (((uint16_t*)p_pkg)[0] != 0 && checked_sn <= pxfer->rx_num) {
+	p_pkt += checked_sn - 1;
+	// <!> vulnerable check : word-read unaligned address may cause mem-hardfault
+	// TODO:  refine the big data transfer protocol
+	//        just think about what if we lost the last packet ?
+	while ( checked_sn <= pxfer->rx_num && ((uint16_t*)p_pkt)[0] != 0 ) {
 		checked_sn++;
-		p_pkg++;
+		p_pkt++;
 	}
 
 	if (checked_sn > pxfer->rx_num) {
 		checked_sn = 1;
 		return 0;
 	}
-	else
+	else {
 		return checked_sn;
-
+	}
 }
 
 pt_t pt_resend;

@@ -54,7 +54,7 @@ static void on_connect(ble_evt_t * p_ble_evt)
 	
 	set_mi_authorization(UNAUTHORIZATION);
 
-	NRF_LOG_RAW_INFO("Peer MAC: ");
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Connected Peer MAC: ");
 	NRF_LOG_RAW_HEXDUMP_INFO(p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLE_GAP_ADDR_LEN);
 }
 
@@ -68,7 +68,7 @@ static void on_disconnect(ble_evt_t * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
     mi_srv.conn_handle = BLE_CONN_HANDLE_INVALID;
-	mi_scheduler_stop(0);
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Disconnect.\n");
 }
 
 
@@ -253,7 +253,6 @@ static uint32_t char_add(uint16_t                        uuid,
 
 static void auth_handler(uint8_t *pdata, uint8_t len)
 {
-
 	memcpy(&auth_value, pdata, len);
 	
 	switch (auth_value) {

@@ -217,11 +217,13 @@ int mi_scheduler_start(uint32_t auth_stat)
 	memset(app_pub, 0, 364);
 	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
 
-	NRF_LOG_WARNING("\nSTART %X\n\n", schd_status);
+	NRF_LOG_WARNING(" START %X\n\n", schd_status);
+
+	mi_scheduler(&schd_status);
+
 	errno = app_timer_start(mi_schd_timer_id, schd_interval, &schd_status);
 	APP_ERROR_CHECK(errno);
 
-	mi_scheduler(&schd_status);
 	return errno;
 }
 
@@ -434,7 +436,7 @@ int reliable_rxd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 
 	PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, pxfer));
 
-	pxfer->state = RXFER_DONE;
+	pxfer->state = RXFER_WAIT_CMD;
 	pxfer->rx_num = 0;
 	PT_END(pt);
 }
@@ -452,7 +454,7 @@ int reliable_txd_thread(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 
 	PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, pxfer));
 
-	pxfer->state = RXFER_DONE;
+	pxfer->state = RXFER_WAIT_CMD;
 	pxfer->tx_num = 0;
 	PT_END(pt);
 }
@@ -879,7 +881,7 @@ int login_auth(pt_t *pt)
 	           encrypt_login_data.cipher,  sizeof(encrypt_login_data.cipher),
 	    (void*)&encrypt_login_data.crc32,
 	              encrypt_login_data.mic,  4);
-#if 1
+#if 0
 	uint32_t crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
 #else
 	uint32_t crc32 = *(uint32_t*)dev_pub;

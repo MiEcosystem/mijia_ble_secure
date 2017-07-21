@@ -708,7 +708,7 @@ int main(void)
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
-	sd_ble_gap_tx_power_set(-30);
+	sd_ble_gap_tx_power_set(0);
 
 #endif
     // Enter main loop.

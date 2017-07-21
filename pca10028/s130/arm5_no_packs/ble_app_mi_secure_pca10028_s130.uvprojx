@@ -440,11 +440,6 @@
               <FilePath>..\config\sdk_config.h</FilePath>
             </File>
             <File>
-              <FileName>ble_mi_secure.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
-            </File>
-            <File>
               <FileName>mi_secure.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mi_secure.c</FilePath>
@@ -628,6 +623,11 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>ble_mi_secure.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
             </File>
             <File>
               <FileName>ble_lock.c</FileName>
@@ -2542,11 +2542,6 @@
               <FilePath>..\config\sdk_config.h</FilePath>
             </File>
             <File>
-              <FileName>ble_mi_secure.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
-            </File>
-            <File>
               <FileName>mi_secure.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mi_secure.c</FilePath>
@@ -2580,6 +2575,11 @@
               <FileName>ccm.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\ccm.c</FilePath>
+            </File>
+            <File>
+              <FileName>ble_mi_secure.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
             </File>
             <File>
               <FileName>ble_lock.c</FileName>
@@ -4681,11 +4681,6 @@
               <FilePath>..\config\sdk_config.h</FilePath>
             </File>
             <File>
-              <FileName>ble_mi_secure.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
-            </File>
-            <File>
               <FileName>mi_secure.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mi_secure.c</FilePath>
@@ -4869,6 +4864,11 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>ble_mi_secure.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\ble_mi_secure.c</FilePath>
             </File>
             <File>
               <FileName>ble_lock.c</FileName>

@@ -134,6 +134,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 				reliable_control_block.ack = ack;
 				switch (ack) {
 					case A_SUCCESS:
+						reliable_control_block.state = RXFER_WAIT_CMD;
 					case A_READY:
 						reliable_control_block.curr_sn = 0;
 						break;
@@ -358,7 +359,7 @@ int fast_xfer_send(fast_xfer_t *pxfer)
 	while( free_packet_cnt-- ) {
 		errno = fast_xfer_txd(pxfer);
 		if (errno != NRF_SUCCESS) {
-			NRF_LOG_ERROR("Notify error %d", errno);
+			NRF_LOG_ERROR("Notify errno %d", errno);
 			break;
 		}
 		else if (pxfer->curr_len == 0 ) {
@@ -406,12 +407,12 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
 
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
-	
-	NRF_LOG_INFO("CMD\n");
-	NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("can't send cmd: %d\n", cmd);
+		NRF_LOG_INFO("Cann't send CMD %X : %d\n", cmd, errno);
+	} else {
+		NRF_LOG_INFO("CMD\n");
+		NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 	}
 
 	return errno;
@@ -447,7 +448,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 	
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_RAW_INFO("Cann't send pkg %d: %X\n", sn, errno);
+		NRF_LOG_RAW_INFO("Cann't send pkt %d: %X\n", sn, errno);
 	}
 
 	return errno;
@@ -481,10 +482,13 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
 
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
-	NRF_LOG_INFO("ACK\n");
-	NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
+
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("can't send ack: %d\n", ack);
+		NRF_LOG_INFO("Cann't send ACK %x: %d\n", ack, errno);
+		// TODO : catch the exception.
+	} else {
+		NRF_LOG_INFO("ACK\n");
+		NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 	}
 
 	return errno;

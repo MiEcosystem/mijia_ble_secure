@@ -121,7 +121,8 @@ int mi_session_decrypt(uint8_t *input, uint8_t len, uint8_t *output)
 
 	session_nonce_t nonce = {0};
 	memcpy(nonce.iv, app_iv, sizeof(app_iv));
-	update_cnt(&session_app_cnt, *(uint16_t*)input);
+	uint16_t cnt_low = input[1]<<8 | input[0];
+	update_cnt(&session_app_cnt, cnt_low);
 	nonce.counter = session_app_cnt;
 
 	uint32_t ret;

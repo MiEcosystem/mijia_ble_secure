@@ -33,7 +33,7 @@ static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t le
 static ble_mi_t mi_srv;
 static uint32_t auth_value;
 fast_xfer_t fast_control_block = {.type = PUBKEY};
-reliable_xfer_t rxfer_control_block;
+reliable_xfer_t rxfer_control_block = {.state = RXFER_WAIT_CMD};
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S13X SoftDevice.
  *

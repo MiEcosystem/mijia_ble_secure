@@ -26,14 +26,14 @@ int mi_encrypt_init(session_key_t *pkey);
  * the length of output buffer MUST be 6 bytes larger than input buffer.
  *
  * @param[in] input    plain text.
- * @param[in] len      num of byte.
+ * @param[in] len      plain text bytes.
  * @param[out] output  cipher text and 6-bytes extra info.
  */
 int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output);
 
 /**@brief Function for handling the Xiaomi Service's BLE events.
  *
- * @param[in] input    cipher text.
+ * @param[in] input    cipher text and 6-bytes extra info.
  * @param[in] len      num of byte.
  * @param[out] output  plain text.
  */

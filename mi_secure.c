@@ -62,6 +62,8 @@ APP_TIMER_DEF(mi_schd_timer_id);
 #define DATA_IS_VAILD_P(x)       (x == 1)
 #define DATA_IS_INVAILD_P(x)     (x == 0)
 
+#define  RTC_TIME_DRIFT  300
+
 static struct {
 	uint8_t msc_info   :1 ;
 	uint8_t app_pub    :1 ;
@@ -159,9 +161,9 @@ typedef struct {
 	int interval;
 } timer_t;
 
-static int schd_time;
-static uint32_t schd_status;
-static uint32_t  schd_interval = 64;
+static uint32_t schd_time;
+static uint32_t schd_stat;
+static uint32_t schd_interval = 64;
 static pt_t pt1, pt2, pt3, pt4;
 
 static int timer_expired(timer_t *t)
@@ -171,7 +173,7 @@ static void timer_set(timer_t *t, int interval_ms)
 { t->interval = (interval_ms << 5) / schd_interval; t->start = schd_time; }
 
 extern fast_xfer_t fast_control_block;
-extern reliable_xfer_t reliable_control_block;
+extern reliable_xfer_t rxfer_control_block;
 
 void mi_scheduler(void * p_context);
 
@@ -204,7 +206,7 @@ int mi_scheduler_start(uint32_t auth_stat)
 {
 	int32_t errno;
 	schd_time = 0;
-	schd_status = auth_stat;
+	schd_stat = auth_stat;
 
 	PT_INIT(&pt1);
 	PT_INIT(&pt2);
@@ -215,14 +217,17 @@ int mi_scheduler_start(uint32_t auth_stat)
 	memset((char*)&pt_flags, 0xFF, sizeof(pt_flags));
 
 	memset(app_pub, 0, 364);
-	memset(&reliable_control_block, 0, sizeof(reliable_control_block));
+	memset(&rxfer_control_block, 0, sizeof(rxfer_control_block));
+	
+	NRF_LOG_WARNING(" START %X\n\n", schd_stat);
 
-	NRF_LOG_WARNING(" START %X\n\n", schd_status);
-
-	mi_scheduler(&schd_status);
-
-	errno = app_timer_start(mi_schd_timer_id, schd_interval, &schd_status);
+	mi_scheduler(&schd_stat);
+	NRF_LOG_INFO("scheduler work first...\n", schd_stat);
+	app_timer_stop(mi_schd_timer_id);
+	NRF_LOG_INFO("schd timer stop.\n", schd_stat);
+	errno = app_timer_start(mi_schd_timer_id, schd_interval, &schd_stat);
 	APP_ERROR_CHECK(errno);
+	NRF_LOG_INFO("schd timer start.\n", schd_stat);
 
 	return errno;
 }
@@ -232,7 +237,6 @@ int mi_scheduler_stop(int type)
 	int32_t errno;
 	errno = app_timer_stop(mi_schd_timer_id);
 	APP_ERROR_CHECK(errno);
-	schd_status = 0;
 	return errno;
 }
 
@@ -305,7 +309,6 @@ static int pthd_resend(pt_t *pt, reliable_xfer_t *pxfer)
 	PT_END(pt);
 }
 
-
 pt_t pt_send;
 static int pthd_send(pt_t *pt, reliable_xfer_t *pxfer)
 {
@@ -349,14 +352,14 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 	// exchange data head : data type + data pkg cnt
 	if (pframe->sn == 0 && pframe->ctrl.mode == MODE_CMD) {
 		fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->ctrl.type;
-		reliable_control_block.mode = MODE_CMD;
-		reliable_control_block.type = cmd;
+		rxfer_control_block.mode = MODE_CMD;
+		rxfer_control_block.type = cmd;
 		switch (cmd) {
 			case DEV_CERT:
-				reliable_control_block.tx_num = *(uint16_t*)pframe->ctrl.arg;
+				rxfer_control_block.tx_num = *(uint16_t*)pframe->ctrl.arg;
 				break;
 			default:
-				NRF_LOG_ERROR("Unkown reliable CMD.\n");
+				NRF_LOG_ERROR("Unknow reliable CMD.\n");
 		}
 	}
 	else {
@@ -366,14 +369,14 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 
 //	APP Layer PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 	timer_set(&rxd_timer, 1000);
-	while(pframe->sn > 0 && pframe->sn < reliable_control_block.tx_num && !timer_expired(&rxd_timer)) {
-		memcpy(reliable_control_block.pdata + (pframe->sn - 1) * 18, pframe->data, len-sizeof(pframe->sn));
+	while(pframe->sn > 0 && pframe->sn < rxfer_control_block.tx_num && !timer_expired(&rxd_timer)) {
+		memcpy(rxfer_control_block.pdata + (pframe->sn - 1) * 18, pframe->data, len-sizeof(pframe->sn));
 		timer_set(&rxd_timer, 1000);
 		PT_YIELD(pt);
 	}
 	
-	if (pframe->sn == reliable_control_block.tx_num)
-		memcpy(reliable_control_block.pdata + (pframe->sn - 1) * 18, pframe->data, len-sizeof(pframe->sn));
+	if (pframe->sn == rxfer_control_block.tx_num)
+		memcpy(rxfer_control_block.pdata + (pframe->sn - 1) * 18, pframe->data, len-sizeof(pframe->sn));
 	else {
 		rl_xfer_mode = 3;
 		PT_EXIT(pt);
@@ -381,7 +384,7 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 
 // <!> BUG : if sd_ble_gatts_hvx has no TX packet for the ackonwleage
 	while(1) {
-		sn = find_lost_sn(&reliable_control_block);
+		sn = find_lost_sn(&rxfer_control_block);
 		if (sn == 0) {
 			reliable_xfer_ack(A_SUCCESS);
 			break;
@@ -389,7 +392,7 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 		else {
 			reliable_xfer_ack(A_LOST, sn);
 			PT_WAIT_UNTIL(pt, pframe->sn == sn);
-			memcpy(reliable_control_block.pdata + (sn - 1) * 18, pframe->data, len-sizeof(sn));
+			memcpy(rxfer_control_block.pdata + (sn - 1) * 18, pframe->data, len-sizeof(sn));
 		}
 	}
 
@@ -401,17 +404,19 @@ int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
 static timer_t timeout_timer;
 int format_rx_cb(reliable_xfer_t *pxfer, void *p_rxd, uint16_t rxd_bytes)
 {
+	uint8_t last_bytes = rxd_bytes % 18;
 	pxfer->pdata = p_rxd;
 	pxfer->max_rx_num = CEIL_DIV(rxd_bytes, 18);
-	pxfer->last_bytes  = rxd_bytes % 18;
+	pxfer->last_bytes  = last_bytes == 0 ? 18 : last_bytes;
 	return 0;
 }
 
 int format_tx_cb(reliable_xfer_t *pxfer, void *p_txd, uint16_t txd_bytes)
 {
+	uint8_t last_bytes = txd_bytes % 18;
 	pxfer->pdata = p_txd;
 	pxfer->tx_num = CEIL_DIV(txd_bytes, 18);
-	pxfer->last_bytes  = txd_bytes % 18;
+	pxfer->last_bytes  = last_bytes == 0 ? 18 : last_bytes;
 	return 0;
 }
 
@@ -465,25 +470,25 @@ static int reliable_xfer_test(pt_t *pt)
 	static uint16_t rx_amount = 0;
 	while(1) {
 		/* Recive data */
-		PT_WAIT_UNTIL(pt, reliable_control_block.rx_num != 0);
-		rx_amount = reliable_control_block.rx_num;
-		reliable_control_block.pdata = dev_cert;
+		PT_WAIT_UNTIL(pt, rxfer_control_block.rx_num != 0);
+		rx_amount = rxfer_control_block.rx_num;
+		rxfer_control_block.pdata = dev_cert;
 		PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
 
 		timer_set(&timeout_timer, 10000);
-		PT_WAIT_UNTIL(pt, reliable_control_block.rx_num == reliable_control_block.curr_sn || timer_expired(&timeout_timer));
+		PT_WAIT_UNTIL(pt, rxfer_control_block.rx_num == rxfer_control_block.curr_sn || timer_expired(&timeout_timer));
 
-		PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, &reliable_control_block));
+		PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, &rxfer_control_block));
 
 		/* Send data. */
-		reliable_control_block.tx_num = rx_amount;
-		PT_WAIT_UNTIL(pt, reliable_xfer_cmd(DEV_CERT, reliable_control_block.tx_num) == NRF_SUCCESS);
+		rxfer_control_block.tx_num = rx_amount;
+		PT_WAIT_UNTIL(pt, reliable_xfer_cmd(DEV_CERT, rxfer_control_block.tx_num) == NRF_SUCCESS);
 
-		PT_WAIT_UNTIL(pt, reliable_control_block.mode == MODE_ACK && reliable_control_block.ack == A_READY);
+		PT_WAIT_UNTIL(pt, rxfer_control_block.mode == MODE_ACK && rxfer_control_block.ack == A_READY);
 
-		PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, &reliable_control_block));
+		PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, &rxfer_control_block));
 
-		reliable_control_block.tx_num = 0;
+		rxfer_control_block.tx_num = 0;
 		/* And we loop. */
 	}
 
@@ -736,29 +741,29 @@ int reg_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
-	format_rx_cb(&reliable_control_block, app_pub, sizeof(app_pub));
-	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
+	format_rx_cb(&rxfer_control_block, app_pub, sizeof(app_pub));
+	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &rxfer_control_block, DEV_PUBKEY));
 	SET_DATA_VAILD(flags.app_pub);
 	NRF_LOG_INFO("app_pub recived "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.msc_info));
-	format_tx_cb(&reliable_control_block, msc_info, sizeof(msc_info) + sizeof(dev_pub));
-	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
+	format_tx_cb(&rxfer_control_block, msc_info, sizeof(msc_info) + sizeof(dev_pub));
+	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_PUBKEY));
 	NRF_LOG_INFO("dev_pub send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_cert));
-	format_tx_cb(&reliable_control_block, dev_cert, m_certs_len.dev);
-	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_CERT));
+	format_tx_cb(&rxfer_control_block, dev_cert, m_certs_len.dev);
+	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_CERT));
 	NRF_LOG_INFO("dev_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.manu_cert));
-	format_tx_cb(&reliable_control_block, manu_cert, m_certs_len.manu);
-	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_MANU_CERT));
+	format_tx_cb(&rxfer_control_block, manu_cert, m_certs_len.manu);
+	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_MANU_CERT));
 	NRF_LOG_INFO("manu_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.encrypt_reg_data));
-	format_tx_cb(&reliable_control_block, &encrypt_reg_data, sizeof(encrypt_reg_data));
-	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_SIGNATURE));
+	format_tx_cb(&rxfer_control_block, &encrypt_reg_data, sizeof(encrypt_reg_data));
+	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_SIGNATURE));
 	NRF_LOG_INFO("encrypt_reg_data send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 
 	PT_END(pt);
@@ -771,10 +776,10 @@ int reg_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
-//	msc_control_block = MSC_XFER(MSC_INFO, NULL, 0, (void*)&tmp_info, 26);
-//	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-//	SET_DATA_VAILD(flags.msc_info);
-//	memcpy(msc_info+8, (uint8_t*)&tmp_info.sw_ver, 4);
+	msc_control_block = MSC_XFER(MSC_INFO, NULL, 0, (void*)&tmp_info, 26);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.msc_info);
+	memcpy(msc_info+8, (uint8_t*)&tmp_info.sw_ver, 4);
 
 	msc_control_block = MSC_XFER(MSC_ID, NULL, 0, msc_info, 8);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
@@ -881,7 +886,7 @@ int login_auth(pt_t *pt)
 	           encrypt_login_data.cipher,  sizeof(encrypt_login_data.cipher),
 	    (void*)&encrypt_login_data.crc32,
 	              encrypt_login_data.mic,  4);
-#if 0
+#if 1
 	uint32_t crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
 #else
 	uint32_t crc32 = *(uint32_t*)dev_pub;
@@ -907,16 +912,16 @@ int login_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
-	format_rx_cb(&reliable_control_block, app_pub, sizeof(app_pub));
-	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
+	format_rx_cb(&rxfer_control_block, app_pub, sizeof(app_pub));
+	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &rxfer_control_block, DEV_PUBKEY));
 	SET_DATA_VAILD(flags.app_pub);
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
-	format_tx_cb(&reliable_control_block, dev_pub, sizeof(dev_pub));
-	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
+	format_tx_cb(&rxfer_control_block, dev_pub, sizeof(dev_pub));
+	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_PUBKEY));
 
-	format_rx_cb(&reliable_control_block, &encrypt_login_data, sizeof(encrypt_login_data));
-	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_LOGIN_INFO));
+	format_rx_cb(&rxfer_control_block, &encrypt_login_data, sizeof(encrypt_login_data));
+	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &rxfer_control_block, DEV_LOGIN_INFO));
 	SET_DATA_VAILD(flags.encrypt_login_data);
 
 	PT_END(pt);
@@ -971,7 +976,6 @@ void login_procedure()
 }
 
 
-#define  RTC_TIME_DRIFT  300
 int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 {
 	time_t curr_time = time(NULL);
@@ -999,13 +1003,15 @@ int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 	           (void*)&virtual_key.key, 16,
 	           (void*)&virtual_key.key,
 	               virtual_key.key_mic,  4);
-	
+
 	if (errno != 0) {
-		NRF_LOG_ERROR("Invaild virtual key.\n");
+		NRF_LOG_ERROR("Invaild virtual key:%d\n", errno);
 		virtual_key.key.expire_time = 0;
 		return 2;
 	}
-
+	NRF_LOG_INFO("Local  time UTC %d\n", curr_time);
+	NRF_LOG_INFO("Expire time UTC %d\n", virtual_key.key.expire_time);
+	
 	if (virtual_key.key.expire_time <= curr_time + RTC_TIME_DRIFT) {
 		NRF_LOG_ERROR("virtual key expired.\n");
 		return 1;
@@ -1024,6 +1030,10 @@ int shared_msc(pt_t *pt)
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.dev_pub);
 
+	msc_control_block = MSC_XFER(MSC_ID, NULL, 0, msc_info, 8);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.msc_info);
+
 #if ENC_LTMK
 	MKPK.id = 0;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
@@ -1035,7 +1045,7 @@ int shared_msc(pt_t *pt)
 #endif
 	SET_DATA_VAILD(flags.LTMK);
 
-	if (auth_recv() == SHARED_LOG_START_W_CERT) {
+	if (schd_stat == SHARED_LOG_START_W_CERT) {
 		msc_control_block = MSC_XFER(MSC_CERTS_LEN, NULL, 0, (void*)&m_certs_len, sizeof(m_certs_len));
 		PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
@@ -1073,33 +1083,33 @@ int shared_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
-	format_rx_cb(&reliable_control_block, app_pub, sizeof(app_pub));
-	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_PUBKEY));
+	format_rx_cb(&rxfer_control_block, app_pub, sizeof(app_pub));
+	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &rxfer_control_block, DEV_PUBKEY));
 	SET_DATA_VAILD(flags.app_pub);
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
-	format_tx_cb(&reliable_control_block, dev_pub, sizeof(dev_pub));
-	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_PUBKEY));
+	format_tx_cb(&rxfer_control_block, dev_pub, sizeof(dev_pub));
+	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_PUBKEY));
 
-	if (auth_recv() == SHARED_LOG_START_W_CERT) {
+	if (schd_stat == SHARED_LOG_START_W_CERT) {
 		PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_cert));
-		format_tx_cb(&reliable_control_block, dev_cert, m_certs_len.dev);
-		PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_CERT));
+		format_tx_cb(&rxfer_control_block, dev_cert, m_certs_len.dev);
+		PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_CERT));
 		NRF_LOG_INFO("dev_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 		
 		PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.manu_cert));
-		format_tx_cb(&reliable_control_block, manu_cert, m_certs_len.manu);
-		PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_MANU_CERT));
+		format_tx_cb(&rxfer_control_block, manu_cert, m_certs_len.manu);
+		PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_MANU_CERT));
 		NRF_LOG_INFO("manu_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 	}
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_sign));
-	format_tx_cb(&reliable_control_block, &dev_sign, sizeof(dev_sign));
-	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &reliable_control_block, DEV_SIGNATURE));
+	format_tx_cb(&rxfer_control_block, &dev_sign, sizeof(dev_sign));
+	PT_SPAWN(pt, &pt_r_txd_thd, reliable_txd_thread(&pt_r_txd_thd, &rxfer_control_block, DEV_SIGNATURE));
 	NRF_LOG_INFO("dev_sign send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 
-	format_rx_cb(&reliable_control_block, &encrypt_share_data, sizeof(encrypt_share_data));
-	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &reliable_control_block, DEV_SHARE_INFO));
+	format_rx_cb(&rxfer_control_block, &encrypt_share_data, sizeof(encrypt_share_data));
+	PT_SPAWN(pt, &pt_r_rxd_thd, reliable_rxd_thread(&pt_r_rxd_thd, &rxfer_control_block, DEV_SHARE_INFO));
 	SET_DATA_VAILD(flags.encrypt_share_data);
 	PT_END(pt);
 }
@@ -1152,6 +1162,7 @@ int shared_auth(pt_t *pt)
 	} else {
 		NRF_LOG_INFO("SHARED LOG SUCCESS.\n");
 		set_mi_authorization(SHARE_AUTHORIZATION);
+		mi_encrypt_init(&session_key);
 		PT_WAIT_UNTIL(pt, auth_send(SHARED_LOG_SUCCESS) == NRF_SUCCESS);
 	}
 

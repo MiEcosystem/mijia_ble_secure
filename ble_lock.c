@@ -125,11 +125,11 @@ static void on_auth_read(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_r->handle == lock_srv.log_handles.value_handle)
 	{
-		
+
     }
     else
     {
-        // Do Nothing. This event is not relevant for this service.
+		// Do Nothing. This event is not relevant for this service.
     }
 }
 

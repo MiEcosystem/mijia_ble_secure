@@ -112,7 +112,7 @@ typedef enum {
 
 	RXFER_DONE,
 	RXFER_ERROR = 0xFF
-} r_xfer_stat_t;
+} rxfer_stat_t;
 
 typedef struct {
 	uint16_t    max_tx_num;
@@ -125,7 +125,7 @@ typedef struct {
 	uint8_t            ack;
 	uint8_t         *pdata;
 	uint8_t     last_bytes;
-	r_xfer_stat_t    state;
+	rxfer_stat_t     state;
 } reliable_xfer_t;
 
 /**@brief Xiaomi Service event handler type. */

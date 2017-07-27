@@ -19,6 +19,9 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) < (b) ? (b) : (a))
+
 #define BLE_UUID_MI_AUTH   0x0010                      /**< The UUID of the AUTH   Characteristic. */
 #define BLE_UUID_MI_SECURE 0x0016                      /**< The UUID of the Secure Characteristic. */
 #define BLE_UUID_MI_FXFER  0x0016                      /**< The UUID of the Fast xfer Characteristic. */
@@ -28,12 +31,12 @@
 
 static void auth_handler(uint8_t *pdata, uint8_t len);
 static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
-static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
+static void rxfer_rx_decode(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 
 static ble_mi_t mi_srv;
 static uint32_t auth_value;
 fast_xfer_t fast_control_block = {.type = PUBKEY};
-reliable_xfer_t rxfer_control_block = {.state = RXFER_WAIT_CMD};
+reliable_xfer_t rxfer_control_block;
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S13X SoftDevice.
  *
@@ -82,13 +85,14 @@ static void on_disconnect(ble_evt_t * p_ble_evt)
 static void on_write(ble_evt_t * p_ble_evt)
 {
     ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
-	
-    if ((p_evt_write->len == 2) &&
+	uint16_t   len = p_evt_write->len;
+	uint8_t *pdata = p_evt_write->data;
+    if ((len == 2) &&
 		((p_evt_write->handle == mi_srv.auth_handles.cccd_handle)   ||
 		 (p_evt_write->handle == mi_srv.fast_xfer_handles.cccd_handle) ||
 		 (p_evt_write->handle == mi_srv.secure_handles.cccd_handle)))
     {
-        if (ble_srv_is_notification_enabled(p_evt_write->data))
+        if (ble_srv_is_notification_enabled(pdata))
         {
             mi_srv.is_notification_enabled = true;
         }
@@ -99,13 +103,13 @@ static void on_write(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_write->handle == mi_srv.auth_handles.value_handle)
     {
-        auth_handler(p_evt_write->data, p_evt_write->len);
+        auth_handler(pdata, len);
     }
     else if (p_evt_write->handle == mi_srv.secure_handles.value_handle)
     {
-		NRF_LOG_RAW_HEXDUMP_INFO(p_evt_write->data, p_evt_write->len > 16 ? 16 : p_evt_write->len);
+		NRF_LOG_RAW_HEXDUMP_INFO(pdata, len > 16 ? 16 : len);
 
-		reliable_xfer_frame_t *pframe = (void*)p_evt_write->data;
+		reliable_xfer_frame_t *pframe = (void*)pdata;
 		uint16_t  curr_sn = pframe->sn;
 		
 		if (curr_sn == FRAME_CTRL ) {
@@ -122,7 +126,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 						rxfer_control_block.rx_num = *(uint16_t*)pframe->ctrl.arg;
 						break;
 					default:
-						NRF_LOG_ERROR("Unknow reliable CMD.\n");
+						NRF_LOG_ERROR("Unknow rxfer CMD.\n");
 				}
 			}
 			else if (rxfer_control_block.state == RXFER_WAIT_ACK &&
@@ -141,11 +145,11 @@ static void on_write(ble_evt_t * p_ble_evt)
 						rxfer_control_block.curr_sn = *(uint16_t*)pframe->ctrl.arg;
 						break;
 					default:
-						NRF_LOG_ERROR("Unknow reliable ACK.\n");
+						NRF_LOG_ERROR("Unknow rxfer ACK.\n");
 				}
 			}
 			else {
-				NRF_LOG_ERROR("detected malware connected!\n");
+				NRF_LOG_ERROR("recv malformed packet !\n");
 				// malware 
 				// TODO: handle this exception...
 			}
@@ -153,20 +157,21 @@ static void on_write(ble_evt_t * p_ble_evt)
 		else if (rxfer_control_block.state == RXFER_RXD)
 		{
 			rxfer_control_block.curr_sn = curr_sn;
-			if (curr_sn < rxfer_control_block.rx_num &&
-				p_evt_write->len == 20)
+			if (curr_sn < rxfer_control_block.rx_num && len == 20)
 			{
-				reliable_xfer_rxd(&rxfer_control_block, p_evt_write->data, 20);
+				rxfer_rx_decode(&rxfer_control_block, pdata, 20);
 			}
-			else if (curr_sn == rxfer_control_block.rx_num &&
-			         p_evt_write->len <= rxfer_control_block.last_bytes + 2)
+			else if (curr_sn == rxfer_control_block.rx_num)
 			{
-				reliable_xfer_rxd(&rxfer_control_block, p_evt_write->data,
-				                   p_evt_write->len);
+				if (rxfer_control_block.rx_num == rxfer_control_block.max_rx_num)
+					rxfer_rx_decode(&rxfer_control_block, pdata, 
+				                      MIN(len, rxfer_control_block.last_bytes+2));
+				else
+					rxfer_rx_decode(&rxfer_control_block, pdata, len);
 			}
 			else
 			{
-				NRF_LOG_ERROR("recv illegal reliable data. SN:%d %d\n", curr_sn, p_evt_write->len);
+				NRF_LOG_ERROR("recv illegal rxfer data. SN:%d %d\n", curr_sn, len);
 				rxfer_control_block.curr_sn = 0;
 				// TODO: handle this exception...
 			}
@@ -174,9 +179,9 @@ static void on_write(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_write->handle == mi_srv.fast_xfer_handles.value_handle)
     {
-		fast_xfer_frame_t *pframe = (void*)p_evt_write->data;
+		fast_xfer_frame_t *pframe = (void*)pdata;
         if (pframe->type == PUBKEY && pframe->remain_len < PUBKEY_BYTE)
-			fast_xfer_rxd(&fast_control_block, p_evt_write->data, p_evt_write->len);
+			fast_xfer_rxd(&fast_control_block, pdata, len);
 		else
 			NRF_LOG_ERROR("Unknow fast xfer data type\n");
     }
@@ -369,7 +374,7 @@ int fast_xfer_send(fast_xfer_t *pxfer)
 	return 1;
 }
 
-static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
+static void rxfer_rx_decode(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 {
 	reliable_xfer_frame_t      *pframe = (void*)pdata;
 	int8_t                    data_len = len - sizeof(pframe->sn);

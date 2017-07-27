@@ -52,7 +52,11 @@
 
 #include "ble_lock.h"
 
+#if 0
+#define APP_PRODUCT_ID                  463
+#else
 #define APP_PRODUCT_ID                  0x009C
+#endif
 
 #define RTT_CTRL_CLEAR                  "[2J"
 
@@ -549,7 +553,7 @@ static void advertising_init(void)
 	mi_service_data_t  mi_data = {0}; 
 	mi_data.frame_ctrl.factory_new = 1;
 	mi_data.frame_ctrl.version     = 4;
-	mi_data.pid  = 0x009C;
+	mi_data.pid  = APP_PRODUCT_ID;
 
 #if 1
 	mi_data.p_capability = &cap;

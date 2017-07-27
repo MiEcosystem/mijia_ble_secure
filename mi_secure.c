@@ -215,10 +215,10 @@ int mi_scheduler_start(uint32_t auth_stat)
 
 	memset((char*)&flags, 0, sizeof(flags));
 	memset((char*)&pt_flags, 0xFF, sizeof(pt_flags));
-
 	memset(app_pub, 0, 364);
 	memset(&rxfer_control_block, 0, sizeof(rxfer_control_block));
-	
+	rxfer_control_block.state = RXFER_WAIT_CMD;
+
 	NRF_LOG_WARNING(" START %X\n\n", schd_stat);
 
 	mi_scheduler(&schd_stat);
@@ -426,7 +426,6 @@ static int rxfer_rx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	PT_BEGIN(pt);
 
 	/* Recive data */
-	pxfer->state = RXFER_WAIT_CMD;
 	PT_WAIT_UNTIL(pt, pxfer->rx_num != 0 && pxfer->cmd == data_type);
 	if (pxfer->rx_num <= pxfer->max_rx_num && pxfer->pdata != NULL) {
 		PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
@@ -443,6 +442,7 @@ static int rxfer_rx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 
 	pxfer->state = RXFER_WAIT_CMD;
 	pxfer->rx_num = 0;
+	pxfer->pdata  = 0;
 	PT_END(pt);
 }
 
@@ -857,17 +857,16 @@ int login_auth(pt_t *pt)
 	PT_BEGIN(pt);
 
 #if ENC_LTMK
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(MKPK.mic, 4));
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.MKPK));
 	aes_ccm_auth_decrypt(       rand_key,
 	                               nonce,  sizeof(nonce),
 	                                NULL,  0,
 	                         MKPK.cipher,  sizeof(MKPK.cipher),
 	                                LTMK,
 	                            MKPK.mic,  4);
-
-#else
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.LTMK));
+	SET_DATA_VAILD(flags.LTMK);
 #endif
+
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.eph_key));
 
 	sha256_hkdf(     eph_key,         sizeof(eph_key) + sizeof(LTMK),
@@ -884,13 +883,10 @@ int login_auth(pt_t *pt)
 	           encrypt_login_data.cipher,  sizeof(encrypt_login_data.cipher),
 	    (void*)&encrypt_login_data.crc32,
 	              encrypt_login_data.mic,  4);
-#if 1
-	uint32_t crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
-#else
-	uint32_t crc32 = *(uint32_t*)dev_pub;
-#endif
 
-  	if(crc32 == encrypt_login_data.crc32) {
+	uint32_t crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
+
+  	if (crc32 == encrypt_login_data.crc32) {
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
 		NRF_LOG_INFO("LOG SUCCESS. schd_time : %d\n", schd_time);
 		set_mi_authorization(OWNER_AUTHORIZATION);
@@ -932,16 +928,18 @@ int login_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.dev_pub);
+
 #if ENC_LTMK
 	MKPK.id = 0;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.MKPK);
 #else
 	MKPK.id = 1;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)LTMK, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-#endif
 	SET_DATA_VAILD(flags.LTMK);
+#endif
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.app_pub));
 
@@ -1036,12 +1034,13 @@ int shared_msc(pt_t *pt)
 	MKPK.id = 0;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.MKPK);
 #else
 	MKPK.id = 1;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)LTMK, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-#endif
 	SET_DATA_VAILD(flags.LTMK);
+#endif
 
 	if (schd_stat == SHARED_LOG_START_W_CERT) {
 		msc_control_block = MSC_XFER(MSC_CERTS_LEN, NULL, 0, (void*)&m_certs_len, sizeof(m_certs_len));
@@ -1118,17 +1117,15 @@ int shared_auth(pt_t *pt)
 	PT_BEGIN(pt);
 	uint32_t errno;
 
-#ifdef ENC_LTMK
-	// fs_read rand_key();
-	PT_WAIT_UNTIL(pt, MKPK.mic[3] != 0);
-	aes_ccm_auth_decrypt(rand_key,
+#if ENC_LTMK
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.MKPK));
+	aes_ccm_auth_decrypt(       rand_key,
 	                               nonce,  sizeof(nonce),
 	                                NULL,  0,
 	                         MKPK.cipher,  sizeof(MKPK.cipher),
 	                                LTMK,
 	                            MKPK.mic,  4);
-#else
-
+	SET_DATA_VAILD(flags.LTMK);
 #endif
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.eph_key));

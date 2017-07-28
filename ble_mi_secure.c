@@ -58,10 +58,9 @@ static void on_connect(ble_evt_t * p_ble_evt)
 
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Connected Peer MAC: ");
 	NRF_LOG_RAW_HEXDUMP_INFO(p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLE_GAP_ADDR_LEN);
-	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Conn param default: min %d, max %d\n",
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Conn param default: min %2d, max %2d\n",
 	                 conn_param.min_conn_interval, conn_param.min_conn_interval);
 }
-
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_DISCONNECTED event from the S13X SoftDevice.
  *
@@ -74,6 +73,20 @@ static void on_disconnect(ble_evt_t * p_ble_evt)
     mi_srv.conn_handle = BLE_CONN_HANDLE_INVALID;
 	set_mi_authorization(UNAUTHORIZATION);
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Disconnect.\n");
+}
+
+/**@brief Function for handling the @ref BLE_GAP_EVT_CONN_PARAM_UPDATE event from the S13X SoftDevice.
+ *
+ * @param[in] p_mi_s    Xiaomi Service structure.
+ * @param[in] p_ble_evt Pointer to the event received from BLE stack.
+ */
+static void on_conn_params_update(ble_evt_t * p_ble_evt)
+{
+	ble_gap_conn_params_t conn_param = 
+		p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params;
+
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_BLUE "Conn param update : min %d, max %d\n",
+			         conn_param.min_conn_interval, conn_param.min_conn_interval);
 }
 
 
@@ -130,16 +143,21 @@ static void on_write(ble_evt_t * p_ble_evt)
 				}
 			}
 			else if (rxfer_control_block.state == RXFER_WAIT_ACK &&
-			         pframe->ctrl.mode == MODE_ACK) 
+			         pframe->ctrl.mode == MODE_ACK)
 			{
 				fctrl_ack_t ack = (fctrl_ack_t)pframe->ctrl.type;
 				rxfer_control_block.mode = MODE_ACK;
 				rxfer_control_block.ack = ack;
 				switch (ack) {
 					case A_SUCCESS:
+						rxfer_control_block.curr_sn = 0;
+
 						rxfer_control_block.state = RXFER_WAIT_CMD;
+
+						break;
 					case A_READY:
 						rxfer_control_block.curr_sn = 0;
+						rxfer_control_block.state = RXFER_TXD;
 						break;
 					case A_LOST:
 						rxfer_control_block.curr_sn = *(uint16_t*)pframe->ctrl.arg;
@@ -497,7 +515,6 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
 
 	return errno;
 }
-
 void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
 {
     if (p_ble_evt == NULL)
@@ -516,11 +533,7 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
             break;
 
         case BLE_GAP_EVT_CONN_PARAM_UPDATE:
-			ble_gap_conn_params_t conn_param = 
-				p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params;
-
-            NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_BLUE "Conn param update : min %d, max %d\n",
-			                 conn_param.min_conn_interval, conn_param.min_conn_interval);
+			on_conn_params_update(p_ble_evt);
             break;
 
         case BLE_GATTS_EVT_WRITE:

@@ -52,7 +52,7 @@
 
 #include "ble_lock.h"
 
-#if 0
+#if 1
 #define APP_PRODUCT_ID                  463
 #else
 #define APP_PRODUCT_ID                  0x009C
@@ -283,7 +283,7 @@ static void sleep_mode_enter(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
+static void advertising_init(void);
 /**@brief Function for handling advertising events.
  *
  * @details This function will be called for advertising events which are passed to the application.
@@ -293,15 +293,14 @@ static void sleep_mode_enter(void)
 static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 {
     uint32_t err_code;
-
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_FAST:
+			advertising_init();
             err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
             APP_ERROR_CHECK(err_code);
             break;
         case BLE_ADV_EVT_IDLE:
-            sleep_mode_enter();
             break;
         default:
             break;
@@ -416,13 +415,15 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"EVT %X\n", p_ble_evt->header.evt_id);
+
     ble_conn_params_on_ble_evt(p_ble_evt);
     ble_nus_on_ble_evt(&m_nus, p_ble_evt);
-	ble_mi_on_ble_evt(p_ble_evt);
     on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
     bsp_btn_ble_on_ble_evt(p_ble_evt);
 
+	ble_mi_on_ble_evt(p_ble_evt);
 	ble_lock_on_ble_evt(p_ble_evt);
 }
 
@@ -544,11 +545,11 @@ static void advertising_init(void)
 	                             .encryptable = 1,
 	                             .bondAbility = 1};
 
-	#if (NRF_SD_BLE_API_VERSION == 3)
-        sd_ble_gap_addr_get(&dev_mac);
-    #else
-        sd_ble_gap_address_get(&dev_mac);
-    #endif
+#if (NRF_SD_BLE_API_VERSION == 3)
+	sd_ble_gap_addr_get(&dev_mac);
+#else
+	sd_ble_gap_address_get(&dev_mac);
+#endif
 
 	mi_service_data_t  mi_data = {0}; 
 	mi_data.frame_ctrl.factory_new = 1;
@@ -560,16 +561,16 @@ static void advertising_init(void)
 	mi_data.p_mac = dev_mac.addr;
 #else
 	mibeacon_event_t event = {0};
-	event.type = 0x100B;
+	event.type = 0x0005;
 	struct {
 		uint8_t action;
 		uint8_t method;
-		uint16_t user_id;
+		uint32_t user_id;
 		time_t  time;
 	} evt_data;
-	evt_data.action = 1;
+	evt_data.action = 0;
 	evt_data.method = 2;
-	evt_data.user_id = 0xFFFF;
+	evt_data.user_id = 0xDEADBEEF;
 	evt_data.time = time(NULL);
 	event.data_len = sizeof(evt_data);
 	event.pdata = (uint8_t*)&evt_data;
@@ -677,6 +678,70 @@ void twi0_init (void)
 void time_init(struct tm * time_ptr);
 void mibeacon_test(void);
 
+int mi_beacon_evt_adv(mibeacon_event_t *p_evt)
+{
+	uint32_t errno;
+    uint8_t                data[27];
+    uint8_t                total_len;
+
+
+    /* Indicating Mi Service */
+	mi_service_data_t  mi_data = {0};
+	mi_data.frame_ctrl.factory_new = 1;
+	mi_data.frame_ctrl.version     = 4;
+	mi_data.pid  = APP_PRODUCT_ID;
+	mi_data.frame_ctrl.is_encrypt  = 0;
+
+	struct {
+		uint8_t action;
+		uint8_t method;
+		uint32_t user_id;
+		time_t  time;
+	} evt_data;
+
+	evt_data.action = 0;
+	evt_data.method = 2;
+	evt_data.user_id = 0xDEADBEEF;
+	evt_data.time = time(NULL);
+
+	mibeacon_event_t event = {0};
+	event.type = 0x0005;
+	event.data_len = sizeof(evt_data);
+	event.pdata = (uint8_t*)&evt_data;
+	
+	mi_data.p_event = &event;
+	
+	mi_service_data_set(&mi_data, data, &total_len);
+
+    /* Indicating Mi Service */
+	ble_advdata_service_data_t serviceData;
+    serviceData.service_uuid = BLE_UUID_MI_SERVICE;
+    serviceData.data.size = total_len;
+    serviceData.data.p_data = data;
+
+    ble_advdata_t          advdata;
+    memset(&advdata, 0, sizeof(advdata));
+    advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
+    advdata.p_service_data_array = &serviceData;
+    advdata.service_data_count = 1;
+
+	NRF_LOG_INFO("evt adv.\n");
+	errno = ble_advdata_set(&advdata, NULL);
+    APP_ERROR_CHECK(errno);
+	
+	ble_gap_adv_params_t adv_params;
+	memset(&adv_params, 0, sizeof(adv_params));
+	
+	adv_params.type        = BLE_GAP_ADV_TYPE_ADV_NONCONN_IND;
+	adv_params.fp          = BLE_GAP_ADV_FP_ANY;
+	adv_params.interval    = MSEC_TO_UNITS(100, UNIT_0_625_MS); // must >= 100 ms
+	adv_params.timeout     = 3;
+
+	errno = sd_ble_gap_adv_start(&adv_params);
+	APP_ERROR_CHECK(errno);
+	
+}
+
 /**@brief Application main function.
  */
 int main(void)
@@ -723,11 +788,13 @@ int main(void)
 				case 0:
 					NRF_LOG_INFO("lock\n");
 					bsp_board_led_off(3);
+
 					break;
 				
 				case 1:
 					NRF_LOG_INFO("unlock\n");
 					bsp_board_led_on(3);
+					mi_beacon_evt_adv(NULL);
 					break;
 
 				case 2:

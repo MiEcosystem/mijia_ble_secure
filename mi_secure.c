@@ -321,7 +321,9 @@ static int pthd_send(pt_t *pt, reliable_xfer_t *pxfer)
 		PT_WAIT_UNTIL(pt, reliable_xfer_data(pxfer, sn) == NRF_SUCCESS);
 		sn++;
 	}
-	
+
+	pxfer->state = RXFER_WAIT_ACK;
+
 	while(pxfer->mode == MODE_ACK && pxfer->ack != A_SUCCESS) {
 		PT_WAIT_UNTIL(pt, pxfer->curr_sn != 0 || pxfer->ack == A_SUCCESS);
 		if (pxfer->ack == A_SUCCESS) {
@@ -455,7 +457,11 @@ static int rxfer_tx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	PT_WAIT_UNTIL(pt, reliable_xfer_cmd(data_type, pxfer->tx_num) == NRF_SUCCESS);
 
 	pxfer->state = RXFER_WAIT_ACK;
-	PT_WAIT_UNTIL(pt, pxfer->mode == MODE_ACK && pxfer->ack == A_READY);
+	pxfer->mode  = -1;
+	PT_WAIT_UNTIL(pt, pxfer->mode == MODE_ACK);
+
+	if (pxfer->ack != A_READY)
+		PT_RESTART(pt);
 
 	PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, pxfer));
 
@@ -604,8 +610,8 @@ static int msc_decode_twi_buf(msc_xfer_control_block_t *p_cb)
 	return 0;
 }
 
-pt_t pt_msc_thd;
-int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
+static pt_t pt_msc_thd;
+static int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 {
 	uint32_t err_code;
 

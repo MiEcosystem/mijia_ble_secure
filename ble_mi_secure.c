@@ -45,6 +45,7 @@ reliable_xfer_t rxfer_control_block;
  */
 static void on_connect(ble_evt_t * p_ble_evt)
 {
+	uint32_t errno;
     mi_srv.conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 	ble_gap_conn_params_t conn_param = p_ble_evt->evt.gap_evt.params.connected.conn_params;
 	ble_gap_conn_params_t pref_conn_param = {
@@ -55,6 +56,17 @@ static void on_connect(ble_evt_t * p_ble_evt)
 	};
 
 	sd_ble_gap_conn_param_update(mi_srv.conn_handle, &pref_conn_param);
+
+	ble_gap_adv_params_t adv_params;
+	memset(&adv_params, 0, sizeof(adv_params));
+	
+	adv_params.type        = BLE_GAP_ADV_TYPE_ADV_SCAN_IND;
+	adv_params.fp          = BLE_GAP_ADV_FP_ANY;
+	adv_params.interval    = MSEC_TO_UNITS(100, UNIT_0_625_MS); // must >= 100 ms
+	adv_params.timeout     = 0;
+
+	errno = sd_ble_gap_adv_start(&adv_params);
+	APP_ERROR_CHECK(errno);
 
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Connected Peer MAC: ");
 	NRF_LOG_RAW_HEXDUMP_INFO(p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLE_GAP_ADDR_LEN);
@@ -73,6 +85,10 @@ static void on_disconnect(ble_evt_t * p_ble_evt)
     mi_srv.conn_handle = BLE_CONN_HANDLE_INVALID;
 	set_mi_authorization(UNAUTHORIZATION);
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Disconnect.\n");
+
+	// Stop scannable adv
+	uint32_t errno = sd_ble_gap_adv_stop();
+	APP_ERROR_CHECK(errno);
 }
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONN_PARAM_UPDATE event from the S13X SoftDevice.
@@ -85,7 +101,7 @@ static void on_conn_params_update(ble_evt_t * p_ble_evt)
 	ble_gap_conn_params_t conn_param = 
 		p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params;
 
-	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_BLUE "Conn param update : min %d, max %d\n",
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_BLUE"Conn param update : min %d, max %d\n",
 			         conn_param.min_conn_interval, conn_param.min_conn_interval);
 }
 
@@ -515,6 +531,7 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
 
 	return errno;
 }
+
 void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
 {
     if (p_ble_evt == NULL)

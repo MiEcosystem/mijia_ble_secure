@@ -4,7 +4,6 @@
 #include "mi_arch.h"
 #include "mi_beacon.h"
 
-
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
@@ -44,21 +43,21 @@ static int event_encode(mibeacon_event_t *p_event, uint8_t *output)
 	return 0;
 }
 
-int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, uint8_t *output_len)
+int mi_beacon_data_set(mi_service_data_t const * const input, uint8_t *output, uint8_t *output_len)
 {
 	mibeacon_frame_ctrl_t *p_frame_ctrl = (void*)output;
-
+	mibeacon_event_t *p_event;
 	if (input == NULL) {
 		*output_len = 0;
 		return 1;
 	}
 	/*  encode frame_ctrl and product_id */
 	memcpy(output, (uint8_t*)input, 4);
-	output += 4;
+	output     += 4;
 	*output_len = 4;
 	
 	output[0] = (uint8_t) ++frame_cnt;
-	output += 1;
+	output      += 1;
 	*output_len += 1;
 
 	if (input->p_mac != NULL)
@@ -80,6 +79,7 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 	if (input->p_event != NULL)
 	{
 		p_frame_ctrl->evt_include = 1;
+		p_event = (void*)output;
 		event_encode(input->p_event, output);
 		output      += 3 + input->p_event->data_len;
 		*output_len += 3 + input->p_event->data_len;
@@ -105,22 +105,22 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 		if (*output_len < 20) {
 			beacon_nonce.pid = input->pid;
 			beacon_nonce.cnt = frame_cnt;
-			arch_rand_get(beacon_nonce.rand,   3);
+			arch_rand_get(beacon_nonce.rand, 3);
 			uint8_t mic[4];
 			uint8_t aad = 0x11;
 
 			NRF_LOG_RAW_INFO("Plain text:");
-			NRF_LOG_HEXDUMP_INFO((uint8_t*)p_frame_ctrl + 5,*output_len - 5);
+			NRF_LOG_HEXDUMP_INFO((uint8_t*)p_event, p_event->data_len + 3);
 			NRF_LOG_RAW_INFO("Nonce:");
-			NRF_LOG_HEXDUMP_INFO(&beacon_nonce,12);
+			NRF_LOG_HEXDUMP_INFO(&beacon_nonce, 12);
 			NRF_LOG_RAW_INFO("Key:");
-			NRF_LOG_HEXDUMP_INFO(beacon_key,16);
+			NRF_LOG_HEXDUMP_INFO(beacon_key, 16);
 
 			aes_ccm_encrypt_and_tag(beacon_key,
 	                (uint8_t*)&beacon_nonce, sizeof(beacon_nonce),
 	                                   &aad, sizeof(aad),
-	             (uint8_t*)p_frame_ctrl + 5, *output_len - 5,
-	             (uint8_t*)p_frame_ctrl + 5,
+	                      (uint8_t*)p_event, p_event->data_len + 3,
+	                      (uint8_t*)p_event,
 	                                    mic, 4);
 
 			memcpy(output, beacon_nonce.rand, 3);
@@ -130,7 +130,7 @@ int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, 
 			*output_len += 3 + sizeof(mic);
 
 			NRF_LOG_RAW_INFO("Cipher + MIC:");
-			NRF_LOG_HEXDUMP_INFO((uint8_t*)p_frame_ctrl + 5, *output_len - 5);
+			NRF_LOG_HEXDUMP_INFO((uint8_t*)p_event, p_event->data_len + 3);
 		}
 		else {
 			return -1;
@@ -163,7 +163,7 @@ void mibeacon_test()
 	data.p_capability = &cap;
 	data.p_mac = mac;
 
-	mi_service_data_set(&data, adv_data, &adv_data_len);
+	mi_beacon_data_set(&data, adv_data, &adv_data_len);
 	
 }
 #endif

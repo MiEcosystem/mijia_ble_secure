@@ -52,10 +52,10 @@
 
 #include "ble_lock.h"
 
-#if 1
-#define APP_PRODUCT_ID                  463
+#if 0
+#define APP_PRODUCT_ID                  0x01CF            // Xiaomi Secure BLE dev board
 #else
-#define APP_PRODUCT_ID                  0x009C
+#define APP_PRODUCT_ID                  0x009C            // Xiaomi BLE dev board
 #endif
 
 #define RTT_CTRL_CLEAR                  "[2J"
@@ -77,7 +77,7 @@
 #define DEVICE_NAME                     "Secure_nRF51"                              /**< Name of device. Will be included in the advertising data. */
 #endif
 
-#define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_INTERVAL                MSEC_TO_UNITS(100, UNIT_0_625_MS)           /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS      0                                           /**< The advertising timeout (in units of seconds). */
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
@@ -418,13 +418,13 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"EVT %X\n", p_ble_evt->header.evt_id);
 
     ble_conn_params_on_ble_evt(p_ble_evt);
+	ble_mi_on_ble_evt(p_ble_evt);
+	ble_lock_on_ble_evt(p_ble_evt);
     ble_nus_on_ble_evt(&m_nus, p_ble_evt);
     on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
     bsp_btn_ble_on_ble_evt(p_ble_evt);
 
-	ble_mi_on_ble_evt(p_ble_evt);
-	ble_lock_on_ble_evt(p_ble_evt);
 }
 
 /**@brief Function for dispatching a system event to interested modules.
@@ -555,33 +555,10 @@ static void advertising_init(void)
 	mi_data.frame_ctrl.factory_new = 1;
 	mi_data.frame_ctrl.version     = 4;
 	mi_data.pid  = APP_PRODUCT_ID;
-
-#if 1
 	mi_data.p_capability = &cap;
 	mi_data.p_mac = dev_mac.addr;
-#else
-	mibeacon_event_t event = {0};
-	event.type = 0x0005;
-	struct {
-		uint8_t action;
-		uint8_t method;
-		uint32_t user_id;
-		time_t  time;
-	} evt_data;
-	evt_data.action = 0;
-	evt_data.method = 2;
-	evt_data.user_id = 0xDEADBEEF;
-	evt_data.time = time(NULL);
-	event.data_len = sizeof(evt_data);
-	event.pdata = (uint8_t*)&evt_data;
 	
-	mi_data.frame_ctrl.is_encrypt  = 1;
-	mi_data.p_event = &event;
-	uint8_t key[16] = "DUMMY KEY";
-	set_beacon_key(key);
-#endif
-	
-	mi_service_data_set(&mi_data, data, &total_len);
+	mi_beacon_data_set(&mi_data, data, &total_len);
 
     /* Indicating Mi Service */
 	ble_advdata_service_data_t serviceData;
@@ -600,6 +577,7 @@ static void advertising_init(void)
 
     ble_advdata_t          scanrsp;
     memset(&scanrsp, 0, sizeof(scanrsp));
+	scanrsp.name_type               = BLE_ADVDATA_FULL_NAME;
     scanrsp.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     scanrsp.uuids_complete.p_uuids  = m_adv_uuids;
 
@@ -680,9 +658,9 @@ void mibeacon_test(void);
 
 int mi_beacon_evt_adv(mibeacon_event_t *p_evt)
 {
-	uint32_t errno;
-    uint8_t                data[27];
-    uint8_t                total_len;
+	uint32_t    errno;
+    uint8_t     data[27];
+    uint8_t     total_len;
 
 
     /* Indicating Mi Service */
@@ -711,7 +689,7 @@ int mi_beacon_evt_adv(mibeacon_event_t *p_evt)
 	
 	mi_data.p_event = &event;
 	
-	mi_service_data_set(&mi_data, data, &total_len);
+	mi_beacon_data_set(&mi_data, data, &total_len);
 
     /* Indicating Mi Service */
 	ble_advdata_service_data_t serviceData;
@@ -732,10 +710,10 @@ int mi_beacon_evt_adv(mibeacon_event_t *p_evt)
 	ble_gap_adv_params_t adv_params;
 	memset(&adv_params, 0, sizeof(adv_params));
 	
-	adv_params.type        = BLE_GAP_ADV_TYPE_ADV_NONCONN_IND;
+	adv_params.type        = BLE_GAP_ADV_TYPE_ADV_SCAN_IND;
 	adv_params.fp          = BLE_GAP_ADV_FP_ANY;
 	adv_params.interval    = MSEC_TO_UNITS(100, UNIT_0_625_MS); // must >= 100 ms
-	adv_params.timeout     = 3;
+	adv_params.timeout     = 10;
 
 	errno = sd_ble_gap_adv_start(&adv_params);
 	APP_ERROR_CHECK(errno);
@@ -794,7 +772,6 @@ int main(void)
 				case 1:
 					NRF_LOG_INFO("unlock\n");
 					bsp_board_led_on(3);
-					mi_beacon_evt_adv(NULL);
 					break;
 
 				case 2:

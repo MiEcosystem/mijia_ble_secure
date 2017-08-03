@@ -62,7 +62,7 @@ APP_TIMER_DEF(mi_schd_timer_id);
 #define DATA_IS_VAILD_P(x)       (x == 1)
 #define DATA_IS_INVAILD_P(x)     (x == 0)
 
-#define  RTC_TIME_DRIFT  300
+#define  RTC_TIME_DRIFT  600
 
 static struct {
 	uint8_t msc_info   :1 ;
@@ -1011,8 +1011,8 @@ int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 		virtual_key.key.expire_time = 0;
 		return 2;
 	}
-	NRF_LOG_INFO("Local  time UTC %d\n", curr_time);
-	NRF_LOG_INFO("Expire time UTC %d\n", virtual_key.key.expire_time);
+	NRF_LOG_INFO("Local  UTC %s\n", nrf_log_push(ctime(&curr_time)));
+	NRF_LOG_INFO("Expire UTC %s\n", nrf_log_push(ctime(&virtual_key.key.expire_time)));
 	
 	if (virtual_key.key.expire_time <= curr_time + RTC_TIME_DRIFT) {
 		NRF_LOG_ERROR("virtual key expired.\n");

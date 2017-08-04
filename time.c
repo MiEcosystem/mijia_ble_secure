@@ -39,11 +39,6 @@ time_t time(time_t *p_time)
 	return seconds;
 }
 
-static void set_offset_time(struct tm * time_ptr)
-{
-	offset_time_in_sec = mktime(time_ptr);
-}
-
 static int month2int( char * str )
 {
 	int i;
@@ -65,10 +60,11 @@ void time_init(struct tm * time_ptr)
 		struct tm compiled_tm = {0};
 		sscanf(__DATE__, "%s %d %d", month_name, &compiled_tm.tm_mday, &compiled_tm.tm_year);
 		sscanf(__TIME__, "%d:%d:%d", &compiled_tm.tm_hour, &compiled_tm.tm_min, &compiled_tm.tm_sec);
-
+		
 		compiled_tm.tm_mon = month2int(month_name);
 		compiled_tm.tm_year -= 1900;
-		set_offset_time(&compiled_tm);
+		
+		offset_time_in_sec = mktime(&compiled_tm) - 8 * 3600;  // compiled time is UTC+8
 	} else {
 		time_t current_time = time(NULL);
 		time_t new_time     = mktime(time_ptr);

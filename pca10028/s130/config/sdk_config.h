@@ -1644,7 +1644,7 @@
 // <e> RNG_ENABLED - nrf_drv_rng - RNG peripheral driver
 //==========================================================
 #ifndef RNG_ENABLED
-#define RNG_ENABLED 1
+#define RNG_ENABLED 0
 #endif
 #if  RNG_ENABLED
 // <q> RNG_CONFIG_ERROR_CORRECTION  - Error correction
@@ -2929,9 +2929,15 @@
  
 
 #ifndef APP_FIFO_ENABLED
-#define APP_FIFO_ENABLED 1
+#define APP_FIFO_ENABLED 0
 #endif
 
+// <q> APP_MAILBOX_ENABLED  - app_mailbox - Mailbox for safely queuing items
+ 
+
+#ifndef APP_MAILBOX_ENABLED
+#define APP_MAILBOX_ENABLED 1
+#endif
 // <q> APP_GPIOTE_ENABLED  - app_gpiote - GPIOTE events dispatcher
  
 
@@ -3290,7 +3296,7 @@
 // <e> MEM_MANAGER_ENABLED - mem_manager - Dynamic memory allocator
 //==========================================================
 #ifndef MEM_MANAGER_ENABLED
-#define MEM_MANAGER_ENABLED 1
+#define MEM_MANAGER_ENABLED 0
 #endif
 #if  MEM_MANAGER_ENABLED
 // <o> MEMORY_MANAGER_SMALL_BLOCK_COUNT - Size of each memory blocks identified as 'small' block.  <0-255> 
@@ -3423,7 +3429,7 @@
  
 
 #ifndef NRF_QUEUE_ENABLED
-#define NRF_QUEUE_ENABLED 1
+#define NRF_QUEUE_ENABLED 0
 #endif
 
 // <q> RETARGET_ENABLED  - retarget - Retargeting stdio functions
@@ -3495,7 +3501,7 @@
 // <e> NRF_LOG_USES_COLORS - If enabled then ANSI escape code for colors is prefixed to every string
 //==========================================================
 #ifndef NRF_LOG_USES_COLORS
-#define NRF_LOG_USES_COLORS 0
+#define NRF_LOG_USES_COLORS 1
 #endif
 #if  NRF_LOG_USES_COLORS
 // <o> NRF_LOG_COLOR_DEFAULT  - ANSI escape code prefix.

@@ -29,19 +29,16 @@
 extern "C" {
 #endif
 
+#if defined(__CC_ARM)
+  #pragma anon_unions
+#elif defined(__ICCARM__)
+  #pragma language=extended
+#elif defined(__GNUC__)
+  /* anonymous unions are enabled by default */
+#endif
+
 #define MODE_CMD  0
 #define MODE_ACK  1
-
-#define REG_START    	    0x10UL
-#define REG_SUCCESS 	    0x11UL
-#define REG_FAILED	        0x12UL
-#define LOG_START	        0x20UL
-#define LOG_SUCCESS      	0x21UL
-#define LOG_FAILED	        0x22UL
-#define SHARED_LOG_START	0x30UL
-#define SHARED_LOG_SUCCESS	0x31UL
-#define SHARED_LOG_FAILED	0x32UL
-#define SHARED_LOG_EXPIRED	0x33UL
 
 #define BLE_UUID_MI_SERVICE 0xFE95                      /**< The UUID of the Xiaomi Service. */
 #define BLE_MI_MAX_DATA_LEN (GATT_MTU_SIZE_DEFAULT - 3) /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Xiaomi  service module. */
@@ -100,22 +97,27 @@ typedef struct {
 	union {
 		uint8_t          data[18];
 		reliable_fctrl_t     ctrl;
-	} f;
+	};
 } reliable_xfer_frame_t;
 
 typedef enum {
 	RXFER_READY = 0x01,
 	RXFER_BUSY,
 
+	RXFER_WAIT_CMD,
+	RXFER_WAIT_ACK,
+
 	RXFER_TXD,
 	RXFER_RXD,
 
 	RXFER_DONE,
 	RXFER_ERROR = 0xFF
-} r_xfer_stat_t;
+} rxfer_stat_t;
 
 typedef struct {
+	uint16_t    max_tx_num;
 	uint16_t        tx_num;
+	uint16_t    max_rx_num;
 	uint16_t        rx_num;
 	uint16_t       curr_sn;
 	uint8_t           mode;
@@ -123,7 +125,7 @@ typedef struct {
 	uint8_t            ack;
 	uint8_t         *pdata;
 	uint8_t     last_bytes;
-	r_xfer_stat_t   status;
+	rxfer_stat_t     state;
 } reliable_xfer_t;
 
 /**@brief Xiaomi Service event handler type. */
@@ -145,16 +147,16 @@ typedef struct
  * @details This structure contains status information related to the service.
  */
 typedef struct {
-    uint8_t                  uuid_type;               /**< UUID type for Xiaomi Service Base UUID. */
-    uint16_t                 service_handle;          /**< Handle of Xiaomi Service (as provided by the SoftDevice). */
+	uint8_t                  uuid_type;               /**< UUID type for Xiaomi Service Base UUID. */
+	uint16_t                 service_handle;          /**< Handle of Xiaomi Service (as provided by the SoftDevice). */
 
-    ble_gatts_char_handles_t auth_handles;            /**< Handles related to the characteristic (as provided by the SoftDevice). */
-    ble_gatts_char_handles_t secure_handles;
-    ble_gatts_char_handles_t fast_xfer_handles;              
+	ble_gatts_char_handles_t auth_handles;            /**< Handles related to the characteristic (as provided by the SoftDevice). */
+	ble_gatts_char_handles_t secure_handles;
+	ble_gatts_char_handles_t fast_xfer_handles;              
               
-    uint16_t                 conn_handle;             /**< Handle of the current connection (as provided by the SoftDevice). BLE_CONN_HANDLE_INVALID if not in a connection. */
-    bool                     is_notification_enabled; /**< Variable to indicate if the peer has enabled notification of the RX characteristic.*/
-    ble_mi_data_handler_t    data_handler;            /**< Event handler to be called for handling received data. */
+	uint16_t                 conn_handle;             /**< Handle of the current connection (as provided by the SoftDevice). BLE_CONN_HANDLE_INVALID if not in a connection. */
+	bool                     is_notification_enabled; /**< Variable to indicate if the peer has enabled notification of the RX characteristic.*/
+	ble_mi_data_handler_t    data_handler;            /**< Event handler to be called for handling received data. */
 } ble_mi_t;
 
 /**@brief Function for initializing the Xiaomi Service.
@@ -187,6 +189,7 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt);
  * @retval NRF_SUCCESS If the status was sent successfully. Otherwise, an error code is returned.
  */
 uint32_t auth_send(uint32_t status);
+uint32_t auth_recv(void);
 
 int fast_xfer_recive(fast_xfer_t *pxfer);
 int fast_xfer_send(fast_xfer_t *pxfer);

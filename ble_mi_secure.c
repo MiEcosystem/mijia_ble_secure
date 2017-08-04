@@ -449,7 +449,7 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
 	if (errno != NRF_SUCCESS) {
 		NRF_LOG_INFO("Cann't send CMD %X : %d\n", cmd, errno);
 	} else {
-		NRF_LOG_INFO("CMD\n");
+		NRF_LOG_INFO("CMD ");
 		NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 	}
 
@@ -518,14 +518,18 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
     hvx_params.p_data = (void*)&frame;
     hvx_params.p_len  = &data_len;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
-
+	
+	// TODO : exception handler
+	if (mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID)
+		NRF_LOG_ERROR("Exception disconnect in BLE.\n");
+	
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 	
 	if (errno != NRF_SUCCESS) {
 		NRF_LOG_INFO("Cann't send ACK %x: %d\n", ack, errno);
 		// TODO : catch the exception.
 	} else {
-		NRF_LOG_INFO("ACK\n");
+		NRF_LOG_INFO("ACK ");
 		NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 	}
 

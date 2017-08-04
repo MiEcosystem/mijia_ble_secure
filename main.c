@@ -52,7 +52,7 @@
 
 #include "ble_lock.h"
 
-#if 0
+#if 1
 #define APP_PRODUCT_ID                  0x01CF            // Xiaomi Secure BLE dev board
 #else
 #define APP_PRODUCT_ID                  0x009C            // Xiaomi BLE dev board
@@ -83,8 +83,8 @@
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
 #define APP_TIMER_OP_QUEUE_SIZE         8                                           /**< Size of timer operation queues. */
 
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(10, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (10 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(30, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (40 ms), Connection interval uses 1.25 ms units. */
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(100, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (10 ms), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (40 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)  /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
@@ -551,20 +551,19 @@ static void advertising_init(void)
 	sd_ble_gap_address_get(&dev_mac);
 #endif
 
-	mi_service_data_t  mi_data = {0}; 
-	mi_data.frame_ctrl.factory_new = 1;
-	mi_data.frame_ctrl.version     = 4;
-	mi_data.pid  = APP_PRODUCT_ID;
-	mi_data.p_capability = &cap;
-	mi_data.p_mac = dev_mac.addr;
+	mibeacon_config_t  beacon_cfg = {0};
+	beacon_cfg.frame_ctrl.version     = 4;
+	beacon_cfg.pid                    = APP_PRODUCT_ID;
+	beacon_cfg.p_capability           = &cap;
+	beacon_cfg.p_mac                  = dev_mac.addr;
 	
-	mi_beacon_data_set(&mi_data, data, &total_len);
+	mi_beacon_data_set(&beacon_cfg, data, &total_len);
 
     /* Indicating Mi Service */
 	ble_advdata_service_data_t serviceData;
     serviceData.service_uuid = BLE_UUID_MI_SERVICE;
-    serviceData.data.size = total_len;
-    serviceData.data.p_data = data;
+    serviceData.data.size    = total_len;
+    serviceData.data.p_data  = data;
 	
     // Build advertising data struct to pass into @ref ble_advertising_init.
     ble_advdata_t          advdata;
@@ -587,7 +586,7 @@ static void advertising_init(void)
     options.ble_adv_fast_interval = APP_ADV_INTERVAL;
     options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;
 
-    err_code = ble_advertising_init(&advdata, &scanrsp, &options, on_adv_evt, NULL);
+    err_code = ble_advertising_init(&advdata, NULL, &options, on_adv_evt, NULL);
     APP_ERROR_CHECK(err_code);
 
 }
@@ -656,69 +655,12 @@ void twi0_init (void)
 void time_init(struct tm * time_ptr);
 void mibeacon_test(void);
 
-int mi_beacon_evt_adv(mibeacon_event_t *p_evt)
-{
-	uint32_t    errno;
-    uint8_t     data[27];
-    uint8_t     total_len;
-
-
-    /* Indicating Mi Service */
-	mi_service_data_t  mi_data = {0};
-	mi_data.frame_ctrl.factory_new = 1;
-	mi_data.frame_ctrl.version     = 4;
-	mi_data.pid  = APP_PRODUCT_ID;
-	mi_data.frame_ctrl.is_encrypt  = 0;
-
-	struct {
-		uint8_t action;
-		uint8_t method;
-		uint32_t user_id;
-		time_t  time;
-	} evt_data;
-
-	evt_data.action = 0;
-	evt_data.method = 2;
-	evt_data.user_id = 0xDEADBEEF;
-	evt_data.time = time(NULL);
-
-	mibeacon_event_t event = {0};
-	event.type = 0x0005;
-	event.data_len = sizeof(evt_data);
-	event.pdata = (uint8_t*)&evt_data;
-	
-	mi_data.p_event = &event;
-	
-	mi_beacon_data_set(&mi_data, data, &total_len);
-
-    /* Indicating Mi Service */
-	ble_advdata_service_data_t serviceData;
-    serviceData.service_uuid = BLE_UUID_MI_SERVICE;
-    serviceData.data.size = total_len;
-    serviceData.data.p_data = data;
-
-    ble_advdata_t          advdata;
-    memset(&advdata, 0, sizeof(advdata));
-    advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
-    advdata.p_service_data_array = &serviceData;
-    advdata.service_data_count = 1;
-
-	NRF_LOG_INFO("evt adv.\n");
-	errno = ble_advdata_set(&advdata, NULL);
-    APP_ERROR_CHECK(errno);
-	
-	ble_gap_adv_params_t adv_params;
-	memset(&adv_params, 0, sizeof(adv_params));
-	
-	adv_params.type        = BLE_GAP_ADV_TYPE_ADV_SCAN_IND;
-	adv_params.fp          = BLE_GAP_ADV_FP_ANY;
-	adv_params.interval    = MSEC_TO_UNITS(100, UNIT_0_625_MS); // must >= 100 ms
-	adv_params.timeout     = 10;
-
-	errno = sd_ble_gap_adv_start(&adv_params);
-	APP_ERROR_CHECK(errno);
-	
-}
+typedef __packed struct {
+	uint8_t  action;
+	uint8_t  method;
+	uint32_t user_id;
+	uint32_t time;
+} lock_evt_t;
 
 /**@brief Application main function.
  */
@@ -727,7 +669,7 @@ int main(void)
     uint32_t err_code;
     bool erase_bonds;
 	uint8_t  lock_opcode = 1;
-
+	lock_evt_t lock_event;
 	err_code = NRF_LOG_INIT(NULL);
     APP_ERROR_CHECK(err_code);
 	NRF_LOG_RAW_INFO(RTT_CTRL_CLEAR);
@@ -741,9 +683,11 @@ int main(void)
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
     gap_params_init();
+
     services_init();
     advertising_init();
     conn_params_init();
+	mibeacon_init();
 
     NRF_LOG_RAW_INFO("Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
 
@@ -766,17 +710,30 @@ int main(void)
 				case 0:
 					NRF_LOG_INFO("lock\n");
 					bsp_board_led_off(3);
-
 					break;
 				
 				case 1:
 					NRF_LOG_INFO("unlock\n");
 					bsp_board_led_on(3);
+
+					lock_event.action = 0;
+					lock_event.method = 0;
+					lock_event.user_id= 0x11223344;
+					lock_event.time   = time(NULL);
+
+					mibeacon_event_push(LOCK_EVT, sizeof(lock_event), &lock_event);
 					break;
 
 				case 2:
 					NRF_LOG_INFO("bolt\n");
 					bsp_board_led_off(3);
+
+					lock_event.action = 2;
+					lock_event.method = 0;
+					lock_event.user_id= 0x55667788;
+					lock_event.time   = time(NULL);
+
+					mibeacon_event_push(LOCK_EVT, sizeof(lock_event), &lock_event);
 					break;
 
 				default:

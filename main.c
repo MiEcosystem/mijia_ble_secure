@@ -20,7 +20,7 @@
  * This file contains the source code for a sample application that uses the Nordic UART service.
  * This application uses the @ref srvlib_conn_params module.
  */
-
+//
 #include <stdint.h>
 #include <string.h>
 #include <time.h>

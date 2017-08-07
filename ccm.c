@@ -39,10 +39,11 @@
 #include "nrf_log_ctrl.h"
 
 #include "ccm.h"
+
 #define CCM_ENCRYPT 0
 #define CCM_DECRYPT 1
 
-static int nrf_aes_ecb_encrypt(const uint8_t* pKey, uint8_t* input, uint8_t* output)
+static int aes_ecb_encrypt(const uint8_t* pKey, uint8_t* input, uint8_t* output)
 {
 	int ret;
 	nrf_ecb_hal_data_t ecb_data;
@@ -71,7 +72,7 @@ static void mbedtls_zeroize( void *v, size_t n ) {
     for( i = 0; i < 16; i++ )                                               \
         y[i] ^= b[i];                                                       \
                                                                             \
-    if( ( ret = nrf_aes_ecb_encrypt( key, y, y) ) != 0 )                    \
+    if( ( ret = aes_ecb_encrypt( key, y, y) ) != 0 )                    \
         return( ret );
 
 /*
@@ -80,7 +81,7 @@ static void mbedtls_zeroize( void *v, size_t n ) {
  * This avoids allocating one more 16 bytes buffer while allowing src == dst.
  */
 #define CTR_CRYPT( dst, src, len  )                                            \
-    if( ( ret = nrf_aes_ecb_encrypt( key, ctr, b) ) != 0 )                     \
+    if( ( ret = aes_ecb_encrypt( key, ctr, b) ) != 0 )                     \
         return( ret );                                                         \
                                                                                \
     for( i = 0; i < len; i++ )                                                 \
@@ -323,18 +324,18 @@ void aes_ccm_test2(void)
 {
 
     aes_ccm_encrypt_and_tag(k, nonce, 12, astr, sizeof(astr), p, LEN, c, mic, 4);
-//	aes_ccm_auth_decrypt(k, nonce, 12, astr, sizeof(astr), c, LEN, d, mic, 4);
+	aes_ccm_auth_decrypt(k, nonce, 12, astr, sizeof(astr), c, LEN, d, mic, 4);
 
-//    NRF_LOG_INFO("Cipher Text:\r\n");
-//    NRF_LOG_HEXDUMP_INFO(c, LEN);
+    NRF_LOG_INFO("Cipher Text:\r\n");
+    NRF_LOG_HEXDUMP_INFO(c, LEN);
 
-//	NRF_LOG_INFO("AES128-CCM TEST: ");
-//	if(memcmp(d, p, LEN) == 0) {
-//		NRF_LOG_RAW_INFO(" PASS \n");
-//	}
-//	else {
-//		NRF_LOG_RAW_INFO(" FAIL \n");
-//	}
+	NRF_LOG_INFO("AES128-CCM TEST: ");
+	if(memcmp(d, p, LEN) == 0) {
+		NRF_LOG_RAW_INFO(" PASS \n");
+	}
+	else {
+		NRF_LOG_RAW_INFO(" FAIL \n");
+	}
 	
 }
 #endif

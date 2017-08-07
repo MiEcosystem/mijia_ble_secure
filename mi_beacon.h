@@ -3,9 +3,12 @@
 #include <stdint.h>
 
 typedef enum {
+	GENERAL_EVT_BASE = 0x0000,
 	CONNECT_EVT      = 0x0001,
 	SIMPLE_PAIR_EVT  = 0x0002,
-	
+	LOCK_EVT         = 0x0005,
+
+	GENERAL_STA_BASE = 0x1000,
 	BUTTON_EVT       = 0x1001,
 	SLEEP_EVT        = 0x1002,
 	RSSI_EVT         = 0x1003,
@@ -17,8 +20,7 @@ typedef enum {
 	SOIL_EC_EVT      = 0x1009,
 	BATTERY_EVT      = 0x100A,
 
-	LOCK_EVT         = 0x100E,
-} mibeacon_evt_t;
+} evt_t;
 
 typedef struct {
 	uint8_t				factory_new  :1;
@@ -39,22 +41,22 @@ typedef struct {
 } mibeacon_frame_ctrl_t;
 
 typedef struct {
-	uint16_t type;
-	uint8_t  data_len;
-	uint8_t *pdata;
+	evt_t    type;
+	uint8_t  len;
+	uint8_t  val[20];
 } mibeacon_event_t;
 
 typedef struct {
-        uint8_t connectable : 1;
-        uint8_t centralable : 1;
-        uint8_t encryptable : 1;
-        uint8_t bondAbility : 2;
-        uint8_t reserved    : 3;
+	uint8_t connectable : 1;
+	uint8_t centralable : 1;
+	uint8_t encryptable : 1;
+	uint8_t bondAbility : 2;
+	uint8_t reserved    : 3;
 } mibeacon_capability_t;
 
 typedef struct {
-	uint8_t data_len;
-	uint8_t *pdata;
+	uint8_t len;
+	uint8_t val[20];
 } mibeacon_manu_data_t;
 
 typedef struct {
@@ -66,10 +68,13 @@ typedef struct {
 	mibeacon_event_t      *p_event;
 	mibeacon_manu_data_t  *p_manu_data;
 	mibeacon_manu_data_t  *p_manu_title;
-} mi_service_data_t;
+} mibeacon_config_t;
 
 
-int mi_service_data_set(mi_service_data_t const * const input, uint8_t *output, uint8_t *output_len);
+int mi_beacon_data_set(mibeacon_config_t const * const in, uint8_t *out, uint8_t *out_len);
+int mibeacon_event_push(evt_t evt, uint8_t len, void *val);
+int mibeacon_init();
+
 
 #endif  /* __MI_BEACON_H__ */ 
 

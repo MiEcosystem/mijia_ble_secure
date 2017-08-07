@@ -3003,7 +3003,13 @@
  
 
 #ifndef APP_FIFO_ENABLED
-#define APP_FIFO_ENABLED 1
+#define APP_FIFO_ENABLED 0
+#endif
+
+// <q> APP_MAILBOX_ENABLED  - app_mailbox - Mailbox for safely queuing items
+
+#ifndef APP_MAILBOX_ENABLED
+#define APP_MAILBOX_ENABLED 1
 #endif
 
 // <q> APP_GPIOTE_ENABLED  - app_gpiote - GPIOTE events dispatcher
@@ -3159,7 +3165,7 @@
 // <e> FDS_ENABLED - fds - Flash data storage module
 //==========================================================
 #ifndef FDS_ENABLED
-#define FDS_ENABLED 0
+#define FDS_ENABLED 1
 #endif
 #if  FDS_ENABLED
 // <o> FDS_OP_QUEUE_SIZE - Size of the internal queue. 

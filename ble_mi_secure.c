@@ -19,6 +19,9 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) < (b) ? (b) : (a))
+
 #define BLE_UUID_MI_AUTH   0x0010                      /**< The UUID of the AUTH   Characteristic. */
 #define BLE_UUID_MI_SECURE 0x0016                      /**< The UUID of the Secure Characteristic. */
 #define BLE_UUID_MI_FXFER  0x0016                      /**< The UUID of the Fast xfer Characteristic. */
@@ -28,12 +31,12 @@
 
 static void auth_handler(uint8_t *pdata, uint8_t len);
 static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
-static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
+static void rxfer_rx_decode(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 
 static ble_mi_t mi_srv;
 static uint32_t auth_value;
 fast_xfer_t fast_control_block = {.type = PUBKEY};
-reliable_xfer_t rxfer_control_block = {.state = RXFER_WAIT_CMD};
+reliable_xfer_t rxfer_control_block;
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_CONNECTED event from the S13X SoftDevice.
  *
@@ -42,6 +45,7 @@ reliable_xfer_t rxfer_control_block = {.state = RXFER_WAIT_CMD};
  */
 static void on_connect(ble_evt_t * p_ble_evt)
 {
+	uint32_t errno;
     mi_srv.conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 	ble_gap_conn_params_t conn_param = p_ble_evt->evt.gap_evt.params.connected.conn_params;
 	ble_gap_conn_params_t pref_conn_param = {
@@ -53,12 +57,22 @@ static void on_connect(ble_evt_t * p_ble_evt)
 
 	sd_ble_gap_conn_param_update(mi_srv.conn_handle, &pref_conn_param);
 
+	ble_gap_adv_params_t adv_params;
+	memset(&adv_params, 0, sizeof(adv_params));
+	
+	adv_params.type        = BLE_GAP_ADV_TYPE_ADV_SCAN_IND;
+	adv_params.fp          = BLE_GAP_ADV_FP_ANY;
+	adv_params.interval    = MSEC_TO_UNITS(100, UNIT_0_625_MS); // must >= 100 ms
+	adv_params.timeout     = 0;
+
+	errno = sd_ble_gap_adv_start(&adv_params);
+	APP_ERROR_CHECK(errno);
+
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Connected Peer MAC: ");
 	NRF_LOG_RAW_HEXDUMP_INFO(p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr, BLE_GAP_ADDR_LEN);
-	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Conn param default: min %d, max %d\n",
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Conn param default: min %2d, max %2d\n",
 	                 conn_param.min_conn_interval, conn_param.min_conn_interval);
 }
-
 
 /**@brief Function for handling the @ref BLE_GAP_EVT_DISCONNECTED event from the S13X SoftDevice.
  *
@@ -71,6 +85,24 @@ static void on_disconnect(ble_evt_t * p_ble_evt)
     mi_srv.conn_handle = BLE_CONN_HANDLE_INVALID;
 	set_mi_authorization(UNAUTHORIZATION);
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Disconnect.\n");
+
+	// Stop scannable adv
+	uint32_t errno = sd_ble_gap_adv_stop();
+	APP_ERROR_CHECK(errno);
+}
+
+/**@brief Function for handling the @ref BLE_GAP_EVT_CONN_PARAM_UPDATE event from the S13X SoftDevice.
+ *
+ * @param[in] p_mi_s    Xiaomi Service structure.
+ * @param[in] p_ble_evt Pointer to the event received from BLE stack.
+ */
+static void on_conn_params_update(ble_evt_t * p_ble_evt)
+{
+	ble_gap_conn_params_t conn_param = 
+		p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params;
+
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_BLUE"Conn param update : min %d, max %d\n",
+			         conn_param.min_conn_interval, conn_param.min_conn_interval);
 }
 
 
@@ -82,13 +114,14 @@ static void on_disconnect(ble_evt_t * p_ble_evt)
 static void on_write(ble_evt_t * p_ble_evt)
 {
     ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
-	
-    if ((p_evt_write->len == 2) &&
+	uint16_t   len = p_evt_write->len;
+	uint8_t *pdata = p_evt_write->data;
+    if ((len == 2) &&
 		((p_evt_write->handle == mi_srv.auth_handles.cccd_handle)   ||
 		 (p_evt_write->handle == mi_srv.fast_xfer_handles.cccd_handle) ||
 		 (p_evt_write->handle == mi_srv.secure_handles.cccd_handle)))
     {
-        if (ble_srv_is_notification_enabled(p_evt_write->data))
+        if (ble_srv_is_notification_enabled(pdata))
         {
             mi_srv.is_notification_enabled = true;
         }
@@ -99,13 +132,13 @@ static void on_write(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_write->handle == mi_srv.auth_handles.value_handle)
     {
-        auth_handler(p_evt_write->data, p_evt_write->len);
+        auth_handler(pdata, len);
     }
     else if (p_evt_write->handle == mi_srv.secure_handles.value_handle)
     {
-		NRF_LOG_RAW_HEXDUMP_INFO(p_evt_write->data, p_evt_write->len > 16 ? 16 : p_evt_write->len);
+		NRF_LOG_RAW_HEXDUMP_INFO(pdata, len > 16 ? 16 : len);
 
-		reliable_xfer_frame_t *pframe = (void*)p_evt_write->data;
+		reliable_xfer_frame_t *pframe = (void*)pdata;
 		uint16_t  curr_sn = pframe->sn;
 		
 		if (curr_sn == FRAME_CTRL ) {
@@ -122,30 +155,35 @@ static void on_write(ble_evt_t * p_ble_evt)
 						rxfer_control_block.rx_num = *(uint16_t*)pframe->ctrl.arg;
 						break;
 					default:
-						NRF_LOG_ERROR("Unknow reliable CMD.\n");
+						NRF_LOG_ERROR("Unknow rxfer CMD.\n");
 				}
 			}
 			else if (rxfer_control_block.state == RXFER_WAIT_ACK &&
-			         pframe->ctrl.mode == MODE_ACK) 
+			         pframe->ctrl.mode == MODE_ACK)
 			{
 				fctrl_ack_t ack = (fctrl_ack_t)pframe->ctrl.type;
 				rxfer_control_block.mode = MODE_ACK;
 				rxfer_control_block.ack = ack;
 				switch (ack) {
 					case A_SUCCESS:
+						rxfer_control_block.curr_sn = 0;
+
 						rxfer_control_block.state = RXFER_WAIT_CMD;
+
+						break;
 					case A_READY:
 						rxfer_control_block.curr_sn = 0;
+						rxfer_control_block.state = RXFER_TXD;
 						break;
 					case A_LOST:
 						rxfer_control_block.curr_sn = *(uint16_t*)pframe->ctrl.arg;
 						break;
 					default:
-						NRF_LOG_ERROR("Unknow reliable ACK.\n");
+						NRF_LOG_ERROR("Unknow rxfer ACK.\n");
 				}
 			}
 			else {
-				NRF_LOG_ERROR("detected malware connected!\n");
+				NRF_LOG_ERROR("recv malformed packet !\n");
 				// malware 
 				// TODO: handle this exception...
 			}
@@ -153,20 +191,21 @@ static void on_write(ble_evt_t * p_ble_evt)
 		else if (rxfer_control_block.state == RXFER_RXD)
 		{
 			rxfer_control_block.curr_sn = curr_sn;
-			if (curr_sn < rxfer_control_block.rx_num &&
-				p_evt_write->len == 20)
+			if (curr_sn < rxfer_control_block.rx_num && len == 20)
 			{
-				reliable_xfer_rxd(&rxfer_control_block, p_evt_write->data, 20);
+				rxfer_rx_decode(&rxfer_control_block, pdata, 20);
 			}
-			else if (curr_sn == rxfer_control_block.rx_num &&
-			         p_evt_write->len <= rxfer_control_block.last_bytes + 2)
+			else if (curr_sn == rxfer_control_block.rx_num)
 			{
-				reliable_xfer_rxd(&rxfer_control_block, p_evt_write->data,
-				                   p_evt_write->len);
+				if (rxfer_control_block.rx_num == rxfer_control_block.max_rx_num)
+					rxfer_rx_decode(&rxfer_control_block, pdata, 
+				                      MIN(len, rxfer_control_block.last_bytes+2));
+				else
+					rxfer_rx_decode(&rxfer_control_block, pdata, len);
 			}
 			else
 			{
-				NRF_LOG_ERROR("recv illegal reliable data. SN:%d %d\n", curr_sn, p_evt_write->len);
+				NRF_LOG_ERROR("recv illegal rxfer data. SN:%d %d\n", curr_sn, len);
 				rxfer_control_block.curr_sn = 0;
 				// TODO: handle this exception...
 			}
@@ -174,9 +213,9 @@ static void on_write(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_write->handle == mi_srv.fast_xfer_handles.value_handle)
     {
-		fast_xfer_frame_t *pframe = (void*)p_evt_write->data;
+		fast_xfer_frame_t *pframe = (void*)pdata;
         if (pframe->type == PUBKEY && pframe->remain_len < PUBKEY_BYTE)
-			fast_xfer_rxd(&fast_control_block, p_evt_write->data, p_evt_write->len);
+			fast_xfer_rxd(&fast_control_block, pdata, len);
 		else
 			NRF_LOG_ERROR("Unknow fast xfer data type\n");
     }
@@ -369,7 +408,7 @@ int fast_xfer_send(fast_xfer_t *pxfer)
 	return 1;
 }
 
-static void reliable_xfer_rxd(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
+static void rxfer_rx_decode(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 {
 	reliable_xfer_frame_t      *pframe = (void*)pdata;
 	int8_t                    data_len = len - sizeof(pframe->sn);
@@ -410,7 +449,7 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
 	if (errno != NRF_SUCCESS) {
 		NRF_LOG_INFO("Cann't send CMD %X : %d\n", cmd, errno);
 	} else {
-		NRF_LOG_INFO("CMD\n");
+		NRF_LOG_INFO("CMD ");
 		NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 	}
 
@@ -479,14 +518,18 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
     hvx_params.p_data = (void*)&frame;
     hvx_params.p_len  = &data_len;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
-
+	
+	// TODO : exception handler
+	if (mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID)
+		NRF_LOG_ERROR("Exception disconnect in BLE.\n");
+	
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 	
 	if (errno != NRF_SUCCESS) {
 		NRF_LOG_INFO("Cann't send ACK %x: %d\n", ack, errno);
 		// TODO : catch the exception.
 	} else {
-		NRF_LOG_INFO("ACK\n");
+		NRF_LOG_INFO("ACK ");
 		NRF_LOG_RAW_HEXDUMP_INFO(hvx_params.p_data, *hvx_params.p_len);
 	}
 
@@ -511,11 +554,7 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
             break;
 
         case BLE_GAP_EVT_CONN_PARAM_UPDATE:
-			ble_gap_conn_params_t conn_param = 
-				p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params;
-
-            NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_BLUE "Conn param update : min %d, max %d\n",
-			                 conn_param.min_conn_interval, conn_param.min_conn_interval);
+			on_conn_params_update(p_ble_evt);
             break;
 
         case BLE_GATTS_EVT_WRITE:

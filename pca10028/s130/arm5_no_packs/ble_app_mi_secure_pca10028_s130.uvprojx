@@ -1799,6 +1799,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\components\libraries\mailbox\app_mailbox.c</FilePath>
             </File>
+            <File>
+              <FileName>fds.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\fds\fds.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -3690,6 +3695,11 @@
               <FileName>app_mailbox.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\components\libraries\mailbox\app_mailbox.c</FilePath>
+            </File>
+            <File>
+              <FileName>fds.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\fds\fds.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -5919,6 +5929,11 @@
               <FileName>app_mailbox.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\components\libraries\mailbox\app_mailbox.c</FilePath>
+            </File>
+            <File>
+              <FileName>fds.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\fds\fds.c</FilePath>
             </File>
           </Files>
         </Group>

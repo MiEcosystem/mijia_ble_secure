@@ -32,7 +32,6 @@ static struct {
 	uint8_t decrypting  :1;
 	uint8_t pending     :1;
 	uint8_t processing  :1;
-	
 } m_flags;
 
 static uint32_t  session_dev_cnt;
@@ -79,15 +78,20 @@ int mi_encrypt_uninit()
 
 int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output)
 {
+	uint32_t ret = 0;
+
 	if (m_flags.initialized != 1)
-		return 1;
+		ret = 1;
 
 	CRITICAL_REGION_ENTER();
 	if (m_flags.processing == 1)
-		return 2;
+		ret = 2;
 	else
 		m_flags.processing = 1;
 	CRITICAL_REGION_EXIT();
+
+	if (ret)
+		return ret;
 
 	uint8_t tmp[len];
 	memcpy(tmp, input, len);
@@ -109,23 +113,27 @@ int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output)
 
 int mi_session_decrypt(uint8_t *input, uint8_t len, uint8_t *output)
 {
+	uint32_t ret = 0;
+
 	if (m_flags.initialized != 1)
-		return 1;
+		ret = 1;
 
 	CRITICAL_REGION_ENTER();
 	if (m_flags.processing == 1)
-		return 2;
+		ret = 2;
 	else
 		m_flags.processing = 1;
 	CRITICAL_REGION_EXIT();
 
+	if (ret)
+		return ret;
+	
 	session_nonce_t nonce = {0};
 	memcpy(nonce.iv, app_iv, sizeof(app_iv));
 	uint16_t cnt_low = input[1]<<8 | input[0];
 	update_cnt(&session_app_cnt, cnt_low);
 	nonce.counter = session_app_cnt;
 
-	uint32_t ret;
 	ret = aes_ccm_auth_decrypt(session_key_app, (void*)&nonce, sizeof(nonce), NULL, 0,
 	                           2+input, len-6, output, 2+input+len-6, 4);
 

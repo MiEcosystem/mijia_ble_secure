@@ -380,6 +380,11 @@
           <GroupName>Application</GroupName>
           <Files>
             <File>
+              <FileName>sdk_config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\config\sdk_config.h</FilePath>
+            </File>
+            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\main.c</FilePath>
@@ -433,11 +438,6 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
-            </File>
-            <File>
-              <FileName>sdk_config.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\config\sdk_config.h</FilePath>
             </File>
             <File>
               <FileName>mi_beacon.c</FileName>
@@ -1799,6 +1799,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\components\libraries\mailbox\app_mailbox.c</FilePath>
             </File>
+            <File>
+              <FileName>fds.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\fds\fds.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -2473,6 +2478,11 @@
           <GroupName>Application</GroupName>
           <Files>
             <File>
+              <FileName>sdk_config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\config\sdk_config.h</FilePath>
+            </File>
+            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\main.c</FilePath>
@@ -2526,11 +2536,6 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
-            </File>
-            <File>
-              <FileName>sdk_config.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\config\sdk_config.h</FilePath>
             </File>
             <File>
               <FileName>mi_beacon.c</FileName>
@@ -3891,6 +3896,11 @@
               <FileName>app_mailbox.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\components\libraries\mailbox\app_mailbox.c</FilePath>
+            </File>
+            <File>
+              <FileName>fds.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\components\libraries\fds\fds.c</FilePath>
             </File>
           </Files>
         </Group>

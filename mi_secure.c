@@ -80,7 +80,7 @@ static struct {
 	uint8_t encrypt_reg_data   :1 ;
 	uint8_t encrypt_login_data :1 ;
 	uint8_t encrypt_share_data :1 ;
-
+	
 } flags;
 
 uint8_t app_pub[64];
@@ -124,7 +124,7 @@ struct {
 } encrypt_share_data;
 
 uint8_t rand_key[16];
-
+session_key_t cloud_key;
 static uint8_t nonce[12] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
                          0x19, 0x1a, 0x1b};
 
@@ -135,6 +135,7 @@ struct {
 	uint8_t pt3 :1;
 	uint8_t reserve: 5;
 } pt_flags;
+
 struct {
 	uint16_t dev;
 	uint16_t manu;
@@ -897,6 +898,14 @@ int login_auth(pt_t *pt)
 		NRF_LOG_INFO("LOG SUCCESS. schd_time : %d\n", schd_time);
 		set_mi_authorization(OWNER_AUTHORIZATION);
 		mi_encrypt_init(&session_key);
+
+	sha256_hkdf(        LTMK,         sizeof(LTMK),
+	      (void *)cloud_salt,         sizeof(cloud_salt)-1,
+	      (void *)cloud_info,         sizeof(cloud_info)-1,
+	      (void *)&cloud_key,         sizeof(cloud_key));
+		
+	set_beacon_key(cloud_key.app_key);
+
 		mi_scheduler_stop(LOG_SUCCESS);
 	}
 	else {
@@ -993,7 +1002,6 @@ int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 	memcpy(adata, msc_info, 8);
 	adata[8] = 0x01;
 
-	session_key_t cloud_key = {0};
 	sha256_hkdf(      p_LTMK,         32,
 	      (void *)cloud_salt,         sizeof(cloud_salt)-1,
 	      (void *)cloud_info,         sizeof(cloud_info)-1,
@@ -1011,13 +1019,12 @@ int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 		virtual_key.key.expire_time = 0;
 		return 2;
 	}
-	NRF_LOG_INFO("Local  UTC %s\n", nrf_log_push(ctime(&curr_time)));
-	NRF_LOG_INFO("Expire UTC %s\n", nrf_log_push(ctime(&virtual_key.key.expire_time)));
+	NRF_LOG_INFO("Local  UTC %s", nrf_log_push(ctime(&curr_time)));
+	NRF_LOG_INFO("Expire UTC %s", nrf_log_push(ctime(&virtual_key.key.expire_time)));
 	
 	if (virtual_key.key.expire_time <= curr_time + RTC_TIME_DRIFT) {
 		NRF_LOG_ERROR("virtual key expired.\n");
 		return 1;
-
 	} else {
 		NRF_LOG_INFO("virtual key is vaild.\n");
 		return 0;

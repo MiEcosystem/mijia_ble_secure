@@ -634,6 +634,21 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\ble_lock.c</FilePath>
             </File>
+            <File>
+              <FileName>mi_error.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\mi_error.h</FilePath>
+            </File>
+            <File>
+              <FileName>mi_psm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_psm.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_psm.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\mi_psm.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -2530,6 +2545,21 @@
               <FileName>ble_lock.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\ble_lock.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_error.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\mi_error.h</FilePath>
+            </File>
+            <File>
+              <FileName>mi_psm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_psm.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_psm.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\mi_psm.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -4764,6 +4794,21 @@
               <FileName>ble_lock.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\ble_lock.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_error.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\mi_error.h</FilePath>
+            </File>
+            <File>
+              <FileName>mi_psm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_psm.c</FilePath>
+            </File>
+            <File>
+              <FileName>mi_psm.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\mi_psm.h</FilePath>
             </File>
           </Files>
         </Group>

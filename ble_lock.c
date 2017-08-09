@@ -321,7 +321,7 @@ uint32_t ble_lock_init(void)
 	                    char_props, &lock_srv.state_handles);
 	APP_ERROR_CHECK(err_code);
 
-//    // Add the Lock logs Characteristic.
+    // Add the Lock logs Characteristic.
 //	char_props = (ble_gatt_char_props_t){0};
 //	char_props.read                  = 1;
 //	char_props.notify                = 1;
@@ -345,7 +345,7 @@ uint8_t get_lock_opcode(uint8_t *p_opcode)
 	uint8_t errno = mi_session_decrypt(lock_operation, 7, data);
 
 	if (errno != 0) {
-		NRF_LOG_INFO("Opcode decrypt %d\n", errno);
+		NRF_LOG_INFO("Lock Opcode decrypt error %d\n", errno);
 		return 3;
 	}
 
@@ -378,7 +378,7 @@ uint32_t send_lock_stat(uint8_t status)
     errno = sd_ble_gatts_hvx(lock_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("Cann't send lock stat : %d\n", errno);
+		NRF_LOG_INFO("Cann't send lock stat : %X\n", errno);
 	}
 
 	return errno;

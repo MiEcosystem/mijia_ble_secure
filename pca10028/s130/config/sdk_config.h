@@ -3106,7 +3106,7 @@
 
 // <o> FDS_MAX_USERS - Maximum number of callbacks that can be registered. 
 #ifndef FDS_MAX_USERS
-#define FDS_MAX_USERS 8
+#define FDS_MAX_USERS 4
 #endif
 
 // <o> FDS_VIRTUAL_PAGES - Number of virtual flash pages to use. 

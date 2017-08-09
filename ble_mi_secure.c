@@ -23,8 +23,8 @@
 #define MAX(a, b) ((a) < (b) ? (b) : (a))
 
 #define BLE_UUID_MI_AUTH   0x0010                      /**< The UUID of the AUTH   Characteristic. */
+#define BLE_UUID_MI_FXFER  0x0015                      /**< The UUID of the Fast xfer Characteristic. */
 #define BLE_UUID_MI_SECURE 0x0016                      /**< The UUID of the Secure Characteristic. */
-#define BLE_UUID_MI_FXFER  0x0016                      /**< The UUID of the Fast xfer Characteristic. */
 
 #define PUBKEY_BYTE 255
 #define FRAME_CTRL  0

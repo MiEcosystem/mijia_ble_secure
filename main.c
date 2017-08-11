@@ -716,12 +716,13 @@ int main(void)
 
 	/* <!> mi_psm_init() must be called after ble_stack_init(). */
 	mi_psm_init();
-
 	
 
 #ifdef M_TEST
 	mi_scheduler_start(0);
 #else
+	sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
+	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
 	sd_ble_gap_tx_power_set(0);
     errno = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(errno);
@@ -738,7 +739,7 @@ int main(void)
 
 					lock_event.action = 0;
 					lock_event.method = 0;
-					lock_event.user_id= 0xAABBCCDD;
+					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
 					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
@@ -750,7 +751,7 @@ int main(void)
 
 					lock_event.action = 1;
 					lock_event.method = 0;
-					lock_event.user_id= 0x11223344;
+					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
 					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
@@ -762,7 +763,7 @@ int main(void)
 
 					lock_event.action = 2;
 					lock_event.method = 0;
-					lock_event.user_id= 0x55667788;
+					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
 					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);

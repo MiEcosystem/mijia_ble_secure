@@ -460,6 +460,11 @@
               <FilePath>..\..\..\mi_crypto.c</FilePath>
             </File>
             <File>
+              <FileName>mi_psm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_psm.c</FilePath>
+            </File>
+            <File>
               <FileName>sha256_hkdf.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\sha256_hkdf.c</FilePath>
@@ -638,11 +643,6 @@
               <FileName>mi_error.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\..\mi_error.h</FilePath>
-            </File>
-            <File>
-              <FileName>mi_psm.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\mi_psm.c</FilePath>
             </File>
             <File>
               <FileName>mi_psm.h</FileName>
@@ -2522,6 +2522,11 @@
               <FilePath>..\..\..\mi_crypto.c</FilePath>
             </File>
             <File>
+              <FileName>mi_psm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_psm.c</FilePath>
+            </File>
+            <File>
               <FileName>sha256_hkdf.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\sha256_hkdf.c</FilePath>
@@ -2550,11 +2555,6 @@
               <FileName>mi_error.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\..\mi_error.h</FilePath>
-            </File>
-            <File>
-              <FileName>mi_psm.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\mi_psm.c</FilePath>
             </File>
             <File>
               <FileName>mi_psm.h</FileName>
@@ -4621,6 +4621,11 @@
               <FilePath>..\..\..\mi_crypto.c</FilePath>
             </File>
             <File>
+              <FileName>mi_psm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mi_psm.c</FilePath>
+            </File>
+            <File>
               <FileName>sha256_hkdf.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\sha256_hkdf.c</FilePath>
@@ -4799,11 +4804,6 @@
               <FileName>mi_error.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\..\mi_error.h</FilePath>
-            </File>
-            <File>
-              <FileName>mi_psm.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\mi_psm.c</FilePath>
             </File>
             <File>
               <FileName>mi_psm.h</FileName>

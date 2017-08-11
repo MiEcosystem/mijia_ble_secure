@@ -14,7 +14,6 @@ typedef enum {
 	REC_MKPK_KEY           = 0x0010,
 } mi_psm_record_t;
 
-
 void mi_psm_init(void);
 
 int mi_psm_record_read(uint16_t rec_key, uint8_t *out, uint16_t out_len);
@@ -28,5 +27,3 @@ int mi_psm_reset(void);
 #endif
 
 #endif  /* END OF __MI_PSM_H */ 
-
-

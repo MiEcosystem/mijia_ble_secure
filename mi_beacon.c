@@ -3,7 +3,6 @@
 #include "mi_type.h"
 #include "mi_arch.h"
 #include "mi_beacon.h"
-#include "ble_mi_secure.h"
 #include "ble_advdata.h"
 #include "app_mailbox.h"
 #include "app_timer.h"
@@ -12,7 +11,9 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
+#define PRINT_CIPHER 1
 #define EVT_MAX_SIZE 16
+#define BLE_UUID_MI_SERVICE    0xFE95
 
 APP_MAILBOX_DEF(mibeacon_mailbox, 4, EVT_MAX_SIZE);
 APP_TIMER_DEF(mibeacon_timer);
@@ -37,7 +38,6 @@ void set_beacon_key(uint8_t *p_key)
 
 static int manu_data_encode(mibeacon_manu_data_t *p_manu, uint8_t *output)
 {
-
 	output[0] = p_manu->len;
 	memcpy(output+1, p_manu->val, p_manu->len);
 	
@@ -125,14 +125,14 @@ int mi_beacon_data_set(mibeacon_config_t const * const config, uint8_t *output, 
 			uint8_t mic[4];
 			uint8_t aad = 0x11;
 			uint8_t evt_len = p_event->len+3;
-
+	#if (PRINT_CIPHER == 1)
 			NRF_LOG_RAW_INFO("Plain text:\n");
 			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)p_event, evt_len);
 			NRF_LOG_RAW_INFO("Nonce:\n");
 			NRF_LOG_RAW_HEXDUMP_INFO(&beacon_nonce, 12);
 			NRF_LOG_RAW_INFO("Key:\n");
 			NRF_LOG_RAW_HEXDUMP_INFO(beacon_key, 16);
-
+	#endif
 			aes_ccm_encrypt_and_tag(beacon_key,
 	                (uint8_t*)&beacon_nonce, sizeof(beacon_nonce),
 	                                   &aad, sizeof(aad),
@@ -145,11 +145,12 @@ int mi_beacon_data_set(mibeacon_config_t const * const config, uint8_t *output, 
 
 			memcpy(output, mic, sizeof(mic));
 			*output_len += 3 + sizeof(mic);
-
+	#if (PRINT_CIPHER == 1)
 			NRF_LOG_RAW_INFO("Cipher:\n");
 			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)p_event, evt_len);
 			NRF_LOG_RAW_INFO("MIC:\n");
 			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)mic, 4);
+	#endif
 		}
 		else {
 			return -1;

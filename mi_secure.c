@@ -62,7 +62,7 @@ APP_TIMER_DEF(mi_schd_timer_id);
 #define DATA_IS_VAILD_P(x)       (x == 1)
 #define DATA_IS_INVAILD_P(x)     (x == 0)
 
-#define  RTC_TIME_DRIFT  600
+#define  RTC_TIME_DRIFT  300
 
 static struct {
 	uint8_t msc_info   :1 ;
@@ -89,7 +89,7 @@ uint8_t dev_pub[64];
 uint8_t dev_sha[32];
 uint8_t eph_key[32];
 uint8_t LTMK[32];
-session_key_t session_key;
+session_ctx_t session_key;
 uint8_t dev_sign[64];
 
 struct {
@@ -124,11 +124,12 @@ struct {
 } encrypt_share_data;
 
 uint8_t rand_key[16];
-session_key_t cloud_key;
+session_ctx_t cloud_key;
 static uint8_t nonce[12] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
                          0x19, 0x1a, 0x1b};
 
 msc_info_t tmp_info;
+
 struct {
 	uint8_t pt1 :1;
 	uint8_t pt2 :1;
@@ -176,22 +177,26 @@ static void timer_set(timer_t *t, int interval_ms)
 extern fast_xfer_t fast_control_block;
 extern reliable_xfer_t rxfer_control_block;
 
-void mi_scheduler(void * p_context);
+static void mi_scheduler(void * p_context);
 
+static uint32_t key_id;
 static mi_author_stat_t mi_authorization_status;
-
+uint32_t get_mi_key_id(void)
+{
+	return key_id;
+}
 void set_mi_authorization(mi_author_stat_t status)
 {
 	mi_authorization_status = status;
 }
 
-int get_mi_authorization(void)
+uint32_t get_mi_authorization(void)
 {
 	return mi_authorization_status;
 }
 
 
-int mi_scheduler_init(uint32_t interval)
+uint32_t mi_scheduler_init(uint32_t interval)
 {
 	int32_t errno;
 	schd_interval = interval;
@@ -203,7 +208,7 @@ int mi_scheduler_init(uint32_t interval)
 	return 0;
 }
 
-int mi_scheduler_start(uint32_t auth_stat)
+uint32_t mi_scheduler_start(uint32_t auth_stat)
 {
 	int32_t errno;
 	schd_time = 0;
@@ -233,7 +238,7 @@ int mi_scheduler_start(uint32_t auth_stat)
 	return errno;
 }
 
-int mi_scheduler_stop(int type)
+uint32_t mi_scheduler_stop(int type)
 {
 	int32_t errno;
 	errno = app_timer_stop(mi_schd_timer_id);
@@ -662,7 +667,7 @@ static int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 }
 
 
-int reg_auth(pt_t *pt)
+static int reg_auth(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
@@ -744,7 +749,7 @@ int reg_auth(pt_t *pt)
 	PT_END(pt);
 }
 
-int reg_ble(pt_t *pt)
+static int reg_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
@@ -776,7 +781,7 @@ int reg_ble(pt_t *pt)
 	PT_END(pt);
 }
 
-int reg_msc(pt_t *pt)
+static int reg_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
@@ -840,7 +845,7 @@ int reg_msc(pt_t *pt)
 	PT_END(pt);
 }
 
-void reg_procedure()
+static void reg_procedure()
 {
 	if (pt_flags.pt1 == 1)
 		pt_flags.pt1 = PT_SCHEDULE(reg_msc(&pt1));
@@ -859,7 +864,7 @@ void reg_procedure()
 	}
 }
 
-int login_auth(pt_t *pt)
+static int login_auth(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
@@ -899,13 +904,14 @@ int login_auth(pt_t *pt)
 		set_mi_authorization(OWNER_AUTHORIZATION);
 		mi_encrypt_init(&session_key);
 
-	sha256_hkdf(        LTMK,         sizeof(LTMK),
-	      (void *)cloud_salt,         sizeof(cloud_salt)-1,
-	      (void *)cloud_info,         sizeof(cloud_info)-1,
-	      (void *)&cloud_key,         sizeof(cloud_key));
-		
-	set_beacon_key(cloud_key.app_key);
+sha256_hkdf(        LTMK,         sizeof(LTMK),
+	  (void *)cloud_salt,         sizeof(cloud_salt)-1,
+	  (void *)cloud_info,         sizeof(cloud_info)-1,
+	  (void *)&cloud_key,         sizeof(cloud_key));
+	
+set_beacon_key(cloud_key.app_key);
 
+		key_id = 0;
 		mi_scheduler_stop(LOG_SUCCESS);
 	}
 	else {
@@ -917,7 +923,7 @@ int login_auth(pt_t *pt)
 	PT_END(pt);
 }
 
-int login_ble(pt_t *pt)
+static int login_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
@@ -936,7 +942,7 @@ int login_ble(pt_t *pt)
 	PT_END(pt);
 }
 
-int login_msc(pt_t *pt)
+static int login_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
@@ -987,7 +993,7 @@ void login_procedure()
 }
 
 
-int verify_share_info(void * pinfo, uint8_t * p_LTMK)
+static int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 {
 	time_t curr_time = time(NULL);
 	uint32_t errno;
@@ -1026,12 +1032,12 @@ int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 		NRF_LOG_ERROR("virtual key expired.\n");
 		return 1;
 	} else {
-		NRF_LOG_INFO("virtual key is vaild.\n");
+		memcpy(&key_id, &virtual_key.nonce[8], 4);
 		return 0;
 	}
 }
 
-int shared_msc(pt_t *pt)
+static int shared_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
@@ -1089,7 +1095,7 @@ int shared_msc(pt_t *pt)
 	PT_END(pt);
 }
 
-int shared_ble(pt_t *pt)
+static int shared_ble(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	
@@ -1125,7 +1131,7 @@ int shared_ble(pt_t *pt)
 }
 
 
-int shared_auth(pt_t *pt)
+static int shared_auth(pt_t *pt)
 {
 	PT_BEGIN(pt);
 	uint32_t errno;
@@ -1171,13 +1177,21 @@ int shared_auth(pt_t *pt)
 		NRF_LOG_INFO("SHARED LOG SUCCESS.\n");
 		set_mi_authorization(SHARE_AUTHORIZATION);
 		mi_encrypt_init(&session_key);
+
+sha256_hkdf(        LTMK,         sizeof(LTMK),
+	  (void *)cloud_salt,         sizeof(cloud_salt)-1,
+	  (void *)cloud_info,         sizeof(cloud_info)-1,
+	  (void *)&cloud_key,         sizeof(cloud_key));
+	
+set_beacon_key(cloud_key.app_key);
+
 		PT_WAIT_UNTIL(pt, auth_send(SHARED_LOG_SUCCESS) == NRF_SUCCESS);
 	}
 
 	PT_END(pt);
 }
 
-void shared_login_procedure()
+static void shared_login_procedure()
 {
 	if (pt_flags.pt1 == 1)
 		pt_flags.pt1 = PT_SCHEDULE(shared_msc(&pt1));
@@ -1214,7 +1228,7 @@ int test_thd(pt_t *pt)
 	PT_BEGIN(pt);
 	int i;
 
-	session_key_t key = {0};
+	session_ctx_t key = {0};
 	memcpy(key.app_key, "DUMMY KEY", 10);
 	memcpy(key.dev_key, "DUMMY KEY", 10);
 	memcpy(key.dev_iv , "DUMMY KEY", 4);
@@ -1258,7 +1272,7 @@ int test_thd(pt_t *pt)
 }
 #endif
 
-void mi_scheduler(void * p_context)
+static void mi_scheduler(void * p_context)
 {
 	schd_time++;
 	uint32_t *p_auth_status = p_context;

@@ -8,16 +8,9 @@ typedef struct {
 	uint8_t dev_iv[4];
 	uint8_t app_iv[4];
 	uint8_t reserve[24];
-} session_key_t;
+} session_ctx_t;
 
-typedef enum {
-	DEV_NONCE,
-	APP_NONCE,
-	BEACON_NONCE
-} nonce_t;
-
-int mi_encrypt_init(session_key_t *pkey);
-
+int mi_encrypt_init(session_ctx_t *p_ctx);
 /**@brief Function for encrypt the data.
  *
  * @details After Secure auth login, device and application will both generate the

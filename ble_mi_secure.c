@@ -22,9 +22,10 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) < (b) ? (b) : (a))
 
-#define BLE_UUID_MI_AUTH   0x0010                      /**< The UUID of the AUTH   Characteristic. */
+#define BLE_UUID_MI_VERS   0x0004                      /**< The UUID of the Version Characteristic. */
+#define BLE_UUID_MI_CTRLP  0x0010                      /**< The UUID of the Control Point Characteristic. */
+#define BLE_UUID_MI_FXFER  0x0015                      /**< The UUID of the Fast xfer Characteristic. */
 #define BLE_UUID_MI_SECURE 0x0016                      /**< The UUID of the Secure Characteristic. */
-#define BLE_UUID_MI_FXFER  0x0016                      /**< The UUID of the Fast xfer Characteristic. */
 
 #define PUBKEY_BYTE 255
 #define FRAME_CTRL  0
@@ -35,6 +36,7 @@ static void rxfer_rx_decode(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 
 static ble_mi_t mi_srv;
 static uint32_t auth_value;
+static uint8_t version[10];
 fast_xfer_t fast_control_block = {.type = PUBKEY};
 reliable_xfer_t rxfer_control_block;
 
@@ -81,10 +83,10 @@ static void on_connect(ble_evt_t * p_ble_evt)
  */
 static void on_disconnect(ble_evt_t * p_ble_evt)
 {
-    UNUSED_PARAMETER(p_ble_evt);
     mi_srv.conn_handle = BLE_CONN_HANDLE_INVALID;
 	set_mi_authorization(UNAUTHORIZATION);
-	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Disconnect.\n");
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Disconnect reason %X.\n",
+	                 p_ble_evt->evt.gap_evt.params.disconnected.reason);
 
 	// Stop scannable adv
 	uint32_t errno = sd_ble_gap_adv_stop();
@@ -117,7 +119,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 	uint16_t   len = p_evt_write->len;
 	uint8_t *pdata = p_evt_write->data;
     if ((len == 2) &&
-		((p_evt_write->handle == mi_srv.auth_handles.cccd_handle)   ||
+		((p_evt_write->handle == mi_srv.ctrl_handles.cccd_handle)   ||
 		 (p_evt_write->handle == mi_srv.fast_xfer_handles.cccd_handle) ||
 		 (p_evt_write->handle == mi_srv.secure_handles.cccd_handle)))
     {
@@ -130,7 +132,7 @@ static void on_write(ble_evt_t * p_ble_evt)
             mi_srv.is_notification_enabled = false;
         }
     }
-    else if (p_evt_write->handle == mi_srv.auth_handles.value_handle)
+    else if (p_evt_write->handle == mi_srv.ctrl_handles.value_handle)
     {
         auth_handler(pdata, len);
     }
@@ -285,6 +287,7 @@ static uint32_t char_add(uint16_t                        uuid,
     attr_char_value.p_uuid    = &ble_uuid;
     attr_char_value.p_attr_md = &attr_md;
     attr_char_value.max_len   = char_len;
+	attr_char_value.init_len  = p_char_value ? char_len : 0;
     attr_char_value.p_value   = p_char_value ? p_char_value : NULL;
 
     return sd_ble_gatts_characteristic_add(mi_srv.service_handle,
@@ -444,6 +447,10 @@ int reliable_xfer_cmd(fctrl_cmd_t cmd, ...)
     hvx_params.p_len  = &data_len;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
 
+	// TODO : exception handler
+	if (mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID)
+		NRF_LOG_ERROR("Exception disconnect in BLE.\n");
+
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
@@ -520,13 +527,14 @@ int reliable_xfer_ack(fctrl_ack_t ack, ...)
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
 	
 	// TODO : exception handler
-	if (mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID)
+	if (mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID) {
 		NRF_LOG_ERROR("Exception disconnect in BLE.\n");
-	
+		return 0;
+	}
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 	
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("Cann't send ACK %x: %d\n", ack, errno);
+		NRF_LOG_INFO("Cann't send ACK %x: %X\n", ack, errno);
 		// TODO : catch the exception.
 	} else {
 		NRF_LOG_INFO("ACK ");
@@ -598,11 +606,18 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
                                         &mi_srv.service_handle);
     APP_ERROR_CHECK(err_code);
 
-    // Add the AUTH Characteristic.
+    // Add the Version Characteristic.
 	ble_gatt_char_props_t char_props = {0};
+	char_props.read                  = 1;
+	err_code = char_add(BLE_UUID_MI_VERS, version, sizeof(version),
+	                    char_props, &mi_srv.version_handles);
+	APP_ERROR_CHECK(err_code);
+
+    // Add the Control Point Characteristic.
+	char_props = (ble_gatt_char_props_t){0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
-	err_code = char_add(BLE_UUID_MI_AUTH, NULL, 4, char_props, &mi_srv.auth_handles);
+	err_code = char_add(BLE_UUID_MI_CTRLP, NULL, 4, char_props, &mi_srv.ctrl_handles);
 	APP_ERROR_CHECK(err_code);
 
     // Add the Secure AUTH Characteristic.
@@ -619,7 +634,19 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 //	err_code = char_add(BLE_UUID_MI_FXFER, NULL, 20, char_props, &mi_srv.fast_xfer_handles);
 //	VERIFY_SUCCESS(err_code);
     
+	version_set("1.2.3_01");
+	
 	return NRF_SUCCESS;
+}
+
+void version_get(uint8_t *out)
+{
+	memcpy(out, version, sizeof(version));
+}
+
+uint32_t version_set(uint8_t *in)
+{
+	memcpy(version, in, sizeof(version));
 }
 
 uint32_t auth_send(uint32_t status)
@@ -637,7 +664,7 @@ uint32_t auth_send(uint32_t status)
         return NRF_ERROR_INVALID_PARAM;
     }
 
-    hvx_params.handle = mi_srv.auth_handles.value_handle;
+    hvx_params.handle = mi_srv.ctrl_handles.value_handle;
     hvx_params.p_data = (uint8_t*)&status;
     hvx_params.p_len  = &length;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;

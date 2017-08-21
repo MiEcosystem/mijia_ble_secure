@@ -51,12 +51,11 @@ typedef enum {
 } mi_author_stat_t;
 
 void set_mi_authorization(mi_author_stat_t status);
-int get_mi_authorization(void);
-
-void mi_scheduler(void * p_context);
-int mi_scheduler_init(uint32_t interval);
-int mi_scheduler_start(uint32_t status);
-int mi_scheduler_stop(int type);
+uint32_t get_mi_authorization(void);
+uint32_t get_mi_key_id(void);
+uint32_t mi_scheduler_init(uint32_t interval);
+uint32_t mi_scheduler_start(uint32_t status);
+uint32_t mi_scheduler_stop(int type);
 
 #ifdef __cplusplus
 }

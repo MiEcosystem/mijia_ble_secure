@@ -34,6 +34,7 @@
 #include "app_timer.h"
 #include "app_button.h"
 #include "fstorage.h"
+#include "fds.h"
 #include "ble_nus.h"
 
 #define NRF_LOG_MODULE_NAME "MAIN"
@@ -44,6 +45,7 @@
 #include "mi_secure.h"
 #include "mi_beacon.h"
 #include "mi_crypto.h"
+#include "mi_psm.h"
 
 #include "app_util_platform.h"
 #include "bsp.h"
@@ -77,7 +79,7 @@
 #define DEVICE_NAME                     "Secure_nRF51"                              /**< Name of device. Will be included in the advertising data. */
 #endif
 
-#define APP_ADV_INTERVAL                MSEC_TO_UNITS(100, UNIT_0_625_MS)           /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_INTERVAL                MSEC_TO_UNITS(200, UNIT_0_625_MS)           /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS      0                                           /**< The advertising timeout (in units of seconds). */
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
@@ -180,7 +182,6 @@ static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t lengt
 	ble_nus_string_send(&m_nus, msg, length);
 
 }
-/**@snippet [Handling the data received over BLE] */
 
 
 /**@brief Function for initializing services that will be used by the application.
@@ -415,7 +416,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
-	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"EVT %X\n", p_ble_evt->header.evt_id);
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"BLE EVT %X\n", p_ble_evt->header.evt_id);
 
     ble_conn_params_on_ble_evt(p_ble_evt);
 	ble_mi_on_ble_evt(p_ble_evt);
@@ -652,8 +653,30 @@ void twi0_init (void)
 
     nrf_drv_twi_enable(&TWI0);
 }
+
 void time_init(struct tm * time_ptr);
 void mibeacon_test(void);
+
+typedef struct {
+	uint8_t did[8];
+	uint8_t version[12];
+
+	union {
+		uint8_t LTMK[16];
+		uint8_t MKPK[16];
+	};
+
+	uint8_t cloud_key[16];
+	uint8_t beacon_key[16];
+	
+	struct {
+		uint8_t factory_new;
+		uint8_t reserved[3];
+	}status;
+
+} mi_sysinfo_t;
+
+mi_sysinfo_t mi_sysinfo;
 
 typedef __packed struct {
 	uint8_t  action;
@@ -666,14 +689,14 @@ typedef __packed struct {
  */
 int main(void)
 {
-    uint32_t err_code;
+    uint32_t errno;
     bool erase_bonds;
 	uint8_t  lock_opcode = 1;
 	lock_evt_t lock_event;
-	err_code = NRF_LOG_INIT(NULL);
-    APP_ERROR_CHECK(err_code);
-	NRF_LOG_RAW_INFO(RTT_CTRL_CLEAR);
-	
+
+	NRF_LOG_INIT(NULL);
+	NRF_LOG_RAW_INFO(RTT_CTRL_CLEAR"Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
+
     // Initialize.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
 
@@ -687,21 +710,23 @@ int main(void)
     services_init();
     advertising_init();
     conn_params_init();
+
+	/* <!> mi_psm_init() must be called after ble_stack_init(). */
+	mi_psm_init();
 	mibeacon_init();
-
-    NRF_LOG_RAW_INFO("Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
-
 	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
+	
 
 #ifdef M_TEST
 	mi_scheduler_start(0);
 #else
-    err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
-    APP_ERROR_CHECK(err_code);
-
+	sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
+	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
 	sd_ble_gap_tx_power_set(0);
-
+    errno = ble_advertising_start(BLE_ADV_MODE_FAST);
+    APP_ERROR_CHECK(errno);
 #endif
+
     // Enter main loop.
     for (;;)
     {
@@ -710,18 +735,25 @@ int main(void)
 				case 0:
 					NRF_LOG_INFO("lock\n");
 					bsp_board_led_off(3);
+
+					lock_event.action = 0;
+					lock_event.method = 0;
+					lock_event.user_id= get_mi_key_id();
+					lock_event.time   = time(NULL);
+
+					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 				
 				case 1:
 					NRF_LOG_INFO("unlock\n");
 					bsp_board_led_on(3);
 
-					lock_event.action = 0;
+					lock_event.action = 1;
 					lock_event.method = 0;
-					lock_event.user_id= 0x11223344;
+					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(LOCK_EVT, sizeof(lock_event), &lock_event);
+					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 
 				case 2:
@@ -730,10 +762,10 @@ int main(void)
 
 					lock_event.action = 2;
 					lock_event.method = 0;
-					lock_event.user_id= 0x55667788;
+					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(LOCK_EVT, sizeof(lock_event), &lock_event);
+					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 
 				default:

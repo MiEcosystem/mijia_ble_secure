@@ -3,7 +3,6 @@
 #include "mi_type.h"
 #include "mi_arch.h"
 #include "mi_beacon.h"
-#include "ble_mi_secure.h"
 #include "ble_advdata.h"
 #include "app_mailbox.h"
 #include "app_timer.h"
@@ -12,7 +11,9 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
-#define EVT_MAX_SIZE 16
+#define PRINT_ENC_CTX          0
+#define EVT_MAX_SIZE           16
+#define BLE_UUID_MI_SERVICE    0xFE95
 
 APP_MAILBOX_DEF(mibeacon_mailbox, 4, EVT_MAX_SIZE);
 APP_TIMER_DEF(mibeacon_timer);
@@ -37,7 +38,6 @@ void set_beacon_key(uint8_t *p_key)
 
 static int manu_data_encode(mibeacon_manu_data_t *p_manu, uint8_t *output)
 {
-
 	output[0] = p_manu->len;
 	memcpy(output+1, p_manu->val, p_manu->len);
 	
@@ -121,20 +121,22 @@ int mi_beacon_data_set(mibeacon_config_t const * const config, uint8_t *output, 
 			beacon_nonce.pid = config->pid;
 			beacon_nonce.cnt = frame_cnt;
 			arch_rand_get(beacon_nonce.rand, 3);
+
 			uint8_t mic[4];
 			uint8_t aad = 0x11;
-
-			NRF_LOG_RAW_INFO("Plain text:");
-			NRF_LOG_HEXDUMP_INFO((uint8_t*)p_event, p_event->len + 3);
-			NRF_LOG_RAW_INFO("Nonce:");
-			NRF_LOG_HEXDUMP_INFO(&beacon_nonce, 12);
-			NRF_LOG_RAW_INFO("Key:");
-			NRF_LOG_HEXDUMP_INFO(beacon_key, 16);
-
+			uint8_t evt_len = p_event->len+3;
+	#if (PRINT_ENC_CTX == 1)
+			NRF_LOG_RAW_INFO("Plain text:\n");
+			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)p_event, evt_len);
+			NRF_LOG_RAW_INFO("Nonce:\n");
+			NRF_LOG_RAW_HEXDUMP_INFO(&beacon_nonce, 12);
+			NRF_LOG_RAW_INFO("Key:\n");
+			NRF_LOG_RAW_HEXDUMP_INFO(beacon_key, 16);
+	#endif
 			aes_ccm_encrypt_and_tag(beacon_key,
 	                (uint8_t*)&beacon_nonce, sizeof(beacon_nonce),
 	                                   &aad, sizeof(aad),
-	                      (uint8_t*)p_event, p_event->len + 3,
+	                      (uint8_t*)p_event, evt_len,
 	                      (uint8_t*)p_event,
 	                                    mic, 4);
 
@@ -143,9 +145,12 @@ int mi_beacon_data_set(mibeacon_config_t const * const config, uint8_t *output, 
 
 			memcpy(output, mic, sizeof(mic));
 			*output_len += 3 + sizeof(mic);
-
-			NRF_LOG_RAW_INFO("Cipher + MIC:");
-			NRF_LOG_HEXDUMP_INFO((uint8_t*)p_event, p_event->len + 3);
+	#if (PRINT_ENC_CTX == 1)
+			NRF_LOG_RAW_INFO("Cipher:\n");
+			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)p_event, evt_len);
+			NRF_LOG_RAW_INFO("MIC:\n");
+			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)mic, 4);
+	#endif
 		}
 		else {
 			return -1;
@@ -168,15 +173,13 @@ static void mibeacon_timer_handler(void * p_context)
 		m_beacon_timer_is_running = false;
 		app_timer_stop(mibeacon_timer);
 		NRF_LOG_INFO("mibeacon event adv end.\n");
-		
 	} else {
-		NRF_LOG_RAW_HEXDUMP_INFO(item, item[2]+3);
 		m_beacon_timer_is_running = true;
 		app_timer_start(mibeacon_timer, APP_TIMER_TICKS(3000, 0), NULL);
 
 		mibeacon_config_t beacon_cfg = {0};
 		beacon_cfg.frame_ctrl.version = 4;
-		beacon_cfg.frame_ctrl.is_encrypt = 0;
+		beacon_cfg.frame_ctrl.is_encrypt = 1;
 		beacon_cfg.pid = m_beacon_data.pid;
 		beacon_cfg.p_event = (void*)item;
 		mi_beacon_data_set(&beacon_cfg, adv_data, &adv_len);
@@ -197,7 +200,7 @@ static void mibeacon_timer_handler(void * p_context)
 	}
 }
 
-int mibeacon_event_push(evt_t type, uint8_t len, void *val)
+int mibeacon_event_push(mibeacon_obj_t type, uint8_t len, void *val)
 {
 	uint32_t errno;
 	uint8_t item[EVT_MAX_SIZE];
@@ -211,9 +214,11 @@ int mibeacon_event_push(evt_t type, uint8_t len, void *val)
 	memcpy(item+3, (uint8_t*)val, len);
 
 	errno = app_mailbox_put(&mibeacon_mailbox, item);
-	APP_ERROR_CHECK(errno);
+	if(errno != MI_SUCCESS)
+		NRF_LOG_ERROR("push beacon event errno %d\n", errno);
 
 	if (m_beacon_timer_is_running != true ) {
+		/* All event be processed in mibeacon_timer_handler() */
 		errno = app_timer_start(mibeacon_timer, APP_TIMER_TICKS(10, 0), NULL);
 		APP_ERROR_CHECK(errno);
 	}

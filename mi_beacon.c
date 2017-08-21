@@ -11,8 +11,8 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
-#define PRINT_CIPHER 1
-#define EVT_MAX_SIZE 16
+#define PRINT_ENC_CTX          0
+#define EVT_MAX_SIZE           16
 #define BLE_UUID_MI_SERVICE    0xFE95
 
 APP_MAILBOX_DEF(mibeacon_mailbox, 4, EVT_MAX_SIZE);
@@ -125,7 +125,7 @@ int mi_beacon_data_set(mibeacon_config_t const * const config, uint8_t *output, 
 			uint8_t mic[4];
 			uint8_t aad = 0x11;
 			uint8_t evt_len = p_event->len+3;
-	#if (PRINT_CIPHER == 1)
+	#if (PRINT_ENC_CTX == 1)
 			NRF_LOG_RAW_INFO("Plain text:\n");
 			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)p_event, evt_len);
 			NRF_LOG_RAW_INFO("Nonce:\n");
@@ -145,7 +145,7 @@ int mi_beacon_data_set(mibeacon_config_t const * const config, uint8_t *output, 
 
 			memcpy(output, mic, sizeof(mic));
 			*output_len += 3 + sizeof(mic);
-	#if (PRINT_CIPHER == 1)
+	#if (PRINT_ENC_CTX == 1)
 			NRF_LOG_RAW_INFO("Cipher:\n");
 			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)p_event, evt_len);
 			NRF_LOG_RAW_INFO("MIC:\n");

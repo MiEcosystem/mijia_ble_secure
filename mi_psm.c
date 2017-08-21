@@ -80,7 +80,7 @@ int mi_psm_record_write(uint16_t rec_key, uint8_t *in, uint16_t in_len)
     fds_record_t        record;
     fds_record_chunk_t  record_chunk;
 	fds_record_desc_t   record_desc;
-    fds_find_token_t    ftok;
+    fds_find_token_t    ftok = {0};
 	
 	// Set up data.
     record_chunk.p_data         = in;
@@ -96,19 +96,22 @@ int mi_psm_record_write(uint16_t rec_key, uint8_t *in, uint16_t in_len)
     if (ret == FDS_SUCCESS)
     {
         ret = fds_record_update(&record_desc, &record);
-		if (ret != FDS_SUCCESS)
-		{
-			NRF_LOG_INFO("mi psm update KEY %X failed :%d \n", rec_key, ret);
-			ret = MI_ERROR_INTERNAL;
-		}
     }
 	else {
 		ret = fds_record_write(&record_desc, &record); 
+	}
+
+	if (ret == FDS_ERR_NO_SPACE_IN_QUEUES)
+	{
+		NRF_LOG_INFO("mi psm write KEY %X failed :%d \n", rec_key, ret);
+		ret = MI_ERROR_RESOURCES;
+	}
+	else if (ret == FDS_ERR_NO_SPACE_IN_FLASH)
+	{
+		NRF_LOG_INFO("mi psm startup fds_gc().\n");
+		ret = fds_gc();
 		if (ret != FDS_SUCCESS)
-		{
-			NRF_LOG_INFO("mi psm write KEY %X failed :%d \n", rec_key, ret);
-			ret = MI_ERROR_INTERNAL;
-		}
+			NRF_LOG_ERROR("WTF? \n");
 	}
     
     return ret;
@@ -120,7 +123,7 @@ int mi_psm_record_read(uint16_t rec_key, uint8_t *out, uint16_t out_len)
 	uint32_t ret = 0;
 	fds_flash_record_t  flash_record;
     fds_record_desc_t   record_desc;
-    fds_find_token_t    ftok;
+    fds_find_token_t    ftok = {0};
 
 	ret = fds_record_find(MI_RECORD_FILE_ID, rec_key, &record_desc, &ftok);
     if (ret == FDS_SUCCESS)
@@ -155,7 +158,7 @@ int mi_psm_record_delete(uint16_t rec_key)
 {
 	uint32_t ret = 0;
     fds_record_desc_t   record_desc;
-    fds_find_token_t    ftok;
+    fds_find_token_t    ftok = {0};
 
 	ret = fds_record_find(MI_RECORD_FILE_ID, rec_key, &record_desc, &ftok);
     if (ret == FDS_SUCCESS)

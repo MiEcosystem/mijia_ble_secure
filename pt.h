@@ -175,11 +175,11 @@ typedef struct {
  * \hideinitializer
  */
 #define PT_WAIT_UNTIL(pt, condition)	        \
-  do {						\
-    LC_SET((pt)->lc);				\
-    if(!(condition)) {				\
-      return PT_WAITING;			\
-    }						\
+  do {                                          \
+    LC_SET((pt)->lc);                           \
+    if(!(condition)) {                          \
+      return PT_WAITING;                        \
+    }                                           \
   } while(0)
 
 /**

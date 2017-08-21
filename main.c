@@ -710,12 +710,11 @@ int main(void)
     services_init();
     advertising_init();
     conn_params_init();
-	mibeacon_init();
-
-	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
 
 	/* <!> mi_psm_init() must be called after ble_stack_init(). */
 	mi_psm_init();
+	mibeacon_init();
+	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
 	
 
 #ifdef M_TEST

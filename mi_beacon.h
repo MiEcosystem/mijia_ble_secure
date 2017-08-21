@@ -73,7 +73,7 @@ typedef struct {
 
 int mi_beacon_data_set(mibeacon_config_t const * const in, uint8_t *out, uint8_t *out_len);
 int mibeacon_event_push(mibeacon_obj_t evt, uint8_t len, void *val);
-int mibeacon_init();
+int mibeacon_init(void);
 
 
 #endif  /* __MI_BEACON_H__ */ 

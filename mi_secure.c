@@ -161,12 +161,14 @@ const uint8_t mk_info[] = "smartcfg-masterkey-info";
 typedef struct {
 	int start;
 	int interval;
+	int (*handler)(void);
 } timer_t;
 
 static uint32_t schd_time;
 static uint32_t schd_stat;
 static uint32_t schd_interval = 64;
 static pt_t pt1, pt2, pt3, pt4;
+static timer_t timeout_timer;
 
 static int timer_expired(timer_t *t)
 { return (int)(schd_time - t->start) >= (int)t->interval; }
@@ -340,76 +342,9 @@ static int pthd_send(pt_t *pt, reliable_xfer_t *pxfer)
 		}
 		pxfer->curr_sn = 0;
 	}
-
 	PT_END(pt);
 }
 
-#if 0
-uint8_t rl_xfer_mode = 0; // idle:0  rx:1  tx:2   error:3
-pt_t pt_rl_rx;
-int rl_rxd_thread(pt_t *pt, reliable_xfer_frame_t *pframe, uint8_t len)
-{
-//	if (rl_xfer_mode != 1 || rl_xfer_mode)
-//		PT_EXIT(pt);
-
-	static timer_t rxd_timer;
-	static uint16_t sn;
-
-	PT_BEGIN(pt);
-	rl_xfer_mode = 1;
-	// exchange data head : data type + data pkg cnt
-	if (pframe->sn == 0 && pframe->ctrl.mode == MODE_CMD) {
-		fctrl_cmd_t cmd = (fctrl_cmd_t)pframe->ctrl.type;
-		rxfer_control_block.mode = MODE_CMD;
-		rxfer_control_block.type = cmd;
-		switch (cmd) {
-			case DEV_CERT:
-				rxfer_control_block.tx_num = *(uint16_t*)pframe->ctrl.arg;
-				break;
-			default:
-				NRF_LOG_ERROR("Unknow reliable CMD.\n");
-		}
-	}
-	else {
-		rl_xfer_mode = 3;
-		PT_EXIT(pt);
-	}
-
-//	APP Layer PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
-	timer_set(&rxd_timer, 1000);
-	while(pframe->sn > 0 && pframe->sn < rxfer_control_block.tx_num && !timer_expired(&rxd_timer)) {
-		memcpy(rxfer_control_block.pdata + (pframe->sn - 1) * 18, pframe->data, len-sizeof(pframe->sn));
-		timer_set(&rxd_timer, 1000);
-		PT_YIELD(pt);
-	}
-	
-	if (pframe->sn == rxfer_control_block.tx_num)
-		memcpy(rxfer_control_block.pdata + (pframe->sn - 1) * 18, pframe->data, len-sizeof(pframe->sn));
-	else {
-		rl_xfer_mode = 3;
-		PT_EXIT(pt);
-	}
-
-// <!> BUG : if sd_ble_gatts_hvx has no TX packet for the ackonwleage
-	while(1) {
-		sn = find_lost_sn(&rxfer_control_block);
-		if (sn == 0) {
-			reliable_xfer_ack(A_SUCCESS);
-			break;
-		}
-		else {
-			reliable_xfer_ack(A_LOST, sn);
-			PT_WAIT_UNTIL(pt, pframe->sn == sn);
-			memcpy(rxfer_control_block.pdata + (sn - 1) * 18, pframe->data, len-sizeof(sn));
-		}
-	}
-
-	rl_xfer_mode = 0;
-	PT_END(pt);
-}
-#endif
-
-static timer_t timeout_timer;
 static int format_rx_cb(reliable_xfer_t *pxfer, void *p_rxd, uint16_t rxd_bytes)
 {
 	uint8_t last_bytes = rxd_bytes % 18;
@@ -617,7 +552,7 @@ static int msc_decode_twi_buf(msc_xfer_control_block_t *p_cb)
 }
 
 static pt_t pt_msc_thd;
-static int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
+int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 {
 	uint32_t err_code;
 
@@ -725,7 +660,6 @@ static int reg_auth(pt_t *pt)
 	PT_WAIT_UNTIL(pt, auth_recv() != REG_START);
 	if (auth_recv() != REG_SUCCESS) {
 		NRF_LOG_ERROR("Auth failed.\n");
-		mi_scheduler_stop(REG_FAILED);
 		PT_EXIT(pt);
 	}
 
@@ -816,7 +750,6 @@ static int reg_msc(pt_t *pt)
 	SET_DATA_VAILD(flags.eph_key);
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_sha));
-
 	msc_control_block = MSC_XFER(MSC_SIGN, dev_sha, 32, dev_sign, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.dev_sign);
@@ -866,6 +799,8 @@ static void reg_procedure()
 
 static int login_auth(pt_t *pt)
 {
+	uint32_t errno;
+	uint32_t crc32;
 	PT_BEGIN(pt);
 
 #if ENC_LTMK
@@ -888,7 +823,7 @@ static int login_auth(pt_t *pt)
 
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.encrypt_login_data));
 
-	uint8_t errno = 
+	errno = 
 	aes_ccm_auth_decrypt(session_key.app_key,
 	                               nonce,  sizeof(nonce),
 	                                NULL,  0,
@@ -896,7 +831,7 @@ static int login_auth(pt_t *pt)
 	    (void*)&encrypt_login_data.crc32,
 	              encrypt_login_data.mic,  4);
 
-	uint32_t crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
+	crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
 
   	if (crc32 == encrypt_login_data.crc32) {
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
@@ -912,12 +847,10 @@ sha256_hkdf(        LTMK,         sizeof(LTMK),
 set_beacon_key(cloud_key.app_key);
 
 		key_id = 0;
-		mi_scheduler_stop(LOG_SUCCESS);
 	}
 	else {
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
 		NRF_LOG_ERROR("LOG FAILED. %d\n", errno);
-		mi_scheduler_stop(LOG_FAILED);
 	}
 
 	PT_END(pt);
@@ -1238,7 +1171,7 @@ int test_thd(pt_t *pt)
 	mi_session_encrypt(msg, 10, msg);
 	NRF_LOG_RAW_HEXDUMP_INFO(msg, 16);
 
-	mi_session_decrypt(msg, 16, cipher);
+	mi_session_decrypt(msg, 10+6, cipher);
 	NRF_LOG_RAW_HEXDUMP_INFO(cipher, 16);
 
 //	i = 1000;

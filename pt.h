@@ -33,26 +33,12 @@
  * $Id: pt.h,v 1.7 2006/10/02 07:52:56 adam Exp $
  */
 
-/**
- * \addtogroup pt
- * @{
- */
-
-/**
- * \file
- * Protothreads implementation.
- * \author
- * Adam Dunkels <adam@sics.se>
- *
- */
-
 #ifndef __PT_H__
 #define __PT_H__
 
 /**
  * \file
  * Implementation of local continuations based on switch() statment
- * \author Adam Dunkels <adam@sics.se>
  *
  * This implementation of local continuations uses the C switch()
  * statement to resume execution of a function somewhere inside the
@@ -69,30 +55,22 @@
 /* WARNING! lc implementation using switch() does not work if an
    LC_SET() is done within another switch() statement! */
 
-/** \hideinitializer */
 typedef unsigned short lc_t;
 #define LC_INIT(s) s = 0;
 #define LC_RESUME(s) switch(s) { case 0:
 #define LC_SET(s) s = __LINE__; case __LINE__:
 #define LC_END(s) }
 
-struct pt {
-  lc_t lc;
-};
-
 typedef struct {
 	lc_t lc;
+	char status;
+	char reserved;
 } pt_t;
 
 #define PT_WAITING 0
 #define PT_YIELDED 1
 #define PT_EXITED  2
 #define PT_ENDED   3
-
-/**
- * \name Initialization
- * @{
- */
 
 /**
  * Initialize a protothread.
@@ -107,13 +85,6 @@ typedef struct {
  * \hideinitializer
  */
 #define PT_INIT(pt)   LC_INIT((pt)->lc)
-
-/** @} */
-
-/**
- * \name Declaration and definition
- * @{
- */
 
 /**
  * Declaration of a protothread.
@@ -156,13 +127,6 @@ typedef struct {
 #define PT_END(pt) LC_END((pt)->lc); PT_YIELD_FLAG = 0; \
                    PT_INIT(pt); return PT_ENDED; }
 
-/** @} */
-
-/**
- * \name Blocked wait
- * @{
- */
-
 /**
  * Block and wait until condition is true.
  *
@@ -195,13 +159,6 @@ typedef struct {
  */
 #define PT_WAIT_WHILE(pt, cond)  PT_WAIT_UNTIL((pt), !(cond))
 
-/** @} */
-
-/**
- * \name Hierarchical protothreads
- * @{
- */
-
 /**
  * Block and wait until a child protothread completes.
  *
@@ -232,18 +189,11 @@ typedef struct {
  *
  * \hideinitializer
  */
-#define PT_SPAWN(pt, child, thread)		\
-  do {						\
-    PT_INIT((child));				\
-    PT_WAIT_THREAD((pt), (thread));		\
+#define PT_SPAWN(pt, child, thread)                                            \
+  do {                                                                         \
+    PT_INIT((child));                                                          \
+    PT_WAIT_THREAD((pt), (thread));                                            \
   } while(0)
-
-/** @} */
-
-/**
- * \name Exiting and restarting
- * @{
- */
 
 /**
  * Restart the protothread.
@@ -255,10 +205,10 @@ typedef struct {
  *
  * \hideinitializer
  */
-#define PT_RESTART(pt)				\
-  do {						\
-    PT_INIT(pt);				\
-    return PT_WAITING;			\
+#define PT_RESTART(pt)              \
+  do {                              \
+    PT_INIT(pt);                    \
+    return PT_WAITING;              \
   } while(0)
 
 /**
@@ -278,13 +228,6 @@ typedef struct {
     return PT_EXITED;			\
   } while(0)
 
-/** @} */
-
-/**
- * \name Calling a protothread
- * @{
- */
-
 /**
  * Schedule a protothread.
  *
@@ -298,13 +241,6 @@ typedef struct {
  * \hideinitializer
  */
 #define PT_SCHEDULE(f) ((f) < PT_EXITED)
-
-/** @} */
-
-/**
- * \name Yielding from a protothread
- * @{
- */
 
 /**
  * Yield from the current protothread.
@@ -345,68 +281,64 @@ typedef struct {
     }						\
   } while(0)
 
-/** @} */
-
 
 struct pt_sem {
   unsigned int count;
 };
 	
-	/**
-	 * Initialize a semaphore
-	 *
-	 * This macro initializes a semaphore with a value for the
-	 * counter. Internally, the semaphores use an "unsigned int" to
-	 * represent the counter, and therefore the "count" argument should be
-	 * within range of an unsigned int.
-	 *
-	 * \param s (struct pt_sem *) A pointer to the pt_sem struct
-	 * representing the semaphore
-	 *
-	 * \param c (unsigned int) The initial count of the semaphore.
-	 * \hideinitializer
-	 */
+/**
+ * Initialize a semaphore
+ *
+ * This macro initializes a semaphore with a value for the
+ * counter. Internally, the semaphores use an "unsigned int" to
+ * represent the counter, and therefore the "count" argument should be
+ * within range of an unsigned int.
+ *
+ * \param s (struct pt_sem *) A pointer to the pt_sem struct
+ * representing the semaphore
+ *
+ * \param c (unsigned int) The initial count of the semaphore.
+ * \hideinitializer
+ */
 #define PT_SEM_INIT(s, c) (s)->count = c
 	
-	/**
-	 * Wait for a semaphore
-	 *
-	 * This macro carries out the "wait" operation on the semaphore. The
-	 * wait operation causes the protothread to block while the counter is
-	 * zero. When the counter reaches a value larger than zero, the
-	 * protothread will continue.
-	 *
-	 * \param pt (struct pt *) A pointer to the protothread (struct pt) in
-	 * which the operation is executed.
-	 *
-	 * \param s (struct pt_sem *) A pointer to the pt_sem struct
-	 * representing the semaphore
-	 *
-	 * \hideinitializer
-	 */
+/**
+ * Wait for a semaphore
+ *
+ * This macro carries out the "wait" operation on the semaphore. The
+ * wait operation causes the protothread to block while the counter is
+ * zero. When the counter reaches a value larger than zero, the
+ * protothread will continue.
+ *
+ * \param pt (struct pt *) A pointer to the protothread (struct pt) in
+ * which the operation is executed.
+ *
+ * \param s (struct pt_sem *) A pointer to the pt_sem struct
+ * representing the semaphore
+ *
+ * \hideinitializer
+ */
 #define PT_SEM_WAIT(pt, s)	\
 	  do {						\
 		PT_WAIT_UNTIL(pt, (s)->count > 0);		\
 		--(s)->count;				\
 	  } while(0)
 	
-	/**
-	 * Signal a semaphore
-	 *
-	 * This macro carries out the "signal" operation on the semaphore. The
-	 * signal operation increments the counter inside the semaphore, which
-	 * eventually will cause waiting protothreads to continue executing.
-	 *
-	 * \param pt (struct pt *) A pointer to the protothread (struct pt) in
-	 * which the operation is executed.
-	 *
-	 * \param s (struct pt_sem *) A pointer to the pt_sem struct
-	 * representing the semaphore
-	 *
-	 * \hideinitializer
-	 */
+/**
+ * Signal a semaphore
+ *
+ * This macro carries out the "signal" operation on the semaphore. The
+ * signal operation increments the counter inside the semaphore, which
+ * eventually will cause waiting protothreads to continue executing.
+ *
+ * \param pt (struct pt *) A pointer to the protothread (struct pt) in
+ * which the operation is executed.
+ *
+ * \param s (struct pt_sem *) A pointer to the pt_sem struct
+ * representing the semaphore
+ *
+ * \hideinitializer
+ */
 #define PT_SEM_SIGNAL(pt, s) ++(s)->count
 
 #endif /* __PT_H__ */
-
-/** @} */

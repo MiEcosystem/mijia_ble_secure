@@ -552,13 +552,13 @@ static void advertising_init(void)
 	sd_ble_gap_address_get(&dev_mac);
 #endif
 
-	mibeacon_config_t  beacon_cfg = {0};
+	mibeacon_config_t  beacon_cfg     = {0};
 	beacon_cfg.frame_ctrl.version     = 4;
 	beacon_cfg.pid                    = APP_PRODUCT_ID;
 	beacon_cfg.p_capability           = &cap;
 	beacon_cfg.p_mac                  = dev_mac.addr;
 	
-	mi_beacon_data_set(&beacon_cfg, data, &total_len);
+	mibeacon_data_set(&beacon_cfg, data, &total_len);
 
     /* Indicating Mi Service */
 	ble_advdata_service_data_t serviceData;
@@ -733,7 +733,7 @@ int main(void)
 		if (get_lock_opcode(&lock_opcode) == 0) {
 			switch(lock_opcode) {
 				case 0:
-					NRF_LOG_INFO("lock\n");
+					NRF_LOG_INFO(" unlock \n");
 					bsp_board_led_off(3);
 
 					lock_event.action = 0;
@@ -741,11 +741,11 @@ int main(void)
 					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 				
 				case 1:
-					NRF_LOG_INFO("unlock\n");
+					NRF_LOG_INFO(" lock \n");
 					bsp_board_led_on(3);
 
 					lock_event.action = 1;
@@ -753,11 +753,11 @@ int main(void)
 					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 
 				case 2:
-					NRF_LOG_INFO("bolt\n");
+					NRF_LOG_INFO(" bolt \n");
 					bsp_board_led_off(3);
 
 					lock_event.action = 2;
@@ -765,7 +765,7 @@ int main(void)
 					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 
 				default:

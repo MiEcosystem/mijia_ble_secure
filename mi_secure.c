@@ -4,7 +4,6 @@
 #include "pt.h"
 #include "nrf_drv_twi_patched.h"
 #include "nrf_gpio.h"
-#include "app_util.h"
 
 #define NRF_LOG_MODULE_NAME "SCHD"
 #include "nrf_log.h"
@@ -180,9 +179,13 @@ extern fast_xfer_t fast_control_block;
 extern reliable_xfer_t rxfer_control_block;
 
 static void mi_scheduler(void * p_context);
+static void reg_procedure(void);
+static void admin_login_procedure(void);
+static void shared_login_procedure(void);
 
 static uint32_t key_id;
 static mi_author_stat_t mi_authorization_status;
+
 uint32_t get_mi_key_id(void)
 {
 	return key_id;
@@ -246,6 +249,130 @@ uint32_t mi_scheduler_stop(int type)
 	errno = app_timer_stop(mi_schd_timer_id);
 	APP_ERROR_CHECK(errno);
 	return errno;
+}
+
+#ifdef M_TEST
+void aes_ecb_test();
+void aes_ccm_test();
+void aes_ccm_test2();
+static uint8_t msg[20] = "helloworld";
+static uint8_t cipher[20] = {0};
+static uint8_t plain[20] = {0};
+uint8_t test_str[] = {12, 1,2,3,4,5,6,7,8,9,0,1,2,
+					   1, 0,
+					  16, 0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30,
+                      16, 1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6};
+
+int test_thd(pt_t *pt)
+{
+	PT_BEGIN(pt);
+	static int i;
+	static uint16_t len;
+//	session_ctx_t key = {0};
+//	memcpy(key.app_key, "DUMMY KEY", 10);
+//	memcpy(key.dev_key, "DUMMY KEY", 10);
+//	memcpy(key.dev_iv , "DUMMY KEY", 4);
+//	memcpy(key.app_iv , "DUMMY KEY", 4);
+//	mi_encrypt_init(&key);
+
+//	mi_session_encrypt(msg, 10, msg);
+//	NRF_LOG_RAW_HEXDUMP_INFO(msg, 16);
+
+//	mi_session_decrypt(msg, 10+6, cipher);
+//	NRF_LOG_RAW_HEXDUMP_INFO(cipher, 16);
+
+	msc_control_block = MSC_XFER(MSC_CERTS_LEN, NULL, 0, (void*)&m_certs_len, sizeof(m_certs_len));
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+
+	m_certs_len.dev  = __REV16(m_certs_len.dev);
+	m_certs_len.manu = __REV16(m_certs_len.manu);
+	
+	msc_control_block = MSC_XFER(MSC_DEV_CERT, NULL, 0, dev_cert, m_certs_len.dev);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+
+	NRF_LOG_RAW_INFO("dev_cert %d bytes\n", m_certs_len.dev);
+	PT_YIELD(pt);
+	for (i = 0; i*96 < m_certs_len.dev; i++) {
+		len = m_certs_len.dev - i*96;
+		len = len > 96 ? 96 : len;
+		NRF_LOG_RAW_HEXDUMP_INFO(dev_cert + i*96, len);
+		PT_YIELD(pt);
+	}
+
+	msc_control_block = MSC_XFER(MSC_MANU_CERT, NULL, 0, manu_cert, m_certs_len.manu);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	PT_YIELD(pt);
+	NRF_LOG_RAW_INFO("manu_cert %d bytes\n", m_certs_len.manu);
+	PT_YIELD(pt);
+	for (i = 0; i*96 < m_certs_len.dev; i++) {
+		len = m_certs_len.manu - i*96;
+		len = len > 96 ? 96 : len;
+		NRF_LOG_RAW_HEXDUMP_INFO(manu_cert + i*96, len);
+		PT_YIELD(pt);
+	}
+
+//	i = 1000;
+//	nrf_gpio_pin_set(PROFILE_PIN);
+//	while(i--)
+//	aes_ccm_test();
+//	nrf_gpio_pin_clear(PROFILE_PIN);
+	
+//	i = 1000;
+//	nrf_gpio_pin_set(PROFILE_PIN);
+//	while(i--)
+//	aes_ccm_test2();
+//	nrf_gpio_pin_clear(PROFILE_PIN);
+
+//	i = 1;
+//	nrf_gpio_pin_set(PROFILE_PIN);
+//	while(i--)
+//	sha256_hkdf(   test_str,          32,
+//		  (void *)share_salt,         sizeof(share_salt)-1,
+//	      (void *)share_info,         sizeof(share_info)-1,
+//	    (void *)&session_key,         64);
+//	nrf_gpio_pin_clear(PROFILE_PIN);
+//	msc_control_block = MSC_XFER(MSC_AESCCM_ENC, test_str, sizeof(test_str), cipher, 20);
+//	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+//	NRF_LOG_HEXDUMP_INFO(cipher, 20);
+
+//	PT_YIELD(pt);
+
+	PT_WAIT_UNTIL(pt, 0);
+	PT_END(pt);
+}
+#endif
+
+static void mi_scheduler(void * p_context)
+{
+	schd_time++;
+	uint32_t *p_auth_status = p_context;
+	uint8_t auth_type = *p_auth_status & 0xF0;
+	
+#ifdef M_TEST
+
+//	fast_xfer_test(&pt1);
+//	reliable_xfer_test(&pt2);
+	test_thd(&pt3);
+
+#else
+	
+	nrf_gpio_pin_set(PROFILE_PIN);
+
+	switch (auth_type) {
+		case REG_TYPE:
+			reg_procedure();
+			break;
+		case LOG_TYPE:
+			admin_login_procedure();
+			break;
+		case SHARED_TYPE:
+			shared_login_procedure();
+			break;
+	}
+	
+	nrf_gpio_pin_clear(PROFILE_PIN);
+
+#endif
 }
 
 static int fast_xfer_test(pt_t *pt)
@@ -363,15 +490,27 @@ static int format_tx_cb(reliable_xfer_t *pxfer, void *p_txd, uint16_t txd_bytes)
 	return 0;
 }
 
+
 static pt_t pt_r_rx_thd;
 static int rxfer_rx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 {
+	static uint8_t retries_num;
+
 	PT_BEGIN(pt);
 
 	/* Recive data */
 	PT_WAIT_UNTIL(pt, pxfer->rx_num != 0 && pxfer->cmd == data_type);
 	if (pxfer->rx_num <= pxfer->max_rx_num && pxfer->pdata != NULL) {
 		PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
+/*
+		for (retries_num = 0; retries_num < 3; retries_num++) {
+			if (reliable_xfer_ack(A_READY) == NRF_SUCCESS)
+				break;
+			else
+				PT_YIELD(pt);
+		}
+		if (retries_num == 3) PT_EXIT(pt);
+ */	
 		pxfer->state = RXFER_RXD;
 	} else {
 		PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_CANCEL) == NRF_SUCCESS);
@@ -386,6 +525,7 @@ static int rxfer_rx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	pxfer->state = RXFER_WAIT_CMD;
 	pxfer->rx_num = 0;
 	pxfer->pdata  = 0;
+
 	PT_END(pt);
 }
 
@@ -602,119 +742,6 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 }
 
 
-static int reg_auth(pt_t *pt)
-{
-	PT_BEGIN(pt);
-	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.msc_info));
-
-	ble_gap_addr_t   dev_mac;
-	uint8_t          dev_mac_be[6];
-
-	#if (NRF_SD_BLE_API_VERSION == 3)
-        sd_ble_gap_addr_get(&dev_mac);
-	#else
-        sd_ble_gap_address_get(&dev_mac);
-	#endif
-
-	for (int i = 0; i<6; i++)
-		dev_mac_be[i] = dev_mac.addr[5-i];
-
-	mbedtls_sha256_context sha256_ctx;
-	mbedtls_sha256_init(&sha256_ctx);
-	mbedtls_sha256_starts(&sha256_ctx, 0 );
-	mbedtls_sha256_update(&sha256_ctx, msc_info,    sizeof(msc_info));
-	mbedtls_sha256_update(&sha256_ctx, dev_mac_be,  sizeof(dev_mac_be));
-	mbedtls_sha256_update(&sha256_ctx, dev_pub,     64);
-	mbedtls_sha256_finish(&sha256_ctx, dev_sha);
-	SET_DATA_VAILD(flags.dev_sha);
-#if (PRINT_MSC_INFO  == 1)
-	NRF_LOG_RAW_INFO("MSC info\t");
-	NRF_LOG_HEXDUMP_INFO(msc_info, 12);
-#endif
-#if (PRINT_MAC       == 1)
-	NRF_LOG_RAW_INFO("MAC\t");
-	NRF_LOG_HEXDUMP_INFO(dev_be, 6);
-#endif
-#if (PRINT_DEV_PUBKEY == 1)
-	NRF_LOG_RAW_INFO("DEV_PUBKEY\t");
-	NRF_LOG_HEXDUMP_INFO(dev_pub, 16);
-#endif
-#if (PRINT_SHA256     == 1)
-	NRF_LOG_RAW_INFO("SHA256\t");
-	NRF_LOG_HEXDUMP_INFO(dev_sha, 32);
-#endif
-
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.eph_key));
-	sha256_hkdf(     eph_key,         sizeof(eph_key),
-	        (void *)reg_salt,         sizeof(reg_salt)-1,
-	        (void *)reg_info,         sizeof(reg_info)-1,
-	    (void *)&session_key,         sizeof(session_key));
-
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_sign));
-
-	aes_ccm_encrypt_and_tag(session_key.dev_key, nonce, sizeof(nonce), NULL, 0,
-	                        dev_sign, 64, encrypt_reg_data.cipher, encrypt_reg_data.mic, 4);
-	SET_DATA_VAILD(flags.encrypt_reg_data);
-
-	PT_WAIT_UNTIL(pt, auth_recv() != REG_START);
-	if (auth_recv() != REG_SUCCESS) {
-		NRF_LOG_ERROR("Auth failed.\n");
-		PT_EXIT(pt);
-	}
-
-	while(rand_key[0] < 16) {
-		sd_rand_application_bytes_available_get(rand_key);
-		PT_YIELD(pt);
-	}
-	sd_rand_application_vector_get(rand_key, 16);
-
-	sha256_hkdf(     eph_key,         sizeof(eph_key),
-	        (void *) mk_salt,         sizeof(mk_salt)-1,
-	        (void *) mk_info,         sizeof(mk_info)-1,
-	                    LTMK,         sizeof(LTMK));
-	SET_DATA_VAILD(flags.LTMK);
-//	aes_ccm_encrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, LTMK, 32, MKPK.cipher);
-	
-	// fs_store(rand_key);
-	// log encrypt procedure
-	
-//	PT_WAIT_UNTIL(pt, 0);
-	PT_END(pt);
-}
-
-static int reg_ble(pt_t *pt)
-{
-	PT_BEGIN(pt);
-
-	format_rx_cb(&rxfer_control_block, app_pub, sizeof(app_pub));
-	PT_SPAWN(pt, &pt_r_rx_thd, rxfer_rx_thd(&pt_r_rx_thd, &rxfer_control_block, DEV_PUBKEY));
-	SET_DATA_VAILD(flags.app_pub);
-	NRF_LOG_INFO("app_pub recived "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
-	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.msc_info));
-	format_tx_cb(&rxfer_control_block, msc_info, sizeof(msc_info) + sizeof(dev_pub));
-	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_PUBKEY));
-	NRF_LOG_INFO("dev_pub send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
-
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_cert));
-	format_tx_cb(&rxfer_control_block, dev_cert, m_certs_len.dev);
-	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_CERT));
-	NRF_LOG_INFO("dev_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
-	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.manu_cert));
-	format_tx_cb(&rxfer_control_block, manu_cert, m_certs_len.manu);
-	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_MANU_CERT));
-	NRF_LOG_INFO("manu_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
-	
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.encrypt_reg_data));
-	format_tx_cb(&rxfer_control_block, &encrypt_reg_data, sizeof(encrypt_reg_data));
-	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_SIGNATURE));
-	NRF_LOG_INFO("encrypt_reg_data send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
-
-	PT_END(pt);
-}
-
 static int reg_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
@@ -778,6 +805,119 @@ static int reg_msc(pt_t *pt)
 	PT_END(pt);
 }
 
+static int reg_ble(pt_t *pt)
+{
+	PT_BEGIN(pt);
+
+	format_rx_cb(&rxfer_control_block, app_pub, sizeof(app_pub));
+	PT_SPAWN(pt, &pt_r_rx_thd, rxfer_rx_thd(&pt_r_rx_thd, &rxfer_control_block, DEV_PUBKEY));
+	SET_DATA_VAILD(flags.app_pub);
+	NRF_LOG_INFO("app_pub recived "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
+	
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.msc_info));
+	format_tx_cb(&rxfer_control_block, msc_info, sizeof(msc_info) + sizeof(dev_pub));
+	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_PUBKEY));
+	NRF_LOG_INFO("dev_pub send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
+
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_cert));
+	format_tx_cb(&rxfer_control_block, dev_cert, m_certs_len.dev);
+	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_CERT));
+	NRF_LOG_INFO("dev_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
+	
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.manu_cert));
+	format_tx_cb(&rxfer_control_block, manu_cert, m_certs_len.manu);
+	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_MANU_CERT));
+	NRF_LOG_INFO("manu_cert send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
+	
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.encrypt_reg_data));
+	format_tx_cb(&rxfer_control_block, &encrypt_reg_data, sizeof(encrypt_reg_data));
+	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_SIGNATURE));
+	NRF_LOG_INFO("encrypt_reg_data send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
+
+	PT_END(pt);
+}
+
+static int reg_auth(pt_t *pt)
+{
+	PT_BEGIN(pt);
+	
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.msc_info));
+
+	ble_gap_addr_t   dev_mac;
+	uint8_t          dev_mac_be[6];
+
+	#if (NRF_SD_BLE_API_VERSION == 3)
+        sd_ble_gap_addr_get(&dev_mac);
+	#else
+        sd_ble_gap_address_get(&dev_mac);
+	#endif
+
+	for (int i = 0; i<6; i++)
+		dev_mac_be[i] = dev_mac.addr[5-i];
+
+	mbedtls_sha256_context sha256_ctx;
+	mbedtls_sha256_init(&sha256_ctx);
+	mbedtls_sha256_starts(&sha256_ctx, 0 );
+	mbedtls_sha256_update(&sha256_ctx, msc_info,    sizeof(msc_info));
+	mbedtls_sha256_update(&sha256_ctx, dev_mac_be,  sizeof(dev_mac_be));
+	mbedtls_sha256_update(&sha256_ctx, dev_pub,     64);
+	mbedtls_sha256_finish(&sha256_ctx, dev_sha);
+	SET_DATA_VAILD(flags.dev_sha);
+#if (PRINT_MSC_INFO   == 1)
+	NRF_LOG_RAW_INFO("MSC info\t");
+	NRF_LOG_HEXDUMP_INFO(msc_info, 12);
+#endif
+#if (PRINT_MAC        == 1)
+	NRF_LOG_RAW_INFO("MAC\t");
+	NRF_LOG_HEXDUMP_INFO(dev_be, 6);
+#endif
+#if (PRINT_DEV_PUBKEY == 1)
+	NRF_LOG_RAW_INFO("DEV_PUBKEY\t");
+	NRF_LOG_HEXDUMP_INFO(dev_pub, 16);
+#endif
+#if (PRINT_SHA256     == 1)
+	NRF_LOG_RAW_INFO("SHA256\t");
+	NRF_LOG_HEXDUMP_INFO(dev_sha, 32);
+#endif
+
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.eph_key));
+	sha256_hkdf(     eph_key,         sizeof(eph_key),
+	        (void *)reg_salt,         sizeof(reg_salt)-1,
+	        (void *)reg_info,         sizeof(reg_info)-1,
+	    (void *)&session_key,         sizeof(session_key));
+
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_sign));
+
+	aes_ccm_encrypt_and_tag(session_key.dev_key, nonce, sizeof(nonce), NULL, 0,
+	                        dev_sign, 64, encrypt_reg_data.cipher, encrypt_reg_data.mic, 4);
+	SET_DATA_VAILD(flags.encrypt_reg_data);
+
+	PT_WAIT_UNTIL(pt, auth_recv() != REG_START);
+	if (auth_recv() != REG_SUCCESS) {
+		NRF_LOG_ERROR("Auth failed.\n");
+		PT_EXIT(pt);
+	}
+
+	while(rand_key[0] < 16) {
+		sd_rand_application_bytes_available_get(rand_key);
+		PT_YIELD(pt);
+	}
+	sd_rand_application_vector_get(rand_key, 16);
+
+	sha256_hkdf(     eph_key,         sizeof(eph_key),
+	        (void *) mk_salt,         sizeof(mk_salt)-1,
+	        (void *) mk_info,         sizeof(mk_info)-1,
+	                    LTMK,         sizeof(LTMK));
+	SET_DATA_VAILD(flags.LTMK);
+//	aes_ccm_encrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, LTMK, 32, MKPK.cipher);
+	
+	// fs_store(rand_key);
+	// log encrypt procedure
+	
+//	PT_WAIT_UNTIL(pt, 0);
+	PT_END(pt);
+}
+
 static void reg_procedure()
 {
 	if (pt_flags.pt1 == 1)
@@ -797,7 +937,56 @@ static void reg_procedure()
 	}
 }
 
-static int login_auth(pt_t *pt)
+
+static int admin_msc(pt_t *pt)
+{
+	PT_BEGIN(pt);
+
+	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.dev_pub);
+
+#if ENC_LTMK
+	MKPK.id = 0;
+	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.MKPK);
+#else
+	MKPK.id = 1;
+	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)LTMK, 32);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.LTMK);
+#endif
+
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.app_pub));
+
+	msc_control_block = MSC_XFER(MSC_ECDHE, app_pub, 64, eph_key, 32);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	SET_DATA_VAILD(flags.eph_key);
+
+	PT_END(pt);
+}
+
+static int admin_ble(pt_t *pt)
+{
+	PT_BEGIN(pt);
+	
+	format_rx_cb(&rxfer_control_block, app_pub, sizeof(app_pub));
+	PT_SPAWN(pt, &pt_r_rx_thd, rxfer_rx_thd(&pt_r_rx_thd, &rxfer_control_block, DEV_PUBKEY));
+	SET_DATA_VAILD(flags.app_pub);
+
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
+	format_tx_cb(&rxfer_control_block, dev_pub, sizeof(dev_pub));
+	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_PUBKEY));
+
+	format_rx_cb(&rxfer_control_block, &encrypt_login_data, sizeof(encrypt_login_data));
+	PT_SPAWN(pt, &pt_r_rx_thd, rxfer_rx_thd(&pt_r_rx_thd, &rxfer_control_block, DEV_LOGIN_INFO));
+	SET_DATA_VAILD(flags.encrypt_login_data);
+
+	PT_END(pt);
+}
+
+static int admin_auth(pt_t *pt)
 {
 	uint32_t errno;
 	uint32_t crc32;
@@ -856,65 +1045,16 @@ set_beacon_key(cloud_key.app_key);
 	PT_END(pt);
 }
 
-static int login_ble(pt_t *pt)
-{
-	PT_BEGIN(pt);
-	
-	format_rx_cb(&rxfer_control_block, app_pub, sizeof(app_pub));
-	PT_SPAWN(pt, &pt_r_rx_thd, rxfer_rx_thd(&pt_r_rx_thd, &rxfer_control_block, DEV_PUBKEY));
-	SET_DATA_VAILD(flags.app_pub);
-
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.dev_pub));
-	format_tx_cb(&rxfer_control_block, dev_pub, sizeof(dev_pub));
-	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_PUBKEY));
-
-	format_rx_cb(&rxfer_control_block, &encrypt_login_data, sizeof(encrypt_login_data));
-	PT_SPAWN(pt, &pt_r_rx_thd, rxfer_rx_thd(&pt_r_rx_thd, &rxfer_control_block, DEV_LOGIN_INFO));
-	SET_DATA_VAILD(flags.encrypt_login_data);
-
-	PT_END(pt);
-}
-
-static int login_msc(pt_t *pt)
-{
-	PT_BEGIN(pt);
-
-	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	SET_DATA_VAILD(flags.dev_pub);
-
-#if ENC_LTMK
-	MKPK.id = 0;
-	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	SET_DATA_VAILD(flags.MKPK);
-#else
-	MKPK.id = 1;
-	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)LTMK, 32);
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	SET_DATA_VAILD(flags.LTMK);
-#endif
-
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.app_pub));
-
-	msc_control_block = MSC_XFER(MSC_ECDHE, app_pub, 64, eph_key, 32);
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	SET_DATA_VAILD(flags.eph_key);
-
-	PT_END(pt);
-}
-
-
-void login_procedure()
+void admin_login_procedure()
 {
 	if (pt_flags.pt1 == 1)
-		pt_flags.pt1 = PT_SCHEDULE(login_msc(&pt1));
+		pt_flags.pt1 = PT_SCHEDULE(admin_msc(&pt1));
 
 	if (pt_flags.pt2 == 1)
-		pt_flags.pt2 = PT_SCHEDULE(login_ble(&pt2));
+		pt_flags.pt2 = PT_SCHEDULE(admin_ble(&pt2));
 
 	if (pt_flags.pt3 == 1)
-		pt_flags.pt3 = PT_SCHEDULE(login_auth(&pt3));
+		pt_flags.pt3 = PT_SCHEDULE(admin_auth(&pt3));
 	
 	if (pt_flags.pt1 == 0 &&
 		pt_flags.pt2 == 0 &&
@@ -1143,98 +1283,3 @@ static void shared_login_procedure()
 	}
 }
 
-
-#ifdef M_TEST
-void aes_ecb_test();
-void aes_ccm_test();
-void aes_ccm_test2();
-static uint8_t msg[20] = "helloworld";
-static uint8_t cipher[20] = {0};
-static uint8_t plain[20] = {0};
-uint8_t test_str[] = {12, 1,2,3,4,5,6,7,8,9,0,1,2,
-					   1, 0,
-					  16, 0,'x',0xD,0xE,0xA,0xD,0xB,0xE,0xE,0xF,'a','b','c','d','e',30,
-                      16, 1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6};
-
-int test_thd(pt_t *pt)
-{
-	PT_BEGIN(pt);
-	int i;
-
-	session_ctx_t key = {0};
-	memcpy(key.app_key, "DUMMY KEY", 10);
-	memcpy(key.dev_key, "DUMMY KEY", 10);
-	memcpy(key.dev_iv , "DUMMY KEY", 4);
-	memcpy(key.app_iv , "DUMMY KEY", 4);
-	mi_encrypt_init(&key);
-
-	mi_session_encrypt(msg, 10, msg);
-	NRF_LOG_RAW_HEXDUMP_INFO(msg, 16);
-
-	mi_session_decrypt(msg, 10+6, cipher);
-	NRF_LOG_RAW_HEXDUMP_INFO(cipher, 16);
-
-//	i = 1000;
-//	nrf_gpio_pin_set(PROFILE_PIN);
-//	while(i--)
-//	aes_ccm_test();
-//	nrf_gpio_pin_clear(PROFILE_PIN);
-	
-//	i = 1000;
-//	nrf_gpio_pin_set(PROFILE_PIN);
-//	while(i--)
-//	aes_ccm_test2();
-//	nrf_gpio_pin_clear(PROFILE_PIN);
-
-//	i = 1;
-//	nrf_gpio_pin_set(PROFILE_PIN);
-//	while(i--)
-//	sha256_hkdf(   test_str,          32,
-//		  (void *)share_salt,         sizeof(share_salt)-1,
-//	      (void *)share_info,         sizeof(share_info)-1,
-//	    (void *)&session_key,         64);
-//	nrf_gpio_pin_clear(PROFILE_PIN);
-//	msc_control_block = MSC_XFER(MSC_AESCCM_ENC, test_str, sizeof(test_str), cipher, 20);
-//	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-//	NRF_LOG_HEXDUMP_INFO(cipher, 20);
-
-//	PT_YIELD(pt);
-
-	PT_WAIT_UNTIL(pt, 0);
-	PT_END(pt);
-}
-#endif
-
-static void mi_scheduler(void * p_context)
-{
-	schd_time++;
-	uint32_t *p_auth_status = p_context;
-	uint8_t auth_type = *p_auth_status & 0xF0;
-	
-#ifdef M_TEST
-
-//	fast_xfer_test(&pt1);
-//	reliable_xfer_test(&pt2);
-	test_thd(&pt3);
-
-#else
-	
-	nrf_gpio_pin_set(PROFILE_PIN);
-
-	switch (auth_type) {
-		case REG_TYPE:
-			reg_procedure();
-			break;
-		case LOG_TYPE:
-			login_procedure();
-			break;
-		case SHARED_TYPE:
-			shared_login_procedure();
-			break;
-	}
-	
-	nrf_gpio_pin_clear(PROFILE_PIN);
-
-#endif
-
-}

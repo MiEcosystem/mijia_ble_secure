@@ -10,7 +10,7 @@ extern "C"
 
 #define MI_SUCCESS                           (MI_ERROR_BASE_NUM + 0)  ///< Successful command
 
-#define MI_ERROR_SOFTDEVICE_NOT_ENABLED      (MI_ERROR_BASE_NUM + 2)  ///< SoftDevice has not been enabled
+#define MI_ERROR_NOT_INIT                    (MI_ERROR_BASE_NUM + 2)  ///< SoftDevice has not been enabled
 #define MI_ERROR_INTERNAL                    (MI_ERROR_BASE_NUM + 3)  ///< Internal Error
 #define MI_ERROR_NO_MEM                      (MI_ERROR_BASE_NUM + 4)  ///< No Memory for operation
 #define MI_ERROR_NOT_FOUND                   (MI_ERROR_BASE_NUM + 5)  ///< Not found

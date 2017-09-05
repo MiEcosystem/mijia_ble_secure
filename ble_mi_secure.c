@@ -118,19 +118,15 @@ static void on_write(ble_evt_t * p_ble_evt)
     ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
 	uint16_t   len = p_evt_write->len;
 	uint8_t *pdata = p_evt_write->data;
-    if ((len == 2) &&
-		((p_evt_write->handle == mi_srv.ctrl_handles.cccd_handle)   ||
-		 (p_evt_write->handle == mi_srv.fast_xfer_handles.cccd_handle) ||
-		 (p_evt_write->handle == mi_srv.secure_handles.cccd_handle)))
-    {
+    if (len == 2
+		&& (p_evt_write->handle == mi_srv.ctrl_handles.cccd_handle
+			|| p_evt_write->handle == mi_srv.fast_xfer_handles.cccd_handle
+			|| p_evt_write->handle == mi_srv.secure_handles.cccd_handle)) 
+	{
         if (ble_srv_is_notification_enabled(pdata))
-        {
             mi_srv.is_notification_enabled = true;
-        }
         else
-        {
             mi_srv.is_notification_enabled = false;
-        }
     }
     else if (p_evt_write->handle == mi_srv.ctrl_handles.value_handle)
     {
@@ -301,15 +297,15 @@ static void auth_handler(uint8_t *pdata, uint8_t len)
 	memcpy(&auth_value, pdata, len);
 	
 	switch (auth_value) {
-		case REG_START:
-		case LOG_START:
-		case SHARED_LOG_START:
-		case SHARED_LOG_START_W_CERT:
-			mi_scheduler_start(auth_value);
-			break;
-		default:
-			NRF_LOG_WARNING("UNKNOW START STATUS %X\n", auth_value);
-			break;
+	case REG_START:
+	case LOG_START:
+	case SHARED_LOG_START:
+	case SHARED_LOG_START_W_CERT:
+		mi_scheduler_start(auth_value);
+		break;
+	default:
+		NRF_LOG_WARNING("NON-START STATUS %X\n", auth_value);
+		break;
 	}
 
 	return;

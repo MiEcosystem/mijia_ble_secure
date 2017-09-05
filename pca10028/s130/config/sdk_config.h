@@ -2936,7 +2936,7 @@
  
 
 #ifndef APP_MAILBOX_ENABLED
-#define APP_MAILBOX_ENABLED 1
+#define APP_MAILBOX_ENABLED 0
 #endif
 // <q> APP_GPIOTE_ENABLED  - app_gpiote - GPIOTE events dispatcher
  
@@ -3429,7 +3429,7 @@
  
 
 #ifndef NRF_QUEUE_ENABLED
-#define NRF_QUEUE_ENABLED 0
+#define NRF_QUEUE_ENABLED 1
 #endif
 
 // <q> RETARGET_ENABLED  - retarget - Retargeting stdio functions

@@ -552,13 +552,13 @@ static void advertising_init(void)
 	sd_ble_gap_address_get(&dev_mac);
 #endif
 
-	mibeacon_config_t  beacon_cfg = {0};
+	mibeacon_config_t  beacon_cfg     = {0};
 	beacon_cfg.frame_ctrl.version     = 4;
 	beacon_cfg.pid                    = APP_PRODUCT_ID;
 	beacon_cfg.p_capability           = &cap;
 	beacon_cfg.p_mac                  = dev_mac.addr;
 	
-	mi_beacon_data_set(&beacon_cfg, data, &total_len);
+	mibeacon_data_set(&beacon_cfg, data, &total_len);
 
     /* Indicating Mi Service */
 	ble_advdata_service_data_t serviceData;
@@ -685,6 +685,11 @@ typedef __packed struct {
 	uint32_t time;
 } lock_evt_t;
 
+void mi_schd_event_handler(schd_evt_t evt_id)
+{
+	NRF_LOG_RAW_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", evt_id);
+}
+
 /**@brief Application main function.
  */
 int main(void)
@@ -714,7 +719,7 @@ int main(void)
 	/* <!> mi_psm_init() must be called after ble_stack_init(). */
 	mi_psm_init();
 	mibeacon_init();
-	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
+	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), mi_schd_event_handler);
 	
 
 #ifdef M_TEST
@@ -733,7 +738,7 @@ int main(void)
 		if (get_lock_opcode(&lock_opcode) == 0) {
 			switch(lock_opcode) {
 				case 0:
-					NRF_LOG_INFO("lock\n");
+					NRF_LOG_INFO(" unlock \n");
 					bsp_board_led_off(3);
 
 					lock_event.action = 0;
@@ -741,11 +746,11 @@ int main(void)
 					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 				
 				case 1:
-					NRF_LOG_INFO("unlock\n");
+					NRF_LOG_INFO(" lock \n");
 					bsp_board_led_on(3);
 
 					lock_event.action = 1;
@@ -753,11 +758,11 @@ int main(void)
 					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 
 				case 2:
-					NRF_LOG_INFO("bolt\n");
+					NRF_LOG_INFO(" bolt \n");
 					bsp_board_led_off(3);
 
 					lock_event.action = 2;
@@ -765,7 +770,7 @@ int main(void)
 					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 
 				default:

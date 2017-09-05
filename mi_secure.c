@@ -24,15 +24,6 @@
   /* anonymous unions are enabled by default */
 #endif
 
-typedef enum {
-	SCHD_EVT_REG_SUCCESS = 0x01,
-	SCHD_EVT_REG_FAILED,
-	SCHD_EVT_ADMIN_LOGIN_SUCCESS,
-	SCHD_EVT_ADMIN_LOGIN_FAILED,
-	SCHD_EVT_SHARE_LOGIN_SUCCESS,
-	SCHD_EVT_SHARE_LOGIN_FAILED,
-	SCHD_EVT_TIMEOUT
-} schd_evt_t;
 
 typedef struct {
     uint8_t  vid;
@@ -244,6 +235,7 @@ static void shared_login_procedure(void);
 
 static uint32_t key_id;
 static mi_author_stat_t mi_authorization_status;
+static mi_schd_event_handler_t m_user_event_handler;
 
 uint32_t get_mi_key_id(void)
 {
@@ -260,12 +252,15 @@ uint32_t get_mi_authorization(void)
 }
 
 
-uint32_t mi_scheduler_init(uint32_t interval)
+uint32_t mi_scheduler_init(uint32_t interval, mi_schd_event_handler_t handler)
 {
 	int32_t errno;
 	schd_interval = interval;
 	errno = app_timer_create(&mi_schd_timer_id, APP_TIMER_MODE_REPEATED, mi_scheduler);
 	APP_ERROR_CHECK(errno);
+
+	if (handler != NULL)
+		m_user_event_handler = handler;
 
 	nrf_gpio_cfg_output(PROFILE_PIN);
 	nrf_gpio_pin_clear(PROFILE_PIN);
@@ -772,7 +767,6 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 	PT_END(pt);
 }
 
-
 void schd_evt_handler(schd_evt_t evt_id)
 {
 	switch (evt_id) {
@@ -782,13 +776,14 @@ void schd_evt_handler(schd_evt_t evt_id)
 	case SCHD_EVT_ADMIN_LOGIN_FAILED:
 	case SCHD_EVT_SHARE_LOGIN_SUCCESS:
 	case SCHD_EVT_SHARE_LOGIN_FAILED:
-		// call back here
 	case SCHD_EVT_TIMEOUT:
 		schd_stat = 0;
 		mi_scheduler_stop(0);
 		break;
-	
 	}
+
+	if (m_user_event_handler != NULL)
+		m_user_event_handler(evt_id);
 }
 
 static queue_t schd_evt_queue;
@@ -811,8 +806,10 @@ static int monitor(pt_t *pt)
 
 		// fetch evt
 		do {
+			schd_evt = 0;
 			errno = dequeue(&schd_evt_queue, &schd_evt);
-			schd_evt_handler(schd_evt);
+			if (errno != MI_ERROR_NOT_FOUND)
+				schd_evt_handler(schd_evt);
 		} while(errno != MI_ERROR_NOT_FOUND); 
 
 		PT_YIELD(pt);

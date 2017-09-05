@@ -685,6 +685,11 @@ typedef __packed struct {
 	uint32_t time;
 } lock_evt_t;
 
+void mi_schd_event_handler(schd_evt_t evt_id)
+{
+	NRF_LOG_RAW_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", evt_id);
+}
+
 /**@brief Application main function.
  */
 int main(void)
@@ -714,7 +719,7 @@ int main(void)
 	/* <!> mi_psm_init() must be called after ble_stack_init(). */
 	mi_psm_init();
 	mibeacon_init();
-	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
+	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), mi_schd_event_handler);
 	
 
 #ifdef M_TEST

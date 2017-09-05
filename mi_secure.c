@@ -4,7 +4,7 @@
 #include "pt.h"
 #include "nrf_drv_twi_patched.h"
 #include "nrf_gpio.h"
-
+#include "nrf_queue.h"
 #define NRF_LOG_MODULE_NAME "SCHD"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -14,6 +14,7 @@
 #include "mi_secure.h"
 #include "ble_mi_secure.h"
 #include "mi_crypto.h"
+#include "mi_error.h"
 
 #if defined(__CC_ARM)
   #pragma anon_unions
@@ -22,6 +23,16 @@
 #elif defined(__GNUC__)
   /* anonymous unions are enabled by default */
 #endif
+
+typedef enum {
+	SCHD_EVT_REG_SUCCESS = 0x01,
+	SCHD_EVT_REG_FAILED,
+	SCHD_EVT_ADMIN_LOGIN_SUCCESS,
+	SCHD_EVT_ADMIN_LOGIN_FAILED,
+	SCHD_EVT_SHARE_LOGIN_SUCCESS,
+	SCHD_EVT_SHARE_LOGIN_FAILED,
+	SCHD_EVT_TIMEOUT
+} schd_evt_t;
 
 typedef struct {
     uint8_t  vid;
@@ -156,24 +167,72 @@ const uint8_t cloud_info[] = "smartcfg-cloud-info";
 const uint8_t mk_salt[] = "smartcfg-masterkey-salt";
 const uint8_t mk_info[] = "smartcfg-masterkey-info";
 
-// Pseduo Timer
-typedef struct {
-	int start;
-	int interval;
-	int (*handler)(void);
-} timer_t;
-
 static uint32_t schd_time;
 static uint32_t schd_stat;
 static uint32_t schd_interval = 64;
 static pt_t pt1, pt2, pt3, pt4;
-static timer_t timeout_timer;
 
-static int timer_expired(timer_t *t)
-{ return (int)(schd_time - t->start) >= (int)t->interval; }
+/*** Pseduo timer ***/
+typedef struct {
+	int start;
+	int interval;
+} timer_t;
 
-static void timer_set(timer_t *t, int interval_ms)
+static void timer_set(timer_t * t, int interval_ms)
 { t->interval = (interval_ms << 5) / schd_interval; t->start = schd_time; }
+
+static int timer_expired(timer_t * t, void (*handler)(void))
+{
+	int expired = (schd_time - t->start) >= (int)t->interval;
+	if (expired == true && handler != NULL)
+		handler();
+	return expired;
+}
+
+/*** Ring buffer ***/
+typedef struct {
+	uint8_t * buf;
+	uint8_t mask;
+	uint8_t rd_ptr;
+	uint8_t wr_ptr;
+} queue_t;
+
+int queue_init(queue_t *q, uint8_t *buf, uint8_t size)
+{
+	if (buf == NULL || q == NULL)
+		return MI_ERROR_INVALID_PARAM;
+
+	if (!IS_POWER_OF_TWO(size))
+		return MI_ERROR_DATA_SIZE;
+
+	q->buf = buf;
+	q->mask = size - 1;
+	q->rd_ptr = 0;
+	q->wr_ptr = 0;
+	return 0;
+}
+
+int enqueue(queue_t *q, uint8_t in)
+{
+	if (((q->wr_ptr - q->rd_ptr) & q->mask) == q->mask) {
+		return MI_ERROR_NO_MEM;
+	}
+	
+	q->buf[q->wr_ptr++] = in;
+	q->wr_ptr &= q->mask;
+	
+	return 0;
+}
+
+int dequeue(queue_t *q, uint8_t *out)
+{
+	if (((q->wr_ptr - q->rd_ptr) & q->mask) > 0) {
+		*out = q->buf[q->rd_ptr++];
+		q->rd_ptr &= q->mask;
+		return 0;
+	} else
+		return MI_ERROR_NOT_FOUND;
+}
 
 extern fast_xfer_t fast_control_block;
 extern reliable_xfer_t rxfer_control_block;
@@ -217,7 +276,10 @@ uint32_t mi_scheduler_start(uint32_t auth_stat)
 {
 	int32_t errno;
 	schd_time = 0;
-	schd_stat = auth_stat;
+	if (schd_stat == 0)
+		schd_stat = auth_stat;
+	else
+		return -1;
 
 	PT_INIT(&pt1);
 	PT_INIT(&pt2);
@@ -357,17 +419,17 @@ static void mi_scheduler(void * p_context)
 #else
 	
 	nrf_gpio_pin_set(PROFILE_PIN);
-
+	
 	switch (auth_type) {
-		case REG_TYPE:
-			reg_procedure();
-			break;
-		case LOG_TYPE:
-			admin_login_procedure();
-			break;
-		case SHARED_TYPE:
-			shared_login_procedure();
-			break;
+	case REG_TYPE:
+		reg_procedure();
+		break;
+	case LOG_TYPE:
+		admin_login_procedure();
+		break;
+	case SHARED_TYPE:
+		shared_login_procedure();
+		break;
 	}
 	
 	nrf_gpio_pin_clear(PROFILE_PIN);
@@ -495,6 +557,7 @@ static pt_t pt_r_rx_thd;
 static int rxfer_rx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 {
 	static uint8_t retries_num;
+	static timer_t timeout_timer;
 
 	PT_BEGIN(pt);
 
@@ -518,7 +581,7 @@ static int rxfer_rx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 		PT_RESTART(pt);
 	}
 	timer_set(&timeout_timer, 2000);
-	PT_WAIT_UNTIL(pt, pxfer->rx_num == pxfer->curr_sn || timer_expired(&timeout_timer));
+	PT_WAIT_UNTIL(pt, pxfer->rx_num == pxfer->curr_sn || timer_expired(&timeout_timer, NULL));
 
 	PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, pxfer));
 
@@ -550,38 +613,6 @@ static int rxfer_tx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	pxfer->tx_num = 0;
 	PT_END(pt);
 }
-
-static int reliable_xfer_test(pt_t *pt)
-{
-	PT_BEGIN(pt);
-	static uint16_t rx_amount = 0;
-	while(1) {
-		/* Recive data */
-		PT_WAIT_UNTIL(pt, rxfer_control_block.rx_num != 0);
-		rx_amount = rxfer_control_block.rx_num;
-		rxfer_control_block.pdata = dev_cert;
-		PT_WAIT_UNTIL(pt, reliable_xfer_ack(A_READY) == NRF_SUCCESS);
-
-		timer_set(&timeout_timer, 10000);
-		PT_WAIT_UNTIL(pt, rxfer_control_block.rx_num == rxfer_control_block.curr_sn || timer_expired(&timeout_timer));
-
-		PT_SPAWN(pt, &pt_resend, pthd_resend(&pt_resend, &rxfer_control_block));
-
-		/* Send data. */
-		rxfer_control_block.tx_num = rx_amount;
-		PT_WAIT_UNTIL(pt, reliable_xfer_cmd(DEV_CERT, rxfer_control_block.tx_num) == NRF_SUCCESS);
-
-		PT_WAIT_UNTIL(pt, rxfer_control_block.mode == MODE_ACK && rxfer_control_block.ack == A_READY);
-
-		PT_SPAWN(pt, &pt_send, pthd_send(&pt_send, &rxfer_control_block));
-
-		rxfer_control_block.tx_num = 0;
-		/* And we loop. */
-	}
-
-	PT_END(pt);
-}
-
 
 typedef enum {
 	// Info
@@ -742,6 +773,55 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 }
 
 
+void schd_evt_handler(schd_evt_t evt_id)
+{
+	switch (evt_id) {
+	case SCHD_EVT_REG_SUCCESS:
+	case SCHD_EVT_REG_FAILED:
+	case SCHD_EVT_ADMIN_LOGIN_SUCCESS:
+	case SCHD_EVT_ADMIN_LOGIN_FAILED:
+	case SCHD_EVT_SHARE_LOGIN_SUCCESS:
+	case SCHD_EVT_SHARE_LOGIN_FAILED:
+		// call back here
+	case SCHD_EVT_TIMEOUT:
+		schd_stat = 0;
+		mi_scheduler_stop(0);
+		break;
+	
+	}
+}
+
+static queue_t schd_evt_queue;
+static uint8_t evt_buf[8];
+static int monitor(pt_t *pt)
+{
+	static timer_t proc_timeout;
+	uint8_t schd_evt;
+	uint8_t errno;
+
+	PT_BEGIN(pt);
+
+	timer_set(&proc_timeout, 5000);
+	queue_init(&schd_evt_queue, evt_buf, sizeof(evt_buf));
+
+	while(1) {
+		if (timer_expired(&proc_timeout, NULL) == true){
+			enqueue(&schd_evt_queue, SCHD_EVT_TIMEOUT);
+		}
+
+		// fetch evt
+		do {
+			errno = dequeue(&schd_evt_queue, &schd_evt);
+			schd_evt_handler(schd_evt);
+		} while(errno != MI_ERROR_NOT_FOUND); 
+
+		PT_YIELD(pt);
+	}
+
+	PT_END(pt);
+}
+
+
 static int reg_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
@@ -784,23 +864,6 @@ static int reg_msc(pt_t *pt)
 #if (PRINT_SIGN == 1)
 	NRF_LOG_HEXDUMP_INFO(dev_sign, 64);
 #endif	
-
-#if ENC_LTMK
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD(MKPK.mic, 4));
-	
-	MKPK.id = 0;
-
-	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32+4, NULL, 0);
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-#else
-	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.LTMK));
-	
-	MKPK.id = 1;
-	memcpy(MKPK.cipher, LTMK, 32);
-	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32, NULL, 0);
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	SET_DATA_VAILD(flags.LTMK);
-#endif
 	
 	PT_END(pt);
 }
@@ -895,6 +958,7 @@ static int reg_auth(pt_t *pt)
 	PT_WAIT_UNTIL(pt, auth_recv() != REG_START);
 	if (auth_recv() != REG_SUCCESS) {
 		NRF_LOG_ERROR("Auth failed.\n");
+		enqueue(&schd_evt_queue, SCHD_EVT_REG_FAILED);
 		PT_EXIT(pt);
 	}
 
@@ -914,7 +978,23 @@ static int reg_auth(pt_t *pt)
 	// fs_store(rand_key);
 	// log encrypt procedure
 	
-//	PT_WAIT_UNTIL(pt, 0);
+#if ENC_LTMK
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.MKPK));
+	
+	MKPK.id = 0;
+	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32+4, NULL, 0);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+#else
+	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.LTMK));
+	
+	MKPK.id = 1;
+	memcpy(MKPK.cipher, LTMK, 32);
+	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32, NULL, 0);
+	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+
+	enqueue(&schd_evt_queue, SCHD_EVT_REG_SUCCESS);
+#endif
+
 	PT_END(pt);
 }
 
@@ -929,12 +1009,7 @@ static void reg_procedure()
 	if (pt_flags.pt3 == 1)
 		pt_flags.pt3 = PT_SCHEDULE(reg_auth(&pt3));
 	
-	if (pt_flags.pt1 == 0 &&
-		pt_flags.pt2 == 0 &&
-		pt_flags.pt3 == 0 )
-	{
-		mi_scheduler_stop(0);
-	}
+	monitor(&pt4);
 }
 
 
@@ -1036,10 +1111,11 @@ sha256_hkdf(        LTMK,         sizeof(LTMK),
 set_beacon_key(cloud_key.app_key);
 
 		key_id = 0;
-	}
-	else {
+		enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_SUCCESS);
+	} else {
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
 		NRF_LOG_ERROR("LOG FAILED. %d\n", errno);
+		enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_FAILED);
 	}
 
 	PT_END(pt);
@@ -1056,13 +1132,7 @@ void admin_login_procedure()
 	if (pt_flags.pt3 == 1)
 		pt_flags.pt3 = PT_SCHEDULE(admin_auth(&pt3));
 	
-	if (pt_flags.pt1 == 0 &&
-		pt_flags.pt2 == 0 &&
-		pt_flags.pt3 == 0 )
-	{
-		mi_scheduler_stop(0);
-	}
-
+	monitor(&pt4);
 }
 
 
@@ -1246,6 +1316,7 @@ static int shared_auth(pt_t *pt)
 	if (verify_share_info(&shared_info, LTMK) != 0) {
 		NRF_LOG_ERROR("SHARED LOG FAILED.\n");
 		PT_WAIT_UNTIL(pt, auth_send(SHARED_LOG_FAILED) == NRF_SUCCESS);
+		enqueue(&schd_evt_queue, SCHD_EVT_SHARE_LOGIN_FAILED);
 	} else {
 		NRF_LOG_INFO("SHARED LOG SUCCESS.\n");
 		set_mi_authorization(SHARE_AUTHORIZATION);
@@ -1259,6 +1330,7 @@ sha256_hkdf(        LTMK,         sizeof(LTMK),
 set_beacon_key(cloud_key.app_key);
 
 		PT_WAIT_UNTIL(pt, auth_send(SHARED_LOG_SUCCESS) == NRF_SUCCESS);
+		enqueue(&schd_evt_queue, SCHD_EVT_SHARE_LOGIN_SUCCESS);
 	}
 
 	PT_END(pt);
@@ -1275,11 +1347,6 @@ static void shared_login_procedure()
 	if (pt_flags.pt3 == 1)
 		pt_flags.pt3 = PT_SCHEDULE(shared_auth(&pt3));
 	
-	if (pt_flags.pt1 == 0 &&
-		pt_flags.pt2 == 0 &&
-		pt_flags.pt3 == 0 )
-	{
-		mi_scheduler_stop(0);
-	}
+	monitor(&pt4);
 }
 

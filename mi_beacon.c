@@ -7,6 +7,7 @@
 #include "app_timer.h"
 
 #include "mi_type.h"
+#include "mi_error.h"
 #include "mi_config.h"
 #include "mi_arch.h"
 #include "mi_beacon.h"
@@ -67,7 +68,7 @@ int mibeacon_data_set(mibeacon_config_t const * const config, uint8_t *output, u
 
 	if (config == NULL) {
 		*output_len = 0;
-		return 1;
+		return MI_ERROR_INVALID_PARAM;
 	}
 
 	m_beacon_data = *config;
@@ -123,8 +124,8 @@ int mibeacon_data_set(mibeacon_config_t const * const config, uint8_t *output, u
 		*output_len += 1 + config->p_manu_title->len;
 	}
 
-	if (p_frame_ctrl->is_encrypt == 1 && m_beacon_key_is_vaild) {
-		if (*output_len < 20) {
+	if (p_frame_ctrl->is_encrypt == 1) {
+		if (*output_len < 20 && m_beacon_key_is_vaild) {
 			beacon_nonce.pid = config->pid;
 			beacon_nonce.cnt = frame_cnt;
 			arch_rand_get(beacon_nonce.rand, 3);
@@ -160,7 +161,7 @@ int mibeacon_data_set(mibeacon_config_t const * const config, uint8_t *output, u
 	#endif
 		}
 		else {
-			return -1;
+			return MI_ERROR_NOT_INIT;
 		}
 	}
 
@@ -213,7 +214,7 @@ int mibeacon_obj_enque(mibeacon_obj_name_t evt, uint8_t len, void *val)
 	mi_obj_element_t elem;
 
 	if (len > EVT_MAX_SIZE-3)
-		return 1;
+		return MI_ERROR_DATA_SIZE;
 
 	elem[0] = evt;
 	elem[1] = evt >> 8;
@@ -221,11 +222,12 @@ int mibeacon_obj_enque(mibeacon_obj_name_t evt, uint8_t len, void *val)
 	memcpy(elem+3, (uint8_t*)val, len);
 
 	errno = nrf_queue_push(&mi_obj_queue, elem);
-	if(errno != MI_SUCCESS)
+	if(errno != MI_SUCCESS) {
 		NRF_LOG_ERROR("push beacon event errno %d\n", errno);
-
+		return MI_ERROR_RESOURCES;
+	}
 	if (m_beacon_timer_is_running != true ) {
-		/* All event be processed in mibeacon_timer_handler() */
+		/* All event will be processed in mibeacon_timer_handler() */
 		errno = app_timer_start(mibeacon_timer, APP_TIMER_TICKS(10, 0), NULL);
 		APP_ERROR_CHECK(errno);
 	}

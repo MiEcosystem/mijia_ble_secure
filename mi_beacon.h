@@ -46,7 +46,7 @@ typedef struct {
 typedef struct {
 	mibeacon_obj_name_t    type;
 	uint8_t                len;
-	uint8_t                val[20];
+	uint8_t                val[12];
 } mibeacon_obj_t;
 
 typedef struct {
@@ -59,7 +59,7 @@ typedef struct {
 
 typedef struct {
 	uint8_t len;
-	uint8_t val[20];
+	uint8_t val[12];
 } mibeacon_manu_data_t;
 
 typedef struct {

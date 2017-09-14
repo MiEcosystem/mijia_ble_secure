@@ -61,6 +61,7 @@ typedef enum {
 } schd_evt_t;
 
 typedef void (*mi_schd_event_handler_t)(schd_evt_t evt_id);
+
 void set_mi_authorization(mi_author_stat_t status);
 uint32_t get_mi_authorization(void);
 uint32_t get_mi_key_id(void);

@@ -12,9 +12,10 @@
 #include "sha256_hkdf.h"
 #include "ccm.h"
 #include "mi_secure.h"
-#include "ble_mi_secure.h"
 #include "mi_crypto.h"
 #include "mi_error.h"
+#include "mi_beacon.h"
+#include "ble_mi_secure.h"
 
 #if defined(__CC_ARM)
   #pragma anon_unions
@@ -41,7 +42,7 @@ typedef struct {
 	uint32_t reserved[3];
 } shared_key_t;
 
-APP_TIMER_DEF(mi_schd_timer_id);
+APP_TIMER_DEF(mi_schd_timer);
 
 #define PRINT_MSC_INFO     0
 #define PRINT_MAC          0
@@ -104,7 +105,6 @@ struct {
 	uint8_t cipher[64];
 	uint8_t mic[4];
 } encrypt_reg_data;
-
 
 struct {
 	union {
@@ -256,7 +256,7 @@ uint32_t mi_scheduler_init(uint32_t interval, mi_schd_event_handler_t handler)
 {
 	int32_t errno;
 	schd_interval = interval;
-	errno = app_timer_create(&mi_schd_timer_id, APP_TIMER_MODE_REPEATED, mi_scheduler);
+	errno = app_timer_create(&mi_schd_timer, APP_TIMER_MODE_REPEATED, mi_scheduler);
 	APP_ERROR_CHECK(errno);
 
 	if (handler != NULL)
@@ -291,9 +291,9 @@ uint32_t mi_scheduler_start(uint32_t auth_stat)
 
 	mi_scheduler(&schd_stat);
 	NRF_LOG_INFO("scheduler work first...\n", schd_stat);
-	app_timer_stop(mi_schd_timer_id);
+	app_timer_stop(mi_schd_timer);
 	NRF_LOG_INFO("schd timer stop.\n", schd_stat);
-	errno = app_timer_start(mi_schd_timer_id, schd_interval, &schd_stat);
+	errno = app_timer_start(mi_schd_timer, schd_interval, &schd_stat);
 	APP_ERROR_CHECK(errno);
 	NRF_LOG_INFO("schd timer start.\n", schd_stat);
 
@@ -303,7 +303,7 @@ uint32_t mi_scheduler_start(uint32_t auth_stat)
 uint32_t mi_scheduler_stop(int type)
 {
 	int32_t errno;
-	errno = app_timer_stop(mi_schd_timer_id);
+	errno = app_timer_stop(mi_schd_timer);
 	APP_ERROR_CHECK(errno);
 	return errno;
 }
@@ -330,7 +330,7 @@ int test_thd(pt_t *pt)
 //	memcpy(key.dev_key, "DUMMY KEY", 10);
 //	memcpy(key.dev_iv , "DUMMY KEY", 4);
 //	memcpy(key.app_iv , "DUMMY KEY", 4);
-//	mi_encrypt_init(&key);
+//	mi_crypto_init(&key);
 
 //	mi_session_encrypt(msg, 10, msg);
 //	NRF_LOG_RAW_HEXDUMP_INFO(msg, 16);
@@ -431,29 +431,6 @@ static void mi_scheduler(void * p_context)
 
 #endif
 }
-
-static int fast_xfer_test(pt_t *pt)
-{
-	PT_BEGIN(pt);
-
-	while(1) {
-		/* Recive data */
-		PT_WAIT_UNTIL(pt, fast_control_block.avail == 1);
-		fast_control_block.avail = 0;
-		NRF_LOG_INFO("fast xfer recive %d bytes:\n", fast_control_block.full_len);
-		NRF_LOG_RAW_HEXDUMP_INFO(fast_control_block.data+255-fast_control_block.full_len, fast_control_block.full_len);
-		
-		/* Send the recived data */
-		fast_control_block.curr_len = fast_control_block.full_len;
-		fast_control_block.full_len = 255;
-		PT_WAIT_UNTIL(pt, fast_xfer_send(&fast_control_block) == 0);
-		fast_control_block.full_len = 0;
-
-	}
-
-	PT_END(pt);
-}
-
 
 static uint16_t find_lost_sn(reliable_xfer_t *pxfer)
 {
@@ -767,7 +744,7 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 	PT_END(pt);
 }
 
-void schd_evt_handler(schd_evt_t evt_id)
+static void schd_evt_handler(schd_evt_t evt_id)
 {
 	switch (evt_id) {
 	case SCHD_EVT_REG_SUCCESS:
@@ -989,8 +966,9 @@ static int reg_auth(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_WR_MKPK, (void*)&MKPK, 1+32, NULL, 0);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
-	enqueue(&schd_evt_queue, SCHD_EVT_REG_SUCCESS);
 #endif
+	NRF_LOG_RAW_INFO("REG SUCCESS: %d\n", schd_time);
+	enqueue(&schd_evt_queue, SCHD_EVT_REG_SUCCESS);
 
 	PT_END(pt);
 }
@@ -1096,10 +1074,10 @@ static int admin_auth(pt_t *pt)
 
   	if (crc32 == encrypt_login_data.crc32) {
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
-		NRF_LOG_INFO("LOG SUCCESS. schd_time : %d\n", schd_time);
+		NRF_LOG_INFO("LOG SUCCESS: %d\n", schd_time);
 		set_mi_authorization(OWNER_AUTHORIZATION);
-		mi_encrypt_init(&session_key);
-
+		mi_crypto_init(&session_key);
+	
 sha256_hkdf(        LTMK,         sizeof(LTMK),
 	  (void *)cloud_salt,         sizeof(cloud_salt)-1,
 	  (void *)cloud_info,         sizeof(cloud_info)-1,
@@ -1118,7 +1096,7 @@ set_beacon_key(cloud_key.app_key);
 	PT_END(pt);
 }
 
-void admin_login_procedure()
+static void admin_login_procedure()
 {
 	if (pt_flags.pt1 == 1)
 		pt_flags.pt1 = PT_SCHEDULE(admin_msc(&pt1));
@@ -1311,19 +1289,17 @@ static int shared_auth(pt_t *pt)
 // verify the virtual key
 
 	if (verify_share_info(&shared_info, LTMK) != 0) {
-		NRF_LOG_ERROR("SHARED LOG FAILED.\n");
+		NRF_LOG_ERROR("SHARED LOG FAILED: %d\n", schd_time);
 		PT_WAIT_UNTIL(pt, auth_send(SHARED_LOG_FAILED) == NRF_SUCCESS);
 		enqueue(&schd_evt_queue, SCHD_EVT_SHARE_LOGIN_FAILED);
 	} else {
-		NRF_LOG_INFO("SHARED LOG SUCCESS.\n");
-		set_mi_authorization(SHARE_AUTHORIZATION);
-		mi_encrypt_init(&session_key);
 
-sha256_hkdf(        LTMK,         sizeof(LTMK),
-	  (void *)cloud_salt,         sizeof(cloud_salt)-1,
-	  (void *)cloud_info,         sizeof(cloud_info)-1,
-	  (void *)&cloud_key,         sizeof(cloud_key));
-	
+		PT_YIELD(pt);
+
+		NRF_LOG_INFO("SHARED LOG SUCCESS: %d\n", schd_time);
+		set_mi_authorization(SHARE_AUTHORIZATION);
+		mi_crypto_init(&session_key);
+		
 set_beacon_key(cloud_key.app_key);
 
 		PT_WAIT_UNTIL(pt, auth_send(SHARED_LOG_SUCCESS) == NRF_SUCCESS);

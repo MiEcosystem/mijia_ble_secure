@@ -95,6 +95,8 @@
 
 #define DEAD_BEEF                       0xDEADBEEF                                  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
+APP_TIMER_DEF(poll_timer);
+
 static ble_nus_t                        m_nus;                                      /**< Structure to identify the Nordic UART Service. */
 static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;    /**< Handle of the current connection. */
 
@@ -239,7 +241,8 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
  */
 static void conn_params_error_handler(uint32_t nrf_error)
 {
-    APP_ERROR_HANDLER(nrf_error);
+//    APP_ERROR_HANDLER(nrf_error);
+	NRF_LOG_ERROR("conn param error %X\n", nrf_error);
 }
 
 
@@ -416,7 +419,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
-	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"BLE EVT %X\n", p_ble_evt->header.evt_id);
+//	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"BLE EVT %X\n", p_ble_evt->header.evt_id);
 
     ble_conn_params_on_ble_evt(p_ble_evt);
 	ble_mi_on_ble_evt(p_ble_evt);
@@ -458,7 +461,7 @@ static void ble_stack_init(void)
     nrf_clock_lf_cfg_t clock_lf_cfg = {.source        = NRF_CLOCK_LF_SRC_XTAL,
 	                                   .rc_ctiv       = 0,
 	                                   .rc_temp_ctiv  = 0,
-	                                   .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_20_PPM};
+	                                   .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_100_PPM};
 
     // Initialize SoftDevice.
     SOFTDEVICE_HANDLER_INIT(&clock_lf_cfg, NULL);
@@ -645,7 +648,7 @@ void twi0_init (void)
        .sda                = 29,
        .frequency          = NRF_TWI_FREQ_100K,
        .interrupt_priority = APP_IRQ_PRIORITY_HIGH,
-       .clear_bus_init     = false
+       .clear_bus_init     = true
     };
 
     err_code = nrf_drv_twi_init(&TWI0, &msc_config, twi0_handler, NULL);
@@ -655,7 +658,6 @@ void twi0_init (void)
 }
 
 void time_init(struct tm * time_ptr);
-void mibeacon_test(void);
 
 typedef struct {
 	uint8_t did[8];
@@ -690,6 +692,16 @@ void mi_schd_event_handler(schd_evt_t evt_id)
 	NRF_LOG_RAW_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", evt_id);
 }
 
+void poll_timer_handler(void * p_context)
+{
+	time_t utc_time = time(NULL);
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"%s", nrf_log_push(ctime(&utc_time)));
+
+	uint8_t battery_stat = 70;
+	mibeacon_obj_enque(MI_STA_LOCK, sizeof(battery_stat), &battery_stat);
+
+	NRF_LOG_RAW_INFO("max timer cnt :%d\n", app_timer_op_queue_utilization_get());
+}
 /**@brief Application main function.
  */
 int main(void)
@@ -720,8 +732,10 @@ int main(void)
 	mi_psm_init();
 	mibeacon_init();
 	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), mi_schd_event_handler);
-	
 
+	app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
+	app_timer_start(poll_timer, APP_TIMER_TICKS(30000, APP_TIMER_PRESCALER), NULL);
+	
 #ifdef M_TEST
 	mi_scheduler_start(0);
 #else

@@ -42,8 +42,9 @@ time_t time(time_t *p_time)
 static int month2int( char * str )
 {
 	int i;
-	for ( i = 0 ; i < 12; i++)
-		if ( strcmp( _month[i], str) == 0 ) break;
+	for (i = 0; i < 12; i++)
+		if (strcmp(_month[i], str) == 0)
+			break;
 	return i;
 }
 

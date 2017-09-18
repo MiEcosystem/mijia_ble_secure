@@ -14,6 +14,7 @@
 #include "ble_srv_common.h"
 #include "ble_mi_secure.h"
 #include "mi_secure.h"
+#include "mi_crypto.h"
 
 #define NRF_LOG_MODULE_NAME "BLEM"
 #include "nrf_log.h"
@@ -30,7 +31,7 @@
 #define PUBKEY_BYTE 255
 #define FRAME_CTRL  0
 
-static void auth_handler(uint8_t *pdata, uint8_t len);
+static void opcode_parse(uint8_t *pdata, uint8_t len);
 static void fast_xfer_rxd(fast_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 static void rxfer_rx_decode(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len);
 
@@ -84,7 +85,10 @@ static void on_connect(ble_evt_t * p_ble_evt)
 static void on_disconnect(ble_evt_t * p_ble_evt)
 {
     mi_srv.conn_handle = BLE_CONN_HANDLE_INVALID;
+
 	set_mi_authorization(UNAUTHORIZATION);
+	mi_crypto_uninit();
+
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_CYAN"Disconnect reason %X.\n",
 	                 p_ble_evt->evt.gap_evt.params.disconnected.reason);
 
@@ -119,7 +123,7 @@ static void on_write(ble_evt_t * p_ble_evt)
 	uint16_t   len = p_evt_write->len;
 	uint8_t *pdata = p_evt_write->data;
     if (len == 2
-		&& (p_evt_write->handle == mi_srv.ctrl_handles.cccd_handle
+		&& (p_evt_write->handle == mi_srv.ctrl_point_handles.cccd_handle
 			|| p_evt_write->handle == mi_srv.fast_xfer_handles.cccd_handle
 			|| p_evt_write->handle == mi_srv.secure_handles.cccd_handle)) 
 	{
@@ -128,9 +132,9 @@ static void on_write(ble_evt_t * p_ble_evt)
         else
             mi_srv.is_notification_enabled = false;
     }
-    else if (p_evt_write->handle == mi_srv.ctrl_handles.value_handle)
+    else if (p_evt_write->handle == mi_srv.ctrl_point_handles.value_handle)
     {
-        auth_handler(pdata, len);
+        opcode_parse(pdata, len);
     }
     else if (p_evt_write->handle == mi_srv.secure_handles.value_handle)
     {
@@ -292,7 +296,7 @@ static uint32_t char_add(uint16_t                        uuid,
 	                                       p_handles);
 }
 
-static void auth_handler(uint8_t *pdata, uint8_t len)
+static void opcode_parse(uint8_t *pdata, uint8_t len)
 {
 	memcpy(&auth_value, pdata, len);
 	
@@ -575,7 +579,6 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt)
 			break;
 
         default:
-//			NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"BLE EVT %X\n", p_ble_evt->header.evt_id);
             break;
     }
 }
@@ -613,7 +616,7 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 	char_props = (ble_gatt_char_props_t){0};
 	char_props.write_wo_resp         = 1;
 	char_props.notify                = 1;
-	err_code = char_add(BLE_UUID_MI_CTRLP, NULL, 4, char_props, &mi_srv.ctrl_handles);
+	err_code = char_add(BLE_UUID_MI_CTRLP, NULL, 4, char_props, &mi_srv.ctrl_point_handles);
 	APP_ERROR_CHECK(err_code);
 
     // Add the Secure AUTH Characteristic.
@@ -660,7 +663,7 @@ uint32_t auth_send(uint32_t status)
         return NRF_ERROR_INVALID_PARAM;
     }
 
-    hvx_params.handle = mi_srv.ctrl_handles.value_handle;
+    hvx_params.handle = mi_srv.ctrl_point_handles.value_handle;
     hvx_params.p_data = (uint8_t*)&status;
     hvx_params.p_len  = &length;
     hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;

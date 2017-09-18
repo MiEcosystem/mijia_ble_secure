@@ -72,10 +72,10 @@ typedef struct {
 	mibeacon_manu_data_t*  p_manu_title;
 } mibeacon_config_t;
 
-
+int mibeacon_init(void);
+void set_beacon_key(uint8_t *p_key);
 int mibeacon_data_set(mibeacon_config_t const * const in, uint8_t *out, uint8_t *out_len);
 int mibeacon_obj_enque(mibeacon_obj_name_t evt, uint8_t len, void *val);
-int mibeacon_init(void);
 
 
 #endif  /* __MI_BEACON_H__ */ 

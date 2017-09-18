@@ -10,7 +10,8 @@ typedef struct {
 	uint8_t reserve[24];
 } session_ctx_t;
 
-int mi_encrypt_init(session_ctx_t *p_ctx);
+int mi_crypto_init(session_ctx_t *p_ctx);
+int mi_crypto_uninit(void);
 /**@brief Function for encrypt the data.
  *
  * @details After Secure auth login, device and application will both generate the

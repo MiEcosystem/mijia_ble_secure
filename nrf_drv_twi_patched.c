@@ -444,7 +444,7 @@ static bool twi_transfer(NRF_TWI_Type  * p_twi,
     else if (nrf_twi_event_check(p_twi, NRF_TWI_EVENT_ERROR))
     {
         nrf_twi_event_clear(p_twi, NRF_TWI_EVENT_ERROR);
-        NRF_LOG_DEBUG("TWI: Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_ERROR));
+        NRF_LOG_DEBUG(" Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_ERROR));
         nrf_twi_task_trigger(p_twi, NRF_TWI_TASK_STOP);
         *p_error = true;
     }
@@ -453,11 +453,11 @@ static bool twi_transfer(NRF_TWI_Type  * p_twi,
         if (nrf_twi_event_check(p_twi, NRF_TWI_EVENT_TXDSENT))
         {
             nrf_twi_event_clear(p_twi, NRF_TWI_EVENT_TXDSENT);
-            NRF_LOG_DEBUG("TWI: Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_TXDSENT));
+            NRF_LOG_DEBUG(" Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_TXDSENT));
             if (nrf_twi_event_check(p_twi, NRF_TWI_EVENT_ERROR))
             {
                 nrf_twi_event_clear(p_twi, NRF_TWI_EVENT_ERROR);
-                NRF_LOG_DEBUG("TWI: Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_ERROR));                
+                NRF_LOG_DEBUG(" Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_ERROR));                
                 nrf_twi_task_trigger(p_twi, NRF_TWI_TASK_STOP);
                 *p_error = true;
             }
@@ -472,10 +472,10 @@ static bool twi_transfer(NRF_TWI_Type  * p_twi,
         else if (nrf_twi_event_check(p_twi, NRF_TWI_EVENT_RXDREADY))
         {
             nrf_twi_event_clear(p_twi, NRF_TWI_EVENT_RXDREADY);
-            NRF_LOG_DEBUG("TWI: Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_RXDREADY)); 
+            NRF_LOG_DEBUG(" Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_RXDREADY)); 
             if (nrf_twi_event_check(p_twi, NRF_TWI_EVENT_ERROR))
             {
-                NRF_LOG_DEBUG("TWI: Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_ERROR)); 
+                NRF_LOG_DEBUG(" Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_ERROR)); 
                 nrf_twi_event_clear(p_twi, NRF_TWI_EVENT_ERROR);
                 nrf_twi_task_trigger(p_twi, NRF_TWI_TASK_STOP);
                 *p_error = true;
@@ -490,7 +490,7 @@ static bool twi_transfer(NRF_TWI_Type  * p_twi,
     if (do_stop_check && nrf_twi_event_check(p_twi, NRF_TWI_EVENT_STOPPED))
     {
         nrf_twi_event_clear(p_twi, NRF_TWI_EVENT_STOPPED);
-        NRF_LOG_DEBUG("TWI: Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_STOPPED)); 
+        NRF_LOG_DEBUG(" Event: %s.\r\n", (uint32_t)EVT_TO_STR_TWI(NRF_TWI_EVENT_STOPPED)); 
         return false;
     }
 

@@ -151,7 +151,7 @@ typedef struct {
 	uint16_t                 service_handle;          /**< Handle of Xiaomi Service (as provided by the SoftDevice). */
 
 	ble_gatts_char_handles_t version_handles;         /**< Handles related to the characteristic (as provided by the SoftDevice). */
-	ble_gatts_char_handles_t ctrl_handles;            /**< Handles related to the characteristic (as provided by the SoftDevice). */
+	ble_gatts_char_handles_t ctrl_point_handles;            /**< Handles related to the characteristic (as provided by the SoftDevice). */
 	ble_gatts_char_handles_t secure_handles;
 	ble_gatts_char_handles_t fast_xfer_handles;              
               

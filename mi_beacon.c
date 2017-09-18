@@ -144,8 +144,8 @@ int mibeacon_data_set(mibeacon_config_t const * const config, uint8_t *output, u
 			aes_ccm_encrypt_and_tag(beacon_key,
 	                (uint8_t*)&beacon_nonce, sizeof(beacon_nonce),
 	                                   &aad, sizeof(aad),
-	                      (uint8_t*)p_obj, evt_len,
-	                      (uint8_t*)p_obj,
+	                        (uint8_t*)p_obj, evt_len,
+	                        (uint8_t*)p_obj,
 	                                    mic, 4);
 
 			memcpy(output, beacon_nonce.rand, 3);
@@ -159,8 +159,8 @@ int mibeacon_data_set(mibeacon_config_t const * const config, uint8_t *output, u
 			NRF_LOG_RAW_INFO("MIC:\n");
 			NRF_LOG_RAW_HEXDUMP_INFO((uint8_t*)mic, 4);
 	#endif
-		}
-		else {
+		} else {
+			p_frame_ctrl->is_encrypt = 0;
 			return MI_ERROR_NOT_INIT;
 		}
 	}
@@ -180,6 +180,7 @@ static void mibeacon_timer_handler(void * p_context)
 	if (errno != NRF_SUCCESS) {
 		m_beacon_timer_is_running = false;
 		app_timer_stop(mibeacon_timer);
+		sd_ble_gap_adv_data_set(NULL, 0, adv_data, 0);
 		NRF_LOG_INFO("mibeacon event adv end.\n");
 	} else {
 		m_beacon_timer_is_running = true;
@@ -191,7 +192,7 @@ static void mibeacon_timer_handler(void * p_context)
 		beacon_cfg.pid = m_beacon_data.pid;
 		beacon_cfg.p_obj = (void*)elem;
 		mibeacon_data_set(&beacon_cfg, adv_data, &adv_len);
-
+#if 0
 		ble_advdata_service_data_t serviceData;
 		serviceData.service_uuid = BLE_UUID_MI_SERVICE;
 		serviceData.data.size    = adv_len;
@@ -201,7 +202,16 @@ static void mibeacon_timer_handler(void * p_context)
 		memset(&scan_rsp, 0, sizeof(scan_rsp));
 		scan_rsp.p_service_data_array = &serviceData;
 		scan_rsp.service_data_count = 1;
+#else
+		ble_advdata_manuf_data_t manu_data;
+		manu_data.company_identifier = BLE_COMPANY_ID_XIAOMI;
+		manu_data.data.size          = adv_len;
+		manu_data.data.p_data        = adv_data;
 
+		ble_advdata_t          scan_rsp;
+		memset(&scan_rsp, 0, sizeof(scan_rsp));
+		scan_rsp.p_manuf_specific_data = &manu_data;
+#endif
 		NRF_LOG_INFO("mibeacon event adv ...\n");
 		errno = ble_advdata_set(NULL, &scan_rsp);
 		APP_ERROR_CHECK(errno);
@@ -238,7 +248,7 @@ int mibeacon_obj_enque(mibeacon_obj_name_t evt, uint8_t len, void *val)
 int mibeacon_init()
 {
 	int errno;
-
+	
 	errno = app_timer_create(&mibeacon_timer, APP_TIMER_MODE_SINGLE_SHOT, mibeacon_timer_handler);
 	APP_ERROR_CHECK(errno);
 	

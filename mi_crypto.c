@@ -38,7 +38,7 @@ static int update_cnt(uint32_t* p_cnt, uint16_t cnt_low)
 	return 0;
 }
 
-int mi_encrypt_init(session_ctx_t *p_ctx)
+int mi_crypto_init(session_ctx_t *p_ctx)
 {
 	if (p_ctx == NULL)
 		return 1;
@@ -51,7 +51,7 @@ int mi_encrypt_init(session_ctx_t *p_ctx)
 	return 0;
 }
 
-int mi_encrypt_uninit()
+int mi_crypto_uninit(void)
 {
 	m_flags.initialized = 0;
 	return 0;

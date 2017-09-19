@@ -734,7 +734,7 @@ int main(void)
 	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), mi_schd_event_handler);
 
 	app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
-	app_timer_start(poll_timer, APP_TIMER_TICKS(30000, APP_TIMER_PRESCALER), NULL);
+	app_timer_start(poll_timer, APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER), NULL);
 	
 #ifdef M_TEST
 	mi_scheduler_start(0);
@@ -793,6 +793,7 @@ int main(void)
 			}
 			
 			send_lock_stat(lock_opcode);
+			send_lock_log((uint8_t *)&lock_event, sizeof(lock_event));
 			lock_opcode = 0;
 		}
 

@@ -23,7 +23,7 @@ int mi_crypto_uninit(void);
  * @param[in] len      plain text bytes.
  * @param[out] output  cipher text and 6-bytes extra info.
  */
-int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output);
+int mi_session_encrypt(const uint8_t *input, uint8_t len, uint8_t *output);
 
 /**@brief Function for handling the Xiaomi Service's BLE events.
  *
@@ -31,7 +31,7 @@ int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output);
  * @param[in] len      num of byte.
  * @param[out] output  plain text.
  */
-int mi_session_decrypt(uint8_t *input, uint8_t len, uint8_t *output);
+int mi_session_decrypt(const uint8_t *input, uint8_t len, uint8_t *output);
 #endif  /* __MI_CRYPTO_H__ */ 
 
 

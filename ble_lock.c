@@ -35,7 +35,7 @@
 
 static uint8_t lock_operation[7];
 static uint8_t lock_state[7];
-static uint8_t lock_logs[20];
+static uint8_t lock_logs[16];
 
 static struct {
 	uint16_t                 service_handle;
@@ -125,7 +125,21 @@ static void on_auth_read(ble_evt_t * p_ble_evt)
     }
     else if (p_evt_r->handle == lock_srv.log_handles.value_handle)
 	{
-
+		if (get_mi_authorization() == UNAUTHORIZATION) {
+			reply = (ble_gatts_rw_authorize_reply_params_t) {
+				.type = BLE_GATTS_AUTHORIZE_TYPE_READ,
+				.params.read.gatt_status = BLE_GATT_STATUS_ATTERR_READ_NOT_PERMITTED
+			};
+		} else {
+			reply = (ble_gatts_rw_authorize_reply_params_t) {
+				.type = BLE_GATTS_AUTHORIZE_TYPE_READ,
+				.params.read.gatt_status = BLE_GATT_STATUS_SUCCESS,
+				.params.read.p_data      = lock_logs,
+				.params.read.len         = sizeof(lock_logs)
+			};
+		}
+		uint32_t errno = sd_ble_gatts_rw_authorize_reply(lock_srv.conn_handle, &reply);
+		APP_ERROR_CHECK(errno);
     }
     else
     {
@@ -322,12 +336,12 @@ uint32_t ble_lock_init(void)
 	APP_ERROR_CHECK(err_code);
 
     // Add the Lock logs Characteristic.
-//	char_props = (ble_gatt_char_props_t){0};
-//	char_props.read                  = 1;
-//	char_props.notify                = 1;
-//	err_code = char_add(BLE_UUID_LOCK_LOGS, lock_logs, sizeof(lock_logs),
-//	                    char_props, &lock_srv.log_handles);
-//	APP_ERROR_CHECK(err_code);
+	char_props = (ble_gatt_char_props_t){0};
+	char_props.read                  = 1;
+	char_props.notify                = 1;
+	err_code = char_add(BLE_UUID_LOCK_LOGS, lock_logs, sizeof(lock_logs),
+	                    char_props, &lock_srv.log_handles);
+	APP_ERROR_CHECK(err_code);
 
 	return NRF_SUCCESS;
 }
@@ -384,3 +398,30 @@ uint32_t send_lock_stat(uint8_t status)
 	return errno;
 }
 
+uint32_t send_lock_log(uint8_t* log, uint8_t len)
+{
+	uint32_t errno;
+	uint8_t  value[20] = {0};
+	uint16_t length    = len + 6;
+    ble_gatts_hvx_params_t hvx_params = {0};
+
+    if ((lock_srv.conn_handle == BLE_CONN_HANDLE_INVALID) || (!lock_srv.is_notification_enabled))
+    {
+        return NRF_ERROR_INVALID_STATE;
+    }
+	
+	mi_session_encrypt(log, len, value);
+
+    hvx_params.handle = lock_srv.log_handles.value_handle;
+    hvx_params.p_data = value;
+    hvx_params.p_len  = &length;
+    hvx_params.type   = BLE_GATT_HVX_NOTIFICATION;
+
+    errno = sd_ble_gatts_hvx(lock_srv.conn_handle, &hvx_params);
+
+	if (errno != NRF_SUCCESS) {
+		NRF_LOG_INFO("Cann't send lock stat : %X\n", errno);
+	}
+
+	return errno;
+}

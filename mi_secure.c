@@ -1115,6 +1115,8 @@ static int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 {
 	time_t curr_time = time(NULL);
 	uint32_t errno;
+	uint8_t adata[9];
+
 	struct {
 		uint8_t       nonce[12];
 		shared_key_t  key;
@@ -1122,7 +1124,6 @@ static int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 	} virtual_key;
 
 	memcpy(&virtual_key, pinfo, sizeof(virtual_key));
-	uint8_t adata[9];
 	memcpy(adata, msc_info, 8);
 	adata[8] = 0x01;
 

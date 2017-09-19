@@ -59,7 +59,7 @@ void ble_lock_on_ble_evt(ble_evt_t * p_ble_evt);
 
 uint8_t get_lock_opcode(uint8_t *p_opcode);
 uint32_t send_lock_stat(uint8_t status);
-
+uint32_t send_lock_log(uint8_t* log, uint8_t len);
 #ifdef __cplusplus
 }
 #endif

@@ -58,7 +58,7 @@ int mi_crypto_uninit(void)
 }
 
 
-int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output)
+int mi_session_encrypt(const uint8_t *input, uint8_t len, uint8_t *output)
 {
 	uint32_t ret = 0;
 
@@ -93,7 +93,7 @@ int mi_session_encrypt(uint8_t *input, uint8_t len, uint8_t *output)
 	return 0;
 }
 
-int mi_session_decrypt(uint8_t *input, uint8_t len, uint8_t *output)
+int mi_session_decrypt(const uint8_t *input, uint8_t len, uint8_t *output)
 {
 	uint32_t ret = 0;
 

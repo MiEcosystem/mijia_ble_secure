@@ -42,7 +42,10 @@ extern "C" {
 #define SHARED_LOG_START_W_CERT        (SHARED_TYPE+4)
 #define SHARED_LOG_SUCCESS             (SHARED_TYPE+1)
 #define SHARED_LOG_FAILED              (SHARED_TYPE+2)
-#define SHARED_LOG_EXPIRED             (SHARED_TYPE+3)
+
+#define SYS_TYPE                       0xE0UL
+#define PSM_RESTORE                    (SYS_TYPE)
+#define PSM_CLEAR                      (SYS_TYPE+1)
 
 typedef enum {
 	UNAUTHORIZATION = 0,
@@ -57,12 +60,16 @@ typedef enum {
 	SCHD_EVT_ADMIN_LOGIN_FAILED,
 	SCHD_EVT_SHARE_LOGIN_SUCCESS,
 	SCHD_EVT_SHARE_LOGIN_FAILED,
-	SCHD_EVT_TIMEOUT
+	SCHD_EVT_TIMEOUT,
+	SCHD_EVT_NO_PSM,
+	SCHD_EVT_PSM_FOUND
 } schd_evt_t;
 
 typedef void (*mi_schd_event_handler_t)(schd_evt_t evt_id);
 
 void set_mi_authorization(mi_author_stat_t status);
+void set_mi_reg_stat(uint8_t stat);
+int get_mi_reg_stat(void);
 uint32_t get_mi_authorization(void);
 uint32_t get_mi_key_id(void);
 uint32_t mi_scheduler_init(uint32_t interval, mi_schd_event_handler_t handler);

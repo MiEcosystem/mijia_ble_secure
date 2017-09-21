@@ -89,7 +89,7 @@
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (40 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
-#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)  /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
+#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(15000, APP_TIMER_PRESCALER) /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000, APP_TIMER_PRESCALER) /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
 
@@ -529,6 +529,12 @@ void bsp_event_handler(bsp_event_t event)
             }
             break;
 
+		case BSP_EVENT_RESET:
+			set_mi_reg_stat(false);
+			err_code = mi_psm_reset();
+			NRF_LOG_RAW_INFO("CLEAR PSM mi_sysinfo! %d\n", err_code);
+			break;
+
         default:
             break;
     }
@@ -659,27 +665,6 @@ void twi0_init (void)
 
 void time_init(struct tm * time_ptr);
 
-typedef struct {
-	uint8_t did[8];
-	uint8_t version[12];
-
-	union {
-		uint8_t LTMK[16];
-		uint8_t MKPK[16];
-	};
-
-	uint8_t cloud_key[16];
-	uint8_t beacon_key[16];
-	
-	struct {
-		uint8_t factory_new;
-		uint8_t reserved[3];
-	}status;
-
-} mi_sysinfo_t;
-
-mi_sysinfo_t mi_sysinfo;
-
 typedef __packed struct {
 	uint8_t  action;
 	uint8_t  method;
@@ -697,8 +682,8 @@ void poll_timer_handler(void * p_context)
 	time_t utc_time = time(NULL);
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"%s", nrf_log_push(ctime(&utc_time)));
 
-	uint8_t battery_stat = 70;
-	mibeacon_obj_enque(MI_STA_LOCK, sizeof(battery_stat), &battery_stat);
+	uint8_t battery_stat = 1;
+	mibeacon_obj_enque(MI_EVT_DOOR, sizeof(battery_stat), &battery_stat);
 
 	NRF_LOG_RAW_INFO("max timer cnt :%d\n", app_timer_op_queue_utilization_get());
 }
@@ -728,10 +713,18 @@ int main(void)
     advertising_init();
     conn_params_init();
 
+	/* assign BUTTON 3 to clear mi_sysinfo in the FLASH*/
+    errno = bsp_event_to_button_action_assign(2,
+											 BSP_BUTTON_ACTION_LONG_PUSH,
+											 BSP_EVENT_RESET);
+	APP_ERROR_CHECK(errno);
+
 	/* <!> mi_psm_init() must be called after ble_stack_init(). */
 	mi_psm_init();
 	mibeacon_init();
 	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), mi_schd_event_handler);
+	
+	mi_scheduler_start(PSM_RESTORE);
 
 	app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
 	app_timer_start(poll_timer, APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER), NULL);

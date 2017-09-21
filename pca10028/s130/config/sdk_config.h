@@ -3477,7 +3477,6 @@
 #endif
 
 // <q> APP_USBD_MSC_CLASS_LOG_ENABLED  - Enables logging in the module.
- 
 
 #ifndef APP_USBD_MSC_CLASS_LOG_ENABLED
 #define APP_USBD_MSC_CLASS_LOG_ENABLED 0

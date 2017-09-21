@@ -33,5 +33,3 @@ int mi_session_encrypt(const uint8_t *input, uint8_t len, uint8_t *output);
  */
 int mi_session_decrypt(const uint8_t *input, uint8_t len, uint8_t *output);
 #endif  /* __MI_CRYPTO_H__ */ 
-
-

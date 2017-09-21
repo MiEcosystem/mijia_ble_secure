@@ -60,6 +60,9 @@ static void on_connect(ble_evt_t * p_ble_evt)
 
 	sd_ble_gap_conn_param_update(mi_srv.conn_handle, &pref_conn_param);
 
+	errno = sd_ble_gatts_sys_attr_set(mi_srv.conn_handle, NULL, 0, 0);
+	APP_ERROR_CHECK(errno);
+
 	ble_gap_adv_params_t adv_params;
 	memset(&adv_params, 0, sizeof(adv_params));
 	
@@ -302,13 +305,23 @@ static void opcode_parse(uint8_t *pdata, uint8_t len)
 	
 	switch (auth_value) {
 	case REG_START:
+		if (get_mi_reg_stat() == false)
+			mi_scheduler_start(auth_value);
+		else
+			auth_send(0xC0DE0001UL);
+		break;
+
 	case LOG_START:
 	case SHARED_LOG_START:
 	case SHARED_LOG_START_W_CERT:
-		mi_scheduler_start(auth_value);
+		if (get_mi_reg_stat() == true)
+			mi_scheduler_start(auth_value);
+		else
+			auth_send(0xC0DE0002UL);
 		break;
+
 	default:
-		NRF_LOG_WARNING("NON-START STATUS %X\n", auth_value);
+		NRF_LOG_WARNING("NON-START OPCODE %X\n", auth_value);
 		break;
 	}
 
@@ -653,6 +666,7 @@ uint32_t auth_send(uint32_t status)
     ble_gatts_hvx_params_t hvx_params = {0};
 	uint32_t errno;
 	uint16_t length = 4;
+
     if ((mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID) || (!mi_srv.is_notification_enabled))
     {
         return NRF_ERROR_INVALID_STATE;
@@ -671,7 +685,7 @@ uint32_t auth_send(uint32_t status)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("Cann't send auth : %d\n", errno);
+		NRF_LOG_INFO("Cann't send auth : %X\n", errno);
 	}
 
 	return errno;

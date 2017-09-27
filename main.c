@@ -530,9 +530,7 @@ void bsp_event_handler(bsp_event_t event)
             break;
 
 		case BSP_EVENT_RESET:
-			set_mi_reg_stat(false);
-			err_code = mi_psm_reset();
-			NRF_LOG_RAW_INFO("CLEAR PSM mi_sysinfo! %d\n", err_code);
+			mi_scheduler_start(SYS_KEY_DELETE);
 			break;
 
         default:
@@ -633,15 +631,15 @@ static void power_manage(void)
  */
 void twi0_handler(nrf_drv_twi_evt_t const * p_event, void * p_context)
 {
-     switch (p_event->type)
-    {
-        case NRF_DRV_TWI_EVT_DONE:
-			NRF_LOG_INFO("TWI evt done: %d\n", p_event->xfer_desc.type);
-            m_twi0_xfer_done = true;
-            break;
-        default:
-			NRF_LOG_ERROR("TWI evt error %d.\n", p_event->type);
-            break;
+	switch (p_event->type) {
+	case NRF_DRV_TWI_EVT_DONE:
+		NRF_LOG_INFO("TWI evt done: %d\n", p_event->xfer_desc.type);
+		m_twi0_xfer_done = true;
+		break;
+
+	default:
+		NRF_LOG_ERROR("TWI evt error %d.\n", p_event->type);
+		break;
     }
 }
 
@@ -683,7 +681,7 @@ void poll_timer_handler(void * p_context)
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"%s", nrf_log_push(ctime(&utc_time)));
 
 	uint8_t battery_stat = 1;
-	mibeacon_obj_enque(MI_EVT_DOOR, sizeof(battery_stat), &battery_stat);
+	mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
 
 	NRF_LOG_RAW_INFO("max timer cnt :%d\n", app_timer_op_queue_utilization_get());
 }
@@ -724,7 +722,7 @@ int main(void)
 	mibeacon_init();
 	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), mi_schd_event_handler);
 	
-	mi_scheduler_start(PSM_RESTORE);
+	mi_scheduler_start(SYS_KEY_RESTORE);
 
 	app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
 	app_timer_start(poll_timer, APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER), NULL);

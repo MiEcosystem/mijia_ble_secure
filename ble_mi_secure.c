@@ -305,19 +305,10 @@ static void opcode_parse(uint8_t *pdata, uint8_t len)
 	
 	switch (auth_value) {
 	case REG_START:
-		if (get_mi_reg_stat() == false)
-			mi_scheduler_start(auth_value);
-		else
-			auth_send(0xC0DE0001UL);
-		break;
-
 	case LOG_START:
 	case SHARED_LOG_START:
 	case SHARED_LOG_START_W_CERT:
-		if (get_mi_reg_stat() == true)
-			mi_scheduler_start(auth_value);
-		else
-			auth_send(0xC0DE0002UL);
+		mi_scheduler_start(auth_value);
 		break;
 
 	default:
@@ -506,7 +497,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 	
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_RAW_INFO("Cann't send pkt %d: %X\n", sn, errno);
+//		NRF_LOG_RAW_INFO("Cann't send pkt %d: %X\n", sn, errno);
 	}
 
 	return errno;
@@ -646,7 +637,7 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 //	err_code = char_add(BLE_UUID_MI_FXFER, NULL, 20, char_props, &mi_srv.fast_xfer_handles);
 //	VERIFY_SUCCESS(err_code);
     
-	version_set("1.2.3_01");
+	version_set("2.0.0_0000");
 	
 	return NRF_SUCCESS;
 }

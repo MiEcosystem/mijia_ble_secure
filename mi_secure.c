@@ -50,6 +50,7 @@ APP_TIMER_DEF(mi_schd_timer);
 #define PRINT_DEV_PUBKEY   0
 #define PRINT_SHA256       0
 #define PRINT_SIGN         0
+#define PRINT_LTMK         0
 
 #define PROFILE_PIN        25
 
@@ -230,7 +231,7 @@ extern fast_xfer_t fast_control_block;
 extern reliable_xfer_t rxfer_control_block;
 
 static void mi_scheduler(void * p_context);
-static void sys_procedure(void);
+static void sys_procedure(uint32_t type);
 static void reg_procedure(void);
 static void admin_login_procedure(void);
 static void shared_login_procedure(void);
@@ -239,7 +240,7 @@ static int monitor(pt_t *pt);
 static uint32_t key_id;
 static mi_author_stat_t mi_authorization_status;
 static mi_schd_event_handler_t m_user_event_handler;
-static uint8_t is_registered;
+static uint8_t m_is_registered;
 
 static __ALIGN(4) struct {
 	uint8_t  did[8];
@@ -249,12 +250,12 @@ static __ALIGN(4) struct {
 
 int get_mi_reg_stat(void)
 {
-	return is_registered;
+	return m_is_registered;
 }
 
-void set_mi_reg_stat(uint8_t stat)
+static void set_mi_reg_stat(uint8_t stat)
 {
-	is_registered = stat != 0 ? 1 : 0;
+	m_is_registered = stat != 0 ? 1 : 0;
 }
 
 uint32_t get_mi_key_id(void)
@@ -419,7 +420,7 @@ int test_thd(pt_t *pt)
 static void mi_scheduler(void * p_context)
 {
 	schd_time++;
-	uint32_t proc_type = *(uint32_t*)p_context & 0xF0UL;
+	uint32_t proc_type = *(uint32_t*)p_context;
 	
 #ifdef M_TEST
 
@@ -431,9 +432,9 @@ static void mi_scheduler(void * p_context)
 	
 	nrf_gpio_pin_set(PROFILE_PIN);
 	
-	switch (proc_type) {
+	switch (proc_type & 0xF0UL) {
 	case SYS_TYPE:
-		sys_procedure();
+		sys_procedure(proc_type);
 		break;
 
 	case REG_TYPE:
@@ -778,8 +779,11 @@ static void schd_evt_handler(schd_evt_t evt_id)
 	case SCHD_EVT_SHARE_LOGIN_SUCCESS:
 	case SCHD_EVT_SHARE_LOGIN_FAILED:
 	case SCHD_EVT_TIMEOUT:
-	case SCHD_EVT_NO_PSM:
-	case SCHD_EVT_PSM_FOUND:
+
+	case SCHD_EVT_KEY_NOT_FOUND:
+	case SCHD_EVT_KEY_FOUND:
+	case SCHD_EVT_KEY_DEL_FAIL:
+	case SCHD_EVT_KEY_DEL_SUCC:
 		schd_stat = 0;
 		mi_scheduler_stop(0);
 		break;
@@ -798,16 +802,16 @@ static int monitor(pt_t *pt)
 	uint8_t errno;
 
 	PT_BEGIN(pt);
-
+	// All procedure timeout times are 5 seconds
 	timer_set(&proc_timeout, 5000);
 	queue_init(&schd_evt_queue, evt_buf, sizeof(evt_buf));
 
 	while(1) {
-		if (timer_expired(&proc_timeout, NULL) == true){
+		if (timer_expired(&proc_timeout, NULL) == true) {
 			enqueue(&schd_evt_queue, SCHD_EVT_TIMEOUT);
 		}
 
-		// fetch evt
+		// process event
 		do {
 			schd_evt = 0;
 			errno = dequeue(&schd_evt_queue, &schd_evt);
@@ -821,20 +825,21 @@ static int monitor(pt_t *pt)
 	PT_END(pt);
 }
 
-static int psm_thd(pt_t *pt)
+static int psm_restore(pt_t *pt)
 {
 	uint8_t errno;
 
 	PT_BEGIN(pt);
-
+	
 	errno = mi_psm_record_read(0xBEEF, (uint8_t*)&mi_sysinfo, sizeof(mi_sysinfo));
 	if (errno == MI_ERROR_NOT_FOUND) {
 		set_mi_reg_stat(false);
-		enqueue(&schd_evt_queue, SCHD_EVT_NO_PSM);
+		PT_YIELD(pt);
+		enqueue(&schd_evt_queue, SCHD_EVT_KEY_NOT_FOUND);
 		PT_EXIT(pt);
 	} else {
 		set_mi_reg_stat(true);
-		NRF_LOG_RAW_INFO("Found the SYSINFO.\n");
+		NRF_LOG_RAW_INFO("Found the KEYINFO.\n");
 	}
 	
 	set_beacon_key(mi_sysinfo.beacon_key);
@@ -851,25 +856,54 @@ static int psm_thd(pt_t *pt)
 	SET_DATA_VAILD(flags.LTMK);
 #endif
 
-	enqueue(&schd_evt_queue, SCHD_EVT_PSM_FOUND);
+	enqueue(&schd_evt_queue, SCHD_EVT_KEY_FOUND);
 	PT_END(pt);
 }
 
-static int err_thd(pt_t *pt)
+static int psm_delete(pt_t *pt)
 {
 	uint8_t errno;
 
 	PT_BEGIN(pt);
-	
 
-	enqueue(&schd_evt_queue, SCHD_EVT_PSM_FOUND);
+	set_mi_reg_stat(false);
+	errno = mi_psm_reset();
+	if (errno == MI_SUCCESS) {
+		NRF_LOG_RAW_INFO("KEYINFO has been deleted! \n" );
+		PT_YIELD(pt);
+		enqueue(&schd_evt_queue, SCHD_EVT_KEY_DEL_SUCC);
+	} else {
+		NRF_LOG_RAW_INFO("KEYINFO deleted failed! errno: %d\n", errno);
+		PT_YIELD(pt);
+		enqueue(&schd_evt_queue, SCHD_EVT_KEY_DEL_FAIL);
+	}
+	
 	PT_END(pt);
 }
 
-static void sys_procedure()
+static int err_thd(pt_t *pt, uint32_t errno)
 {
+	PT_BEGIN(pt);
+
+	PT_WAIT_UNTIL(pt, auth_send(errno) == MI_SUCCESS);
+	PT_YIELD(pt);
+	PT_END(pt);
+}
+
+static void sys_procedure(uint32_t type)
+{
+	switch (type) {
+	case SYS_KEY_RESTORE:
 		if (pt_flags.pt1 == 1)
-			pt_flags.pt1 = PT_SCHEDULE(psm_thd(&pt1));
+			pt_flags.pt1 = PT_SCHEDULE(psm_restore(&pt1));
+		break;
+
+	case SYS_KEY_DELETE:
+		if (pt_flags.pt1 == 1)
+			pt_flags.pt1 = PT_SCHEDULE(psm_delete(&pt1));
+		break;
+		
+	}
 }
 
 static int reg_msc(pt_t *pt)
@@ -1006,8 +1040,9 @@ static int reg_auth(pt_t *pt)
 	SET_DATA_VAILD(flags.encrypt_reg_data);
 
 	PT_WAIT_UNTIL(pt, auth_recv() != REG_START);
-	if (auth_recv() != REG_SUCCESS) {
+	if (auth_recv() == REG_VERIFY_FAIL) {
 		NRF_LOG_ERROR("Auth failed.\n");
+		PT_WAIT_UNTIL(pt, auth_send(REG_FAILED) == NRF_SUCCESS);
 		enqueue(&schd_evt_queue, SCHD_EVT_REG_FAILED);
 		PT_EXIT(pt);
 	}
@@ -1023,6 +1058,10 @@ static int reg_auth(pt_t *pt)
 	        (void *) mk_info,         sizeof(mk_info)-1,
 	                    LTMK,         sizeof(LTMK));
 	SET_DATA_VAILD(flags.LTMK);
+#if PRINT_LTMK
+	NRF_LOG_RAW_HEXDUMP_INFO(LTMK, 32);
+	PT_YIELD(pt);
+#endif
 //	aes_ccm_encrypt(rand_key, nonce, NULL, 0, MKPK.mic, 4, LTMK, 32, MKPK.cipher);
 	
 	// fs_store(rand_key);
@@ -1055,19 +1094,33 @@ static int reg_auth(pt_t *pt)
 	
 	uint8_t errno = mi_psm_record_write(0xBEEF, (uint8_t*)&mi_sysinfo, sizeof(mi_sysinfo));
 	if (errno != MI_SUCCESS) {
-		NRF_LOG_RAW_INFO("SYSINFO STORE FAILED: %d\n", errno);
+		PT_WAIT_UNTIL(pt, auth_send(REG_FAILED) == NRF_SUCCESS);
+		NRF_LOG_RAW_INFO("KEYINFO STORE FAILED: %d\n", errno);
+		enqueue(&schd_evt_queue, SCHD_EVT_REG_FAILED);
+		
 	 } else {
 		set_mi_reg_stat(true);
+
+		PT_WAIT_UNTIL(pt, auth_send(REG_SUCCESS) == NRF_SUCCESS);
+		NRF_LOG_RAW_INFO("REG SUCCESS: %d\n", schd_time);
+		enqueue(&schd_evt_queue, SCHD_EVT_REG_SUCCESS);
 	}
 
-	NRF_LOG_RAW_INFO("REG SUCCESS: %d\n", schd_time);
-	enqueue(&schd_evt_queue, SCHD_EVT_REG_SUCCESS);
 
 	PT_END(pt);
 }
 
 static void reg_procedure()
 {
+	if (m_is_registered == true) {
+		if (PT_SCHEDULE(err_thd(&pt1, ERR_REGISTERED)))
+			return;
+		else
+			enqueue(&schd_evt_queue, SCHD_EVT_KEY_FOUND);
+
+		return;
+	}
+
 	if (pt_flags.pt1 == 1)
 		pt_flags.pt1 = PT_SCHEDULE(reg_msc(&pt1));
 
@@ -1122,6 +1175,10 @@ static int admin_auth(pt_t *pt)
 	uint32_t crc32;
 	PT_BEGIN(pt);
 
+#if PRINT_LTMK
+	NRF_LOG_RAW_HEXDUMP_INFO(LTMK, 32);
+	PT_YIELD(pt);
+#endif
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.eph_key));
 
 	sha256_hkdf(     eph_key,         sizeof(eph_key) + sizeof(LTMK),
@@ -1142,16 +1199,15 @@ static int admin_auth(pt_t *pt)
 	crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
 
   	if (crc32 == encrypt_login_data.crc32) {
-		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
-		NRF_LOG_INFO("LOG SUCCESS: %d\n", schd_time);
+		NRF_LOG_INFO("ADMIN LOG SUCCESS: %d\n", schd_time);
+		key_id = 0;
 		set_mi_authorization(OWNER_AUTHORIZATION);
 		mi_crypto_init(&session_key);
-
-		key_id = 0;
+		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
 		enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_SUCCESS);
 	} else {
+		NRF_LOG_ERROR("ADMIN LOG FAILED. %d\n", errno);
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
-		NRF_LOG_ERROR("LOG FAILED. %d\n", errno);
 		enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_FAILED);
 	}
 
@@ -1160,6 +1216,15 @@ static int admin_auth(pt_t *pt)
 
 static void admin_login_procedure()
 {
+	if (m_is_registered != true) {
+		if (PT_SCHEDULE(err_thd(&pt1, ERR_NOT_REGISTERED)))
+			return;
+		else
+			enqueue(&schd_evt_queue, SCHD_EVT_KEY_NOT_FOUND);
+		
+		return;
+	}
+
 	if (pt_flags.pt1 == 1)
 		pt_flags.pt1 = PT_SCHEDULE(admin_msc(&pt1));
 
@@ -1292,7 +1357,6 @@ static int shared_ble(pt_t *pt)
 	PT_END(pt);
 }
 
-
 static int shared_auth(pt_t *pt)
 {
 	PT_BEGIN(pt);
@@ -1339,6 +1403,15 @@ static int shared_auth(pt_t *pt)
 
 static void shared_login_procedure()
 {
+	if (m_is_registered != true) {
+		if (PT_SCHEDULE(err_thd(&pt1, ERR_NOT_REGISTERED)))
+			return;
+		else
+			enqueue(&schd_evt_queue, SCHD_EVT_KEY_NOT_FOUND);
+
+		return;
+	}
+
 	if (pt_flags.pt1 == 1)
 		pt_flags.pt1 = PT_SCHEDULE(shared_msc(&pt1));
 

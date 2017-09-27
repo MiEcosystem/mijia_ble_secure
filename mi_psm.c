@@ -7,59 +7,69 @@
 #include "nrf_log_ctrl.h"
 
 #define MI_RECORD_FILE_ID              0x4D49		// file used to storage
-
+uint8_t m_psm_done;
 static void mi_psm_fds_evt_handler(fds_evt_t const * const p_fds_evt)
 {
-    switch (p_fds_evt->id)
-    {
-        case FDS_EVT_INIT:
-            if (p_fds_evt->result == FDS_SUCCESS) {
-				NRF_LOG_INFO("FDS_EVT_INIT SUCCESS\n");
-			}else{
-				NRF_LOG_INFO("FDS_EVT_INIT FAILED\n");
+    switch (p_fds_evt->id) {
+	case FDS_EVT_INIT:
+		if (p_fds_evt->result == FDS_SUCCESS) {
+			NRF_LOG_INFO("FDS_EVT_INIT SUCCESS\n");
+		}else{
+			NRF_LOG_INFO("FDS_EVT_INIT FAILED\n");
+		}
+		break;
+		
+	case FDS_EVT_WRITE:
+		if (p_fds_evt->result == FDS_SUCCESS) {
+			NRF_LOG_INFO("FDS_EVT_WR SUCCESS\n");
+			if ((uint32_t)p_fds_evt->write.file_id == MI_RECORD_FILE_ID) {
+				m_psm_done = 1;
 			}
-            break;
+		} else {
+			NRF_LOG_INFO("FDS_EVT_WR FAILED\n");
+		}
+		break;
+		
+	case FDS_EVT_UPDATE:
+		if (p_fds_evt->result == FDS_SUCCESS) {
+			NRF_LOG_INFO("FDS_EVT_UPDATE SUCCESS\n");
+			if ((uint32_t)p_fds_evt->write.file_id == MI_RECORD_FILE_ID) {
+				m_psm_done = 1;
+			}
+		}else{
+			NRF_LOG_INFO("FDS_EVT_UPDATE FAILED\n");
+		}
+		break;
 			
-		case FDS_EVT_WRITE:
-            if (p_fds_evt->result == FDS_SUCCESS) {
-				NRF_LOG_INFO("FDS_EVT_WR SUCCESS\t file_id is 0x%X.\n", 
-				             (uint32_t)p_fds_evt->write.file_id);
-			}else{
-				NRF_LOG_INFO("FDS_EVT_WR FAILED\n");
+	case FDS_EVT_DEL_RECORD:
+		if (p_fds_evt->result == FDS_SUCCESS) {
+			NRF_LOG_INFO("FDS_EVT_DEL_RECORD SUCCESS\n");
+			if ((uint32_t)p_fds_evt->del.file_id == MI_RECORD_FILE_ID) {
+				m_psm_done = 1;
 			}
-			break;
-			
-		case FDS_EVT_UPDATE:
-			if (p_fds_evt->result == FDS_SUCCESS) {
-				NRF_LOG_INFO("FDS_EVT_UPDATE SUCCESS\n");
-			}else{
-				NRF_LOG_INFO("FDS_EVT_UPDATE FAILED\n");
+		}else{
+			NRF_LOG_INFO("FDS_EVT_DEL_RECORD FAILED\n");
+		}
+		break;
+
+	case FDS_EVT_DEL_FILE:
+		if (p_fds_evt->result == FDS_SUCCESS) {
+			NRF_LOG_INFO("FDS_EVT_DEL_FILE SUCCESS\n");
+			if ((uint32_t)p_fds_evt->del.file_id == MI_RECORD_FILE_ID) {
+				m_psm_done = 1;
 			}
-			break;
-				
-		case FDS_EVT_DEL_RECORD:
-			if (p_fds_evt->result == FDS_SUCCESS) {
-				NRF_LOG_INFO("FDS_EVT_DEL_RECORD SUCCESS\n");
-			}else{
-				NRF_LOG_INFO("FDS_EVT_DEL_RECORD FAILED\n");
-			}
-			break;
-	
-		case FDS_EVT_DEL_FILE:
-			if (p_fds_evt->result == FDS_SUCCESS) {
-				NRF_LOG_INFO("FDS_EVT_DEL_FILE SUCCESS\n");
-			}else{
-				NRF_LOG_INFO("FDS_EVT_DEL_FILE FAILED\n");
-			}
-			break;
-	
-		case FDS_EVT_GC:
-			if (p_fds_evt->result == FDS_SUCCESS) {
-				NRF_LOG_INFO("FDS_EVT_GC SUCCESS\n");
-			}else{
-				NRF_LOG_INFO("FDS_EVT_GC FAILED\n");
-			}
-            break;
+		}else{
+			NRF_LOG_INFO("FDS_EVT_DEL_FILE FAILED\n");
+		}
+		break;
+
+	case FDS_EVT_GC:
+		if (p_fds_evt->result == FDS_SUCCESS) {
+			NRF_LOG_INFO("FDS_EVT_GC SUCCESS\n");
+		}else{
+			NRF_LOG_INFO("FDS_EVT_GC FAILED\n");
+		}
+		break;
     }
 }
 

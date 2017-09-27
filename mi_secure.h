@@ -31,6 +31,8 @@ extern "C" {
 #define REG_START                      (REG_TYPE)
 #define REG_SUCCESS                    (REG_TYPE+1)
 #define REG_FAILED                     (REG_TYPE+2)
+#define REG_VERIFY_SUCC                (REG_TYPE+3)
+#define REG_VERIFY_FAIL                (REG_TYPE+4)
 
 #define LOG_TYPE                       0x20UL
 #define LOG_START                      (LOG_TYPE)
@@ -42,7 +44,14 @@ extern "C" {
 #define SHARED_LOG_START_W_CERT        (SHARED_TYPE+4)
 #define SHARED_LOG_SUCCESS             (SHARED_TYPE+1)
 #define SHARED_LOG_FAILED              (SHARED_TYPE+2)
-#define SHARED_LOG_EXPIRED             (SHARED_TYPE+3)
+
+#define SYS_TYPE                       0xA0UL
+#define SYS_KEY_RESTORE                (SYS_TYPE)
+#define SYS_KEY_DELETE                 (SYS_TYPE+1)
+
+#define ERR_TYPE                       0xE0UL
+#define ERR_NOT_REGISTERED             (ERR_TYPE)
+#define ERR_REGISTERED                 (ERR_TYPE+1)
 
 typedef enum {
 	UNAUTHORIZATION = 0,
@@ -57,7 +66,11 @@ typedef enum {
 	SCHD_EVT_ADMIN_LOGIN_FAILED,
 	SCHD_EVT_SHARE_LOGIN_SUCCESS,
 	SCHD_EVT_SHARE_LOGIN_FAILED,
-	SCHD_EVT_TIMEOUT
+	SCHD_EVT_TIMEOUT,
+	SCHD_EVT_KEY_NOT_FOUND,
+	SCHD_EVT_KEY_FOUND,
+	SCHD_EVT_KEY_DEL_FAIL,
+	SCHD_EVT_KEY_DEL_SUCC
 } schd_evt_t;
 
 typedef void (*mi_schd_event_handler_t)(schd_evt_t evt_id);

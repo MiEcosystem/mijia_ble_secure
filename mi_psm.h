@@ -1,6 +1,8 @@
 #ifndef __MI_PSM_H
 #define __MI_PSM_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -13,6 +15,8 @@ typedef enum {
 
 	REC_MKPK_KEY           = 0x0010,
 } mi_psm_record_t;
+
+extern uint8_t m_psm_done;
 
 void mi_psm_init(void);
 

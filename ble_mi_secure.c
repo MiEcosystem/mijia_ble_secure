@@ -60,6 +60,9 @@ static void on_connect(ble_evt_t * p_ble_evt)
 
 	sd_ble_gap_conn_param_update(mi_srv.conn_handle, &pref_conn_param);
 
+	errno = sd_ble_gatts_sys_attr_set(mi_srv.conn_handle, NULL, 0, 0);
+	APP_ERROR_CHECK(errno);
+
 	ble_gap_adv_params_t adv_params;
 	memset(&adv_params, 0, sizeof(adv_params));
 	
@@ -307,8 +310,9 @@ static void opcode_parse(uint8_t *pdata, uint8_t len)
 	case SHARED_LOG_START_W_CERT:
 		mi_scheduler_start(auth_value);
 		break;
+
 	default:
-		NRF_LOG_WARNING("NON-START STATUS %X\n", auth_value);
+		NRF_LOG_WARNING("NON-START OPCODE %X\n", auth_value);
 		break;
 	}
 
@@ -493,7 +497,7 @@ int reliable_xfer_data(reliable_xfer_t *pxfer, uint16_t sn)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 	
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_RAW_INFO("Cann't send pkt %d: %X\n", sn, errno);
+//		NRF_LOG_RAW_INFO("Cann't send pkt %d: %X\n", sn, errno);
 	}
 
 	return errno;
@@ -633,7 +637,7 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 //	err_code = char_add(BLE_UUID_MI_FXFER, NULL, 20, char_props, &mi_srv.fast_xfer_handles);
 //	VERIFY_SUCCESS(err_code);
     
-	version_set("1.2.3_01");
+	version_set("2.0.0_0000");
 	
 	return NRF_SUCCESS;
 }
@@ -653,6 +657,7 @@ uint32_t auth_send(uint32_t status)
     ble_gatts_hvx_params_t hvx_params = {0};
 	uint32_t errno;
 	uint16_t length = 4;
+
     if ((mi_srv.conn_handle == BLE_CONN_HANDLE_INVALID) || (!mi_srv.is_notification_enabled))
     {
         return NRF_ERROR_INVALID_STATE;
@@ -671,7 +676,7 @@ uint32_t auth_send(uint32_t status)
     errno = sd_ble_gatts_hvx(mi_srv.conn_handle, &hvx_params);
 
 	if (errno != NRF_SUCCESS) {
-		NRF_LOG_INFO("Cann't send auth : %d\n", errno);
+		NRF_LOG_INFO("Cann't send auth : %X\n", errno);
 	}
 
 	return errno;

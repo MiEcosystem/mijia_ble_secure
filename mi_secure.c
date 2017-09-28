@@ -5,6 +5,7 @@
 #include "nrf_drv_twi_patched.h"
 #include "nrf_gpio.h"
 #include "nrf_queue.h"
+
 #define NRF_LOG_MODULE_NAME "SCHD"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -43,7 +44,8 @@ typedef struct {
 	uint32_t reserved[3];
 } shared_key_t;
 
-APP_TIMER_DEF(mi_schd_timer);
+#define PROTOCOL_VERSION   0x0200
+#define PROFILE_PIN        25
 
 #define PRINT_MSC_INFO     0
 #define PRINT_MAC          0
@@ -51,8 +53,6 @@ APP_TIMER_DEF(mi_schd_timer);
 #define PRINT_SHA256       0
 #define PRINT_SIGN         0
 #define PRINT_LTMK         0
-
-#define PROFILE_PIN        25
 
 #define MSC_XFER(CMD, INPUT, INPUT_L, OUTPUT, OUTPUT_L)                         \
 (msc_xfer_control_block_t) {    .cmd      = CMD,                                \
@@ -67,6 +67,8 @@ APP_TIMER_DEF(mi_schd_timer);
 #define DATA_IS_INVAILD_P(x)     (x == 0)
 
 #define  RTC_TIME_DRIFT  300
+
+APP_TIMER_DEF(mi_schd_timer);
 
 static struct {
 	uint8_t msc_info   :1 ;
@@ -915,6 +917,7 @@ static int reg_msc(pt_t *pt)
 
 	msc_control_block = MSC_XFER(MSC_INFO, NULL, 0, (void*)&tmp_info, 26);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
+	tmp_info.protocol_ver = PROTOCOL_VERSION;
 	memcpy(msc_info+8, (uint8_t*)&tmp_info.sw_ver, 4);
 
 	msc_control_block = MSC_XFER(MSC_ID, NULL, 0, msc_info, 8);
@@ -962,6 +965,7 @@ static int reg_ble(pt_t *pt)
 	NRF_LOG_INFO("app_pub recived "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
 	
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.msc_info));
+
 	format_tx_cb(&rxfer_control_block, msc_info, sizeof(msc_info) + sizeof(dev_pub));
 	PT_SPAWN(pt, &pt_r_tx_thd, rxfer_tx_thd(&pt_r_tx_thd, &rxfer_control_block, DEV_PUBKEY));
 	NRF_LOG_INFO("dev_pub send "NRF_LOG_COLOR_CODE_BLUE"@ schd_time %d\n", schd_time);
@@ -1249,7 +1253,7 @@ static int verify_share_info(void * pinfo, uint8_t * p_LTMK)
 	} virtual_key;
 
 	memcpy(&virtual_key, pinfo, sizeof(virtual_key));
-	memcpy(adata, msc_info, 8);
+	memcpy(adata, mi_sysinfo.did, 8);
 	adata[8] = 0x01;
 
 	errno = aes_ccm_auth_decrypt(mi_sysinfo.cloud_key,
@@ -1283,10 +1287,6 @@ static int shared_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.dev_pub);
-
-	msc_control_block = MSC_XFER(MSC_ID, NULL, 0, msc_info, 8);
-	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
-	SET_DATA_VAILD(flags.msc_info);
 
 	if (schd_stat == SHARED_LOG_START_W_CERT) {
 		msc_control_block = MSC_XFER(MSC_CERTS_LEN, NULL, 0, (void*)&m_certs_len, sizeof(m_certs_len));

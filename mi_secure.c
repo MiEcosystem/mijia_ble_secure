@@ -889,6 +889,7 @@ static int err_thd(pt_t *pt, uint32_t errno)
 
 	PT_WAIT_UNTIL(pt, auth_send(errno) == MI_SUCCESS);
 	PT_YIELD(pt);
+	enqueue(&schd_evt_queue, errno == ERR_REGISTERED ? SCHD_EVT_KEY_FOUND : SCHD_EVT_KEY_NOT_FOUND);
 	PT_END(pt);
 }
 
@@ -1117,10 +1118,8 @@ static int reg_auth(pt_t *pt)
 static void reg_procedure()
 {
 	if (m_is_registered == true) {
-		if (PT_SCHEDULE(err_thd(&pt1, ERR_REGISTERED)))
-			return;
-		else
-			enqueue(&schd_evt_queue, SCHD_EVT_KEY_FOUND);
+		if (pt_flags.pt1 == 1)
+			pt_flags.pt1 = PT_SCHEDULE(err_thd(&pt1, ERR_REGISTERED));
 
 		return;
 	}
@@ -1221,11 +1220,9 @@ static int admin_auth(pt_t *pt)
 static void admin_login_procedure()
 {
 	if (m_is_registered != true) {
-		if (PT_SCHEDULE(err_thd(&pt1, ERR_NOT_REGISTERED)))
-			return;
-		else
-			enqueue(&schd_evt_queue, SCHD_EVT_KEY_NOT_FOUND);
-		
+		if (pt_flags.pt1 == 1)
+			pt_flags.pt1 = PT_SCHEDULE(err_thd(&pt1, ERR_NOT_REGISTERED));
+
 		return;
 	}
 
@@ -1404,10 +1401,8 @@ static int shared_auth(pt_t *pt)
 static void shared_login_procedure()
 {
 	if (m_is_registered != true) {
-		if (PT_SCHEDULE(err_thd(&pt1, ERR_NOT_REGISTERED)))
-			return;
-		else
-			enqueue(&schd_evt_queue, SCHD_EVT_KEY_NOT_FOUND);
+		if (pt_flags.pt1 == 1)
+			pt_flags.pt1 = PT_SCHEDULE(err_thd(&pt1, ERR_NOT_REGISTERED));
 
 		return;
 	}

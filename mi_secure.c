@@ -320,7 +320,7 @@ uint32_t mi_scheduler_start(uint32_t auth_stat)
 	return errno;
 }
 
-uint32_t mi_scheduler_stop(int type)
+static uint32_t mi_scheduler_stop(int type)
 {
 	int32_t errno;
 	errno = app_timer_stop(mi_schd_timer);
@@ -1105,7 +1105,7 @@ static int reg_auth(pt_t *pt)
 		
 	 } else {
 		set_mi_reg_stat(true);
-
+		set_beacon_key(mi_sysinfo.beacon_key);
 		PT_WAIT_UNTIL(pt, auth_send(REG_SUCCESS) == NRF_SUCCESS);
 		NRF_LOG_RAW_INFO("REG SUCCESS: %d\n", schd_time);
 		enqueue(&schd_evt_queue, SCHD_EVT_REG_SUCCESS);

@@ -80,7 +80,6 @@ uint32_t get_mi_authorization(void);
 uint32_t get_mi_key_id(void);
 uint32_t mi_scheduler_init(uint32_t interval, mi_schd_event_handler_t handler);
 uint32_t mi_scheduler_start(uint32_t status);
-uint32_t mi_scheduler_stop(int type);
 
 #ifdef __cplusplus
 }

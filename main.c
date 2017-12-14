@@ -20,7 +20,7 @@
  * This file contains the source code for a sample application that uses the Nordic UART service.
  * This application uses the @ref srvlib_conn_params module.
  */
-
+//
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
@@ -34,6 +34,7 @@
 #include "app_timer.h"
 #include "app_button.h"
 #include "fstorage.h"
+#include "fds.h"
 #include "ble_nus.h"
 
 #define NRF_LOG_MODULE_NAME "MAIN"
@@ -44,6 +45,7 @@
 #include "mi_secure.h"
 #include "mi_beacon.h"
 #include "mi_crypto.h"
+#include "mi_psm.h"
 
 #include "app_util_platform.h"
 #include "bsp.h"
@@ -77,7 +79,7 @@
 #define DEVICE_NAME                     "Secure_nRF51"                              /**< Name of device. Will be included in the advertising data. */
 #endif
 
-#define APP_ADV_INTERVAL                MSEC_TO_UNITS(100, UNIT_0_625_MS)           /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_INTERVAL                MSEC_TO_UNITS(200, UNIT_0_625_MS)           /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS      0                                           /**< The advertising timeout (in units of seconds). */
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
@@ -87,11 +89,13 @@
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (40 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
-#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER)  /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
+#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(15000, APP_TIMER_PRESCALER) /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000, APP_TIMER_PRESCALER) /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
 
 #define DEAD_BEEF                       0xDEADBEEF                                  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
+
+APP_TIMER_DEF(poll_timer);
 
 static ble_nus_t                        m_nus;                                      /**< Structure to identify the Nordic UART Service. */
 static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;    /**< Handle of the current connection. */
@@ -180,7 +184,6 @@ static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t lengt
 	ble_nus_string_send(&m_nus, msg, length);
 
 }
-/**@snippet [Handling the data received over BLE] */
 
 
 /**@brief Function for initializing services that will be used by the application.
@@ -238,7 +241,8 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
  */
 static void conn_params_error_handler(uint32_t nrf_error)
 {
-    APP_ERROR_HANDLER(nrf_error);
+//    APP_ERROR_HANDLER(nrf_error);
+	NRF_LOG_ERROR("conn param error %X\n", nrf_error);
 }
 
 
@@ -415,7 +419,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
-	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"EVT %X\n", p_ble_evt->header.evt_id);
+//	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"BLE EVT %X\n", p_ble_evt->header.evt_id);
 
     ble_conn_params_on_ble_evt(p_ble_evt);
 	ble_mi_on_ble_evt(p_ble_evt);
@@ -457,7 +461,7 @@ static void ble_stack_init(void)
     nrf_clock_lf_cfg_t clock_lf_cfg = {.source        = NRF_CLOCK_LF_SRC_XTAL,
 	                                   .rc_ctiv       = 0,
 	                                   .rc_temp_ctiv  = 0,
-	                                   .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_20_PPM};
+	                                   .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_100_PPM};
 
     // Initialize SoftDevice.
     SOFTDEVICE_HANDLER_INIT(&clock_lf_cfg, NULL);
@@ -525,6 +529,10 @@ void bsp_event_handler(bsp_event_t event)
             }
             break;
 
+		case BSP_EVENT_RESET:
+			mi_scheduler_start(SYS_KEY_DELETE);
+			break;
+
         default:
             break;
     }
@@ -551,13 +559,13 @@ static void advertising_init(void)
 	sd_ble_gap_address_get(&dev_mac);
 #endif
 
-	mibeacon_config_t  beacon_cfg = {0};
+	mibeacon_config_t  beacon_cfg     = {0};
 	beacon_cfg.frame_ctrl.version     = 4;
 	beacon_cfg.pid                    = APP_PRODUCT_ID;
 	beacon_cfg.p_capability           = &cap;
 	beacon_cfg.p_mac                  = dev_mac.addr;
 	
-	mi_beacon_data_set(&beacon_cfg, data, &total_len);
+	mibeacon_data_set(&beacon_cfg, data, &total_len);
 
     /* Indicating Mi Service */
 	ble_advdata_service_data_t serviceData;
@@ -623,15 +631,15 @@ static void power_manage(void)
  */
 void twi0_handler(nrf_drv_twi_evt_t const * p_event, void * p_context)
 {
-     switch (p_event->type)
-    {
-        case NRF_DRV_TWI_EVT_DONE:
-			NRF_LOG_INFO("TWI evt done: %d\n", p_event->xfer_desc.type);
-            m_twi0_xfer_done = true;
-            break;
-        default:
-			NRF_LOG_ERROR("TWI evt error %d.\n", p_event->type);
-            break;
+	switch (p_event->type) {
+	case NRF_DRV_TWI_EVT_DONE:
+		NRF_LOG_INFO("TWI evt done: %d\n", p_event->xfer_desc.type);
+		m_twi0_xfer_done = true;
+		break;
+
+	default:
+		NRF_LOG_ERROR("TWI evt error %d.\n", p_event->type);
+		break;
     }
 }
 
@@ -644,7 +652,7 @@ void twi0_init (void)
        .sda                = 29,
        .frequency          = NRF_TWI_FREQ_100K,
        .interrupt_priority = APP_IRQ_PRIORITY_HIGH,
-       .clear_bus_init     = false
+       .clear_bus_init     = true
     };
 
     err_code = nrf_drv_twi_init(&TWI0, &msc_config, twi0_handler, NULL);
@@ -652,8 +660,8 @@ void twi0_init (void)
 
     nrf_drv_twi_enable(&TWI0);
 }
+
 void time_init(struct tm * time_ptr);
-void mibeacon_test(void);
 
 typedef __packed struct {
 	uint8_t  action;
@@ -662,18 +670,35 @@ typedef __packed struct {
 	uint32_t time;
 } lock_evt_t;
 
+void mi_schd_event_handler(schd_evt_t evt_id)
+{
+	NRF_LOG_RAW_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", evt_id);
+}
+
+void poll_timer_handler(void * p_context)
+{
+	time_t utc_time = time(NULL);
+	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"%s", nrf_log_push(ctime(&utc_time)));
+
+	uint8_t battery_stat = 1;
+	mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
+
+	NRF_LOG_RAW_INFO("max timer cnt :%d\n", app_timer_op_queue_utilization_get());
+}
+
+
 /**@brief Application main function.
  */
 int main(void)
 {
-    uint32_t err_code;
+    uint32_t errno;
     bool erase_bonds;
 	uint8_t  lock_opcode = 1;
 	lock_evt_t lock_event;
-	err_code = NRF_LOG_INIT(NULL);
-    APP_ERROR_CHECK(err_code);
-	NRF_LOG_RAW_INFO(RTT_CTRL_CLEAR);
-	
+
+	NRF_LOG_INIT(NULL);
+	NRF_LOG_RAW_INFO(RTT_CTRL_CLEAR"Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
+
     // Initialize.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
 
@@ -689,51 +714,71 @@ int main(void)
     conn_params_init();
 	mibeacon_init();
 
-    NRF_LOG_RAW_INFO("Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
+	/* assign BUTTON 3 to clear mi_sysinfo in the FLASH*/
+    errno = bsp_event_to_button_action_assign(2,
+											 BSP_BUTTON_ACTION_LONG_PUSH,
+											 BSP_EVENT_RESET);
+	APP_ERROR_CHECK(errno);
 
-	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER));
+	/* <!> mi_psm_init() must be called after ble_stack_init(). */
+	mi_psm_init();
+	mibeacon_init();
+	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), mi_schd_event_handler);
+	
+	mi_scheduler_start(SYS_KEY_RESTORE);
+
+	app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
+	app_timer_start(poll_timer, APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER), NULL);
 
 #ifdef M_TEST
 	mi_scheduler_start(0);
 #else
-    err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
-    APP_ERROR_CHECK(err_code);
-
+	sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
+	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
 	sd_ble_gap_tx_power_set(0);
-
+    errno = ble_advertising_start(BLE_ADV_MODE_FAST);
+    APP_ERROR_CHECK(errno);
 #endif
+
     // Enter main loop.
     for (;;)
     {
 		if (get_lock_opcode(&lock_opcode) == 0) {
 			switch(lock_opcode) {
 				case 0:
-					NRF_LOG_INFO("lock\n");
+					NRF_LOG_INFO(" unlock \n");
 					bsp_board_led_off(3);
-					break;
-				
-				case 1:
-					NRF_LOG_INFO("unlock\n");
-					bsp_board_led_on(3);
 
 					lock_event.action = 0;
 					lock_event.method = 0;
-					lock_event.user_id= 0x11223344;
+					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(LOCK_EVT, sizeof(lock_event), &lock_event);
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+					break;
+				
+				case 1:
+					NRF_LOG_INFO(" lock \n");
+					bsp_board_led_on(3);
+
+					lock_event.action = 1;
+					lock_event.method = 0;
+					lock_event.user_id= get_mi_key_id();
+					lock_event.time   = time(NULL);
+
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 
 				case 2:
-					NRF_LOG_INFO("bolt\n");
+					NRF_LOG_INFO(" bolt \n");
 					bsp_board_led_off(3);
 
 					lock_event.action = 2;
 					lock_event.method = 0;
-					lock_event.user_id= 0x55667788;
+					lock_event.user_id= get_mi_key_id();
 					lock_event.time   = time(NULL);
 
-					mibeacon_event_push(LOCK_EVT, sizeof(lock_event), &lock_event);
+					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
 					break;
 
 				default:
@@ -742,6 +787,7 @@ int main(void)
 			}
 			
 			send_lock_stat(lock_opcode);
+			send_lock_log((uint8_t *)&lock_event, sizeof(lock_event));
 			lock_opcode = 0;
 		}
 

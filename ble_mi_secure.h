@@ -150,7 +150,8 @@ typedef struct {
 	uint8_t                  uuid_type;               /**< UUID type for Xiaomi Service Base UUID. */
 	uint16_t                 service_handle;          /**< Handle of Xiaomi Service (as provided by the SoftDevice). */
 
-	ble_gatts_char_handles_t auth_handles;            /**< Handles related to the characteristic (as provided by the SoftDevice). */
+	ble_gatts_char_handles_t version_handles;         /**< Handles related to the characteristic (as provided by the SoftDevice). */
+	ble_gatts_char_handles_t ctrl_point_handles;      /**< Handles related to the characteristic (as provided by the SoftDevice). */
 	ble_gatts_char_handles_t secure_handles;
 	ble_gatts_char_handles_t fast_xfer_handles;              
               
@@ -190,6 +191,33 @@ void ble_mi_on_ble_evt(ble_evt_t * p_ble_evt);
  */
 uint32_t auth_send(uint32_t status);
 uint32_t auth_recv(void);
+
+/**@brief Function for setting version characteristic.
+ *
+ * @details  Version format: "1.2.3_0001"
+ *           A.B.C is mijia ble svr protocol version. e.g. "1.2.3"
+ *           The number after underline is user firmware version. e.g."0001"
+ *
+ *
+ * @param[in] in    Point to the version string. 
+ *
+ * @retval NRF_SUCCESS If the status was sent successfully. Otherwise, an error code is returned.
+ */
+uint32_t version_set(uint8_t *in);
+
+/**@brief Function for getting version characteristic.
+ *
+ * @details  Version format: "1.2.3_0001"
+ *           A.B.C is mijia ble svr protocol version. e.g. "1.2.3"
+ *           The number after underline is user firmware version. e.g."0001"
+ *
+ *
+ * @param[out] out    Point to the version string. 
+ *
+ * @retval NRF_SUCCESS If the status was sent successfully. Otherwise, an error code is returned.
+ */
+void version_get(uint8_t *out);
+
 
 int fast_xfer_recive(fast_xfer_t *pxfer);
 int fast_xfer_send(fast_xfer_t *pxfer);

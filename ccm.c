@@ -72,7 +72,7 @@ static void mbedtls_zeroize( void *v, size_t n ) {
     for( i = 0; i < 16; i++ )                                               \
         y[i] ^= b[i];                                                       \
                                                                             \
-    if( ( ret = aes_ecb_encrypt( key, y, y) ) != 0 )                    \
+    if( ( ret = aes_ecb_encrypt( key, y, y) ) != 0 )                        \
         return( ret );
 
 /*
@@ -81,7 +81,7 @@ static void mbedtls_zeroize( void *v, size_t n ) {
  * This avoids allocating one more 16 bytes buffer while allowing src == dst.
  */
 #define CTR_CRYPT( dst, src, len  )                                            \
-    if( ( ret = aes_ecb_encrypt( key, ctr, b) ) != 0 )                     \
+    if( ( ret = aes_ecb_encrypt( key, ctr, b) ) != 0 )                         \
         return( ret );                                                         \
                                                                                \
     for( i = 0; i < len; i++ )                                                 \
@@ -315,7 +315,7 @@ static uint8_t nonce[13] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
 static uint8_t p[64] = "HELLOWORLD!@#$%^helloworld123456";
 static uint8_t c[64] = {0};
 static uint8_t d[64] = {0};
-static uint8_t  mic[4] = {0};
+static uint8_t mic[4] = {0};
 static uint8_t astr[4] = {1,2,3,4};
 
 

@@ -3009,7 +3009,7 @@
 // <q> APP_MAILBOX_ENABLED  - app_mailbox - Mailbox for safely queuing items
 
 #ifndef APP_MAILBOX_ENABLED
-#define APP_MAILBOX_ENABLED 1
+#define APP_MAILBOX_ENABLED 0
 #endif
 
 // <q> APP_GPIOTE_ENABLED  - app_gpiote - GPIOTE events dispatcher
@@ -3059,7 +3059,7 @@
  
 
 #ifndef APP_TIMER_WITH_PROFILER
-#define APP_TIMER_WITH_PROFILER 0
+#define APP_TIMER_WITH_PROFILER 1
 #endif
 
 // <q> APP_TIMER_KEEPS_RTC_ACTIVE  - Enable RTC always on
@@ -3069,7 +3069,7 @@
 // <i> This option can be used when app_timer is used for timestamping.
 
 #ifndef APP_TIMER_KEEPS_RTC_ACTIVE
-#define APP_TIMER_KEEPS_RTC_ACTIVE 0
+#define APP_TIMER_KEEPS_RTC_ACTIVE 1
 #endif
 
 #endif //APP_TIMER_ENABLED
@@ -3165,7 +3165,7 @@
 // <e> FDS_ENABLED - fds - Flash data storage module
 //==========================================================
 #ifndef FDS_ENABLED
-#define FDS_ENABLED 0
+#define FDS_ENABLED 1
 #endif
 #if  FDS_ENABLED
 // <o> FDS_OP_QUEUE_SIZE - Size of the internal queue. 
@@ -3502,7 +3502,7 @@
  
 
 #ifndef NRF_QUEUE_ENABLED
-#define NRF_QUEUE_ENABLED 0
+#define NRF_QUEUE_ENABLED 1
 #endif
 
 // <q> RETARGET_ENABLED  - retarget - Retargeting stdio functions

@@ -2564,7 +2564,7 @@
 // <3=> 3 
 
 #ifndef TWI_DEFAULT_CONFIG_IRQ_PRIORITY
-#define TWI_DEFAULT_CONFIG_IRQ_PRIORITY 3
+#define TWI_DEFAULT_CONFIG_IRQ_PRIORITY 2
 #endif
 
 // <e> TWI0_ENABLED - Enable TWI0 instance
@@ -2658,7 +2658,7 @@
 // <e> UART_ENABLED - nrf_drv_uart - UART/UARTE peripheral driver
 //==========================================================
 #ifndef UART_ENABLED
-#define UART_ENABLED 1
+#define UART_ENABLED 0
 #endif
 #if  UART_ENABLED
 // <o> UART_DEFAULT_CONFIG_HWFC  - Hardware Flow Control
@@ -2985,7 +2985,7 @@
  
 
 #ifndef APP_TIMER_WITH_PROFILER
-#define APP_TIMER_WITH_PROFILER 0
+#define APP_TIMER_WITH_PROFILER 1
 #endif
 
 // <q> APP_TIMER_KEEPS_RTC_ACTIVE  - Enable RTC always on
@@ -3091,7 +3091,7 @@
 // <e> FDS_ENABLED - fds - Flash data storage module
 //==========================================================
 #ifndef FDS_ENABLED
-#define FDS_ENABLED 0
+#define FDS_ENABLED 1
 #endif
 #if  FDS_ENABLED
 // <o> FDS_OP_QUEUE_SIZE - Size of the internal queue. 
@@ -3106,7 +3106,7 @@
 
 // <o> FDS_MAX_USERS - Maximum number of callbacks that can be registered. 
 #ifndef FDS_MAX_USERS
-#define FDS_MAX_USERS 8
+#define FDS_MAX_USERS 4
 #endif
 
 // <o> FDS_VIRTUAL_PAGES - Number of virtual flash pages to use. 
@@ -3429,7 +3429,7 @@
  
 
 #ifndef NRF_QUEUE_ENABLED
-#define NRF_QUEUE_ENABLED 0
+#define NRF_QUEUE_ENABLED 1
 #endif
 
 // <q> RETARGET_ENABLED  - retarget - Retargeting stdio functions
@@ -3477,7 +3477,6 @@
 #endif
 
 // <q> APP_USBD_MSC_CLASS_LOG_ENABLED  - Enables logging in the module.
- 
 
 #ifndef APP_USBD_MSC_CLASS_LOG_ENABLED
 #define APP_USBD_MSC_CLASS_LOG_ENABLED 0

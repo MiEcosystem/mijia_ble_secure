@@ -6,6 +6,7 @@
 #include "app_mailbox.h"
 #include "app_timer.h"
 
+#include "mi_config.h"
 #include "mi_type.h"
 #include "mi_error.h"
 #include "mi_config.h"

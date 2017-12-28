@@ -1814,16 +1814,6 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\components\libraries\queue\nrf_queue.c</FilePath>
             </File>
-            <File>
-              <FileName>ecc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\..\..\components\libraries\ecc\ecc.c</FilePath>
-            </File>
-            <File>
-              <FileName>micro_ecc_lib_nrf51.lib</FileName>
-              <FileType>4</FileType>
-              <FilePath>..\..\..\..\..\..\external\micro-ecc\nrf51_keil\armgcc\micro_ecc_lib_nrf51.lib</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>
@@ -3730,16 +3720,6 @@
               <FileName>nrf_queue.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\components\libraries\queue\nrf_queue.c</FilePath>
-            </File>
-            <File>
-              <FileName>ecc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\..\..\components\libraries\ecc\ecc.c</FilePath>
-            </File>
-            <File>
-              <FileName>micro_ecc_lib_nrf51.lib</FileName>
-              <FileType>4</FileType>
-              <FilePath>..\..\..\..\..\..\external\micro-ecc\nrf51_keil\armgcc\micro_ecc_lib_nrf51.lib</FilePath>
             </File>
           </Files>
         </Group>
@@ -5984,16 +5964,6 @@
               <FileName>nrf_queue.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\..\..\components\libraries\queue\nrf_queue.c</FilePath>
-            </File>
-            <File>
-              <FileName>ecc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\..\..\components\libraries\ecc\ecc.c</FilePath>
-            </File>
-            <File>
-              <FileName>micro_ecc_lib_nrf51.lib</FileName>
-              <FileType>4</FileType>
-              <FilePath>..\..\..\..\..\..\external\micro-ecc\nrf51_keil\armgcc\micro_ecc_lib_nrf51.lib</FilePath>
             </File>
           </Files>
         </Group>

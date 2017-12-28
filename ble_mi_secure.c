@@ -15,6 +15,7 @@
 #include "ble_mi_secure.h"
 #include "mi_secure.h"
 #include "mi_crypto.h"
+#include "mi_config.h"
 
 #define NRF_LOG_MODULE_NAME "BLEM"
 #include "nrf_log.h"
@@ -37,7 +38,7 @@ static void rxfer_rx_decode(reliable_xfer_t *pxfer, uint8_t *pdata, uint8_t len)
 
 static ble_mi_t mi_srv;
 static uint32_t auth_value;
-static uint8_t version[10];
+static uint8_t version[20] = BLE_SDK_AND_USER_VERSION;
 fast_xfer_t fast_control_block = {.type = PUBKEY};
 reliable_xfer_t rxfer_control_block;
 
@@ -636,20 +637,8 @@ uint32_t ble_mi_init(const ble_mi_init_t * p_mi_s_init)
 //	char_props.notify                = 1;
 //	err_code = char_add(BLE_UUID_MI_FXFER, NULL, 20, char_props, &mi_srv.fast_xfer_handles);
 //	VERIFY_SUCCESS(err_code);
-    
-	version_set("2.0.0_0000");
 	
 	return NRF_SUCCESS;
-}
-
-void version_get(uint8_t *out)
-{
-	memcpy(out, version, sizeof(version));
-}
-
-uint32_t version_set(uint8_t *in)
-{
-	memcpy(version, in, sizeof(version));
 }
 
 uint32_t auth_send(uint32_t status)

@@ -16,4 +16,4 @@
 
 1. download nRF5 SDK 12.3.0 [here](http://www.nordicsemi.com/eng/nordic/Products/nRF52832/nRF5-SDK-v12-zip/54281)
 2. clone this repo in SDK 12.3.0\examples\ble_peripheral\ directory.
-3. change APP_PRODUCT_ID to your product ID
+3. change APP_PRODUCT_ID to your product ID (i.e. pid), that you got when registered in [Mi IoT](https://iot.mi.com/index.html).

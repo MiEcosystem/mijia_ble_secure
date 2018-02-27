@@ -17,6 +17,7 @@
 #include "mi_error.h"
 #include "mi_beacon.h"
 #include "mi_psm.h"
+#include "mi_config.h"
 #include "ble_mi_secure.h"
 
 #if defined(__CC_ARM)
@@ -284,6 +285,9 @@ uint32_t mi_scheduler_init(uint32_t interval, mi_schd_event_handler_t handler)
 
 	if (handler != NULL)
 		m_user_event_handler = handler;
+
+	nrf_gpio_cfg_output(MJSC_POWER_PIN);
+	nrf_gpio_pin_clear(MJSC_POWER_PIN);
 
 	nrf_gpio_cfg_output(PROFILE_PIN);
 	nrf_gpio_pin_clear(PROFILE_PIN);
@@ -626,12 +630,26 @@ typedef struct {
 #define MSC_ADDR   0x2A
 #define MSC_SCL    28
 
+#define MSC_POWER_ON()  do { msc_power_on(MJSC_POWER_PIN);PT_YIELD(pt);} while(0)
+#define MSC_POWER_OFF()  do { msc_power_off(MJSC_POWER_PIN);} while(0)
+
 extern volatile bool m_twi0_xfer_done;
 extern const nrf_drv_twi_t TWI0;
-
 static nrf_drv_twi_xfer_desc_t twi0_xfer;
 static uint8_t twi_buf[515];
 msc_xfer_control_block_t msc_control_block;
+
+static void msc_power_on(uint32_t pin)
+{
+	if (pin != 0xFFFFFFFF)
+		nrf_gpio_pin_set(pin);
+}
+
+static void msc_power_off(uint32_t pin)
+{
+	if (pin != 0xFFFFFFFF)
+		nrf_gpio_pin_clear(pin);
+}
 
 static uint8_t calc_data_xor(uint8_t *pdata, uint16_t len)
 {
@@ -698,8 +716,7 @@ int msc_thread(pt_t *pt, msc_xfer_control_block_t *p_cb)
 {
 	uint32_t err_code;
 
-	PT_BEGIN(pt);
-
+	PT_BEGIN(pt);	
 	static uint8_t  retry_times = 0;
 	msc_encode_twi_buf(p_cb);
 	NRF_LOG_INFO("Start MSC cmd 0x%02X @ schd_time %d\n", p_cb->cmd, schd_time);
@@ -818,6 +835,7 @@ static int psm_restore(pt_t *pt)
 	
 	set_beacon_key(mi_sysinfo.beacon_key);
 
+	MSC_POWER_ON();
 #if ENC_LTMK
 	MKPK.id = 0;
 	msc_control_block = MSC_XFER(MSC_RD_MKPK, &MKPK.id, 1, (uint8_t*)MKPK.cipher, 32+4);
@@ -829,6 +847,7 @@ static int psm_restore(pt_t *pt)
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.LTMK);
 #endif
+	MSC_POWER_OFF();
 
 	enqueue(&schd_evt_queue, SCHD_EVT_KEY_FOUND);
 	PT_END(pt);
@@ -884,7 +903,7 @@ static void sys_procedure(uint32_t type)
 static int reg_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
-
+	MSC_POWER_ON();
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
@@ -921,6 +940,7 @@ static int reg_msc(pt_t *pt)
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.dev_sign);
 
+	MSC_POWER_OFF();
 #if (PRINT_SIGN == 1)
 	NRF_LOG_HEXDUMP_INFO(dev_sign, 64);
 #endif	
@@ -1044,6 +1064,7 @@ static int reg_auth(pt_t *pt)
 	// fs_store(rand_key);
 	// log encrypt procedure
 
+	MSC_POWER_ON();
 #if ENC_LTMK
 	PT_WAIT_UNTIL(pt, DATA_IS_VAILD_P(flags.MKPK));
 	
@@ -1059,6 +1080,7 @@ static int reg_auth(pt_t *pt)
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 
 #endif
+	MSC_POWER_OFF();
 
 	sha256_hkdf(        LTMK,         sizeof(LTMK),
 		  (void *)cloud_salt,         sizeof(cloud_salt)-1,
@@ -1082,7 +1104,6 @@ static int reg_auth(pt_t *pt)
 		NRF_LOG_RAW_INFO("REG SUCCESS: %d\n", schd_time);
 		enqueue(&schd_evt_queue, SCHD_EVT_REG_SUCCESS);
 	}
-
 
 	PT_END(pt);
 }
@@ -1112,6 +1133,7 @@ static int admin_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
+	MSC_POWER_ON();
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.dev_pub);
@@ -1121,6 +1143,7 @@ static int admin_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_ECDHE, app_pub, 64, eph_key, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.eph_key);
+	MSC_POWER_OFF();
 
 	PT_END(pt);
 }
@@ -1253,6 +1276,7 @@ static int shared_msc(pt_t *pt)
 {
 	PT_BEGIN(pt);
 
+	MSC_POWER_ON();
 	msc_control_block = MSC_XFER(MSC_PUBKEY, NULL, 0, dev_pub, 64);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.dev_pub);
@@ -1287,6 +1311,7 @@ static int shared_msc(pt_t *pt)
 	msc_control_block = MSC_XFER(MSC_ECDHE, app_pub, 64, eph_key, 32);
 	PT_SPAWN(pt, &pt_msc_thd, msc_thread(&pt_msc_thd, &msc_control_block));
 	SET_DATA_VAILD(flags.eph_key);
+	MSC_POWER_OFF();
 
 	PT_END(pt);
 }

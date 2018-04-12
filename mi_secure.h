@@ -38,6 +38,7 @@ extern "C" {
 #define LOG_START                      (LOG_TYPE)
 #define LOG_SUCCESS                    (LOG_TYPE+1)
 #define LOG_FAILED                     (LOG_TYPE+2)
+#define LOG_DECRYT_FAILED              (LOG_TYPE+3)
 
 #define SHARED_TYPE                    0x30UL
 #define SHARED_LOG_START               (SHARED_TYPE)
@@ -52,7 +53,7 @@ extern "C" {
 #define ERR_TYPE                       0xE0UL
 #define ERR_NOT_REGISTERED             (ERR_TYPE)
 #define ERR_REGISTERED                 (ERR_TYPE+1)
-
+#define ERR_ADMIN_RELOGIN              (ERR_TYPE+2)
 typedef enum {
 	UNAUTHORIZATION = 0,
 	OWNER_AUTHORIZATION,

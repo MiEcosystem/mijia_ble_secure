@@ -563,6 +563,7 @@ static int rxfer_rx_thd(pt_t *pt, reliable_xfer_t *pxfer, uint8_t data_type)
 	pxfer->state = RXFER_WAIT_CMD;
 	pxfer->rx_num = 0;
 	pxfer->pdata  = 0;
+    pxfer->curr_sn = 0;
 
 	PT_END(pt);
 }
@@ -1173,6 +1174,13 @@ static int admin_auth(pt_t *pt)
 	uint32_t crc32;
 	PT_BEGIN(pt);
 
+    if (mi_authorization_status == OWNER_AUTHORIZATION) {
+        NRF_LOG_ERROR("ADMIN RE-LOGIN ERROR.\n");
+        PT_WAIT_UNTIL(pt, auth_send(ERR_ADMIN_RELOGIN) == NRF_SUCCESS);
+        enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_FAILED);
+        PT_EXIT(pt);
+    }
+
 #if PRINT_LTMK
 	NRF_LOG_RAW_HEXDUMP_INFO(LTMK, 32);
 	PT_YIELD(pt);
@@ -1194,6 +1202,13 @@ static int admin_auth(pt_t *pt)
 	    (void*)&encrypt_login_data.crc32,
 	              encrypt_login_data.mic,  4);
 
+    if (errno != MI_SUCCESS) {
+		NRF_LOG_ERROR("ADMIN LOGIN DECRYPT FAIL. (invaild LTMK) \n");
+        PT_WAIT_UNTIL(pt, auth_send(LOG_DECRYT_FAILED) == NRF_SUCCESS);
+        enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_FAILED);
+        PT_EXIT(pt);
+    }
+    
 	crc32 = soft_crc32(dev_pub, sizeof(dev_pub), 0);
 
   	if (crc32 == encrypt_login_data.crc32) {
@@ -1204,7 +1219,6 @@ static int admin_auth(pt_t *pt)
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
 		enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_SUCCESS);
 	} else {
-		NRF_LOG_ERROR("ADMIN LOG FAILED. %d\n", errno);
 		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
 		enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_FAILED);
 	}

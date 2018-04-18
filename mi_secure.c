@@ -1204,7 +1204,7 @@ static int admin_auth(pt_t *pt)
 
     if (errno != MI_SUCCESS) {
 		NRF_LOG_ERROR("ADMIN LOGIN DECRYPT FAIL. (invaild LTMK) \n");
-        PT_WAIT_UNTIL(pt, auth_send(LOG_DECRYT_FAILED) == NRF_SUCCESS);
+        PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
         enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_FAILED);
         PT_EXIT(pt);
     }
@@ -1219,7 +1219,7 @@ static int admin_auth(pt_t *pt)
 		PT_WAIT_UNTIL(pt, auth_send(LOG_SUCCESS) == NRF_SUCCESS);
 		enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_SUCCESS);
 	} else {
-		PT_WAIT_UNTIL(pt, auth_send(LOG_FAILED) == NRF_SUCCESS);
+		PT_WAIT_UNTIL(pt, auth_send(LOG_VERIFY_FAILED) == NRF_SUCCESS);
 		enqueue(&schd_evt_queue, SCHD_EVT_ADMIN_LOGIN_FAILED);
 	}
 

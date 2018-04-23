@@ -42,9 +42,6 @@
 extern "C" {
 #endif
 
-/**
- * \brief          SHA-256 context structure
- */
 typedef struct
 {
     uint32_t total[2];          /*!< number of bytes processed  */
@@ -130,13 +127,8 @@ extern "C" {
 void mbedtls_sha256( const unsigned char *input, size_t ilen,
            unsigned char output[32], int is224 );
 
-/**
- * \brief          Checkup routine
- *
- * \return         0 if successful, or 1 if the test failed
- */
-//int mbedtls_sha256_self_test( int verbose );
-
+int mbedtls_md_hmac( const unsigned char *key, size_t keylen, const unsigned char *input, size_t ilen,
+                unsigned char *output );
 #ifdef __cplusplus
 }
 #endif

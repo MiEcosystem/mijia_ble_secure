@@ -251,6 +251,36 @@ static __ALIGN(4) struct {
 	uint8_t  cloud_key[16];
 } mi_sysinfo;
 
+/**
+ *@brief    This function will generate 8 sets of OTP.
+ *@param    [in] interval_sec : OTP validity period.
+ *          [out] out : pointer the memory that OTP to be stored.
+ *@return    0 : successful
+            -1 : device is unregistered.
+            -2 : invaild parameters.
+ */
+int get_mi_one_time_passwd(uint32_t interval_sec, mi_otp_t *out)
+{
+    if (m_is_registered != true )
+        return -1;
+    
+    if (interval_sec < 60*10  || interval_sec > 60*60 || out == NULL)
+        return -2;
+
+    uint8_t key[32];
+    uint8_t salt[] = "mi-lock-otp-salt";
+    uint8_t info[] = "mi-lock-otp-info";
+    sha256_hkdf(LTMK, 32,
+        salt, sizeof(salt) - 1,
+        info, sizeof(info) - 1,
+        key,  32);
+    NRF_LOG_HEXDUMP_INFO(key, 32);
+    time_t current = time(NULL) / interval_sec;
+    mbedtls_md_hmac(key, 32, (char*)&current, sizeof(current), (char*)out);
+    NRF_LOG_HEXDUMP_ERROR(out, 32);
+    return 0;
+}
+
 int get_mi_reg_stat(void)
 {
 	return m_is_registered;

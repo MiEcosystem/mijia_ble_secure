@@ -675,6 +675,7 @@ void mi_schd_event_handler(schd_evt_t evt_id)
 	NRF_LOG_RAW_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", evt_id);
 }
 
+mi_otp_t otp_list;
 void poll_timer_handler(void * p_context)
 {
 	time_t utc_time = time(NULL);
@@ -684,6 +685,7 @@ void poll_timer_handler(void * p_context)
 	mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
 
 	NRF_LOG_RAW_INFO("max timer cnt :%d\n", app_timer_op_queue_utilization_get());
+
 }
 
 
@@ -728,7 +730,7 @@ int main(void)
 	mi_scheduler_start(SYS_KEY_RESTORE);
 
 	app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
-	app_timer_start(poll_timer, APP_TIMER_TICKS(20000, APP_TIMER_PRESCALER), NULL);
+	app_timer_start(poll_timer, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
 
 #ifdef M_TEST
 	mi_scheduler_start(0);

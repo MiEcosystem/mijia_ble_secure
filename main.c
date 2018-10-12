@@ -41,26 +41,22 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
-#include "ble_mi_secure.h"
-#include "mi_secure.h"
-#include "mi_beacon.h"
-#include "mi_crypto.h"
-#include "mi_psm.h"
-
 #include "app_util_platform.h"
 #include "bsp.h"
 #include "bsp_btn_ble.h"
-#include "nrf_drv_twi_patched.h"
+#include "SDK12.3.0_patch/nrf_drv_twi_patched.h"
 
-#include "ble_lock.h"
+#include <time.h>
+#include "SEGGER_RTT.h"
+#include "nRF5_evt.h"
+#include "mible_log.h"
+#include "common/mible_beacon.h"
+#include "secure_auth/mible_secure_auth.h"
+#include "secure_auth/mi_service_server.h"
+#include "mijia_profiles/lock_service_server.h"
+#include "mi_config.h"
 
-#if 1
-#define APP_PRODUCT_ID                  0x01CF            // Xiaomi Secure BLE dev board
-#else
-#define APP_PRODUCT_ID                  0x009C            // Xiaomi BLE dev board
-#endif
-
-#define RTT_CTRL_CLEAR                  "[2J"
+#define MSC_PWR_PIN                     23
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT 0                                           /**< Include the service_changed characteristic. If not enabled, the server's database cannot be changed for the lifetime of the device. */
 
@@ -83,7 +79,7 @@
 #define APP_ADV_TIMEOUT_IN_SECONDS      0                                           /**< The advertising timeout (in units of seconds). */
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
-#define APP_TIMER_OP_QUEUE_SIZE         8                                           /**< Size of timer operation queues. */
+#define APP_TIMER_OP_QUEUE_SIZE         16                                           /**< Size of timer operation queues. */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(100, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (10 ms), Connection interval uses 1.25 ms units. */
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (40 ms), Connection interval uses 1.25 ms units. */
@@ -97,16 +93,13 @@
 
 APP_TIMER_DEF(poll_timer);
 
-static ble_nus_t                        m_nus;                                      /**< Structure to identify the Nordic UART Service. */
+#define PAIRCODE_NUMS 6
+bool need_kbd_input;
+uint8_t pair_code_num;
+uint8_t pair_code[PAIRCODE_NUMS];
+
 static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;    /**< Handle of the current connection. */
 
-static ble_uuid_t                       m_adv_uuids[] = {{BLE_UUID_MI_SERVICE, BLE_UUID_TYPE_BLE}};  /**< Universally unique service identifier. */
-
-/* Indicates if operation on TWI has ended. */
-volatile bool m_twi0_xfer_done = false;
-
-/* TWI instance. */
-const nrf_drv_twi_t TWI0 = NRF_DRV_TWI_INSTANCE(0);
 
 /**@brief Function for assert macro callback.
  *
@@ -154,61 +147,13 @@ static void gap_params_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-/**@brief Function for handling the data from the Nordic UART Service.
- *
- * @details This function will process the data received from the Nordic UART BLE Service and send
- *          it to the UART module.
- *
- * @param[in] p_nus    Nordic UART Service structure.
- * @param[in] p_data   Data to be send to UART module.
- * @param[in] length   Length of the data.
- */
-/**@snippet [Handling the data received over BLE] */
-uint8_t msg[32];
-static void nus_data_handler(ble_nus_t * p_nus, uint8_t * p_data, uint16_t length)
-{
-	uint32_t errno;
-
-	NRF_LOG_HEXDUMP_INFO(p_data, length);
-	errno = mi_session_decrypt(p_data, length, msg);
-
-	if (errno != NRF_SUCCESS) {
-		length = 1;
-		msg[0] = 0xFF;
-	} else {
-		NRF_LOG_HEXDUMP_INFO(msg, length-6);
-		mi_session_encrypt(msg, length-6, msg);
-		NRF_LOG_HEXDUMP_INFO(msg, length);
-	}
-	
-	ble_nus_string_send(&m_nus, msg, length);
-
-}
 
 
 /**@brief Function for initializing services that will be used by the application.
  */
 static void services_init(void)
 {
-    uint32_t       err_code;
-    ble_nus_init_t nus_init;
-	ble_mi_init_t  mi_init;
 
-    memset(&nus_init, 0, sizeof(nus_init));
-
-    nus_init.data_handler = nus_data_handler;
-
-    err_code = ble_nus_init(&m_nus, &nus_init);
-    APP_ERROR_CHECK(err_code);
-	
-	memset(&mi_init, 0, sizeof(mi_init));
-	
-	mi_init.data_handler = NULL;
-
-	err_code = ble_mi_init(&mi_init);
-	APP_ERROR_CHECK(err_code);
-
-	ble_lock_init();
 }
 
 
@@ -288,28 +233,7 @@ static void sleep_mode_enter(void)
 }
 
 static void advertising_init(void);
-/**@brief Function for handling advertising events.
- *
- * @details This function will be called for advertising events which are passed to the application.
- *
- * @param[in] ble_adv_evt  Advertising event.
- */
-static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
-{
-    uint32_t err_code;
-    switch (ble_adv_evt)
-    {
-        case BLE_ADV_EVT_FAST:
-			advertising_init();
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
-            APP_ERROR_CHECK(err_code);
-            break;
-        case BLE_ADV_EVT_IDLE:
-            break;
-        default:
-            break;
-    }
-}
+
 
 
 /**@brief Function for the application's SoftDevice event handler.
@@ -419,14 +343,10 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
-//	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"BLE EVT %X\n", p_ble_evt->header.evt_id);
 
+    mible_on_ble_evt(p_ble_evt);
     ble_conn_params_on_ble_evt(p_ble_evt);
-	ble_mi_on_ble_evt(p_ble_evt);
-	ble_lock_on_ble_evt(p_ble_evt);
-    ble_nus_on_ble_evt(&m_nus, p_ble_evt);
     on_ble_evt(p_ble_evt);
-    ble_advertising_on_ble_evt(p_ble_evt);
     bsp_btn_ble_on_ble_evt(p_ble_evt);
 
 }
@@ -443,11 +363,6 @@ static void sys_evt_dispatch(uint32_t sys_evt)
     // Dispatch the system event to the fstorage module, where it will be
     // dispatched to the Flash Data Storage (FDS) module.
     fs_sys_event_handler(sys_evt);
-
-    // Dispatch to the Advertising module last, since it will check if there are any
-    // pending flash operations in fstorage. Let fstorage process system events first,
-    // so that it can report correctly to the Advertising module.
-    ble_advertising_on_sys_evt(sys_evt);
 }
 
 /**@brief Function for the SoftDevice initialization.
@@ -518,17 +433,6 @@ void bsp_event_handler(bsp_event_t event)
             }
             break;
 
-        case BSP_EVENT_WHITELIST_OFF:
-            if (m_conn_handle == BLE_CONN_HANDLE_INVALID)
-            {
-                err_code = ble_advertising_restart_without_whitelist();
-                if (err_code != NRF_ERROR_INVALID_STATE)
-                {
-                    APP_ERROR_CHECK(err_code);
-                }
-            }
-            break;
-
 		case BSP_EVENT_RESET:
 			mi_scheduler_start(SYS_KEY_DELETE);
 			break;
@@ -544,59 +448,46 @@ void bsp_event_handler(bsp_event_t event)
  */
 static void advertising_init(void)
 {
-    uint32_t               err_code;
-    uint8_t                data[27];
-    uint8_t                total_len;
-	ble_gap_addr_t         dev_mac;
+    MI_LOG_INFO("advertising init...\n");
+	mibeacon_frame_ctrl_t frame_ctrl = {
+		.secure_auth    = 1,
+		.version        = 4,
+	};
 
 	mibeacon_capability_t cap = {.connectable = 1,
 	                             .encryptable = 1,
 	                             .bondAbility = 1};
+    mibeacon_cap_sub_io_t IO = {.in_digits = 1};
+	mible_addr_t dev_mac;
+	mible_gap_address_get(dev_mac);
 
-#if (NRF_SD_BLE_API_VERSION == 3)
-	sd_ble_gap_addr_get(&dev_mac);
-#else
-	sd_ble_gap_address_get(&dev_mac);
-#endif
+	mibeacon_config_t mibeacon_cfg = {
+		.frame_ctrl = frame_ctrl,
+		.pid = PRODUCT_ID,
+		.p_mac = (mible_addr_t*)dev_mac, 
+		.p_capability = &cap,
+        .p_cap_sub_IO = &IO,
+		.p_obj = NULL,
+	};
 
-	mibeacon_config_t  beacon_cfg     = {0};
-	beacon_cfg.frame_ctrl.version     = 4;
-	beacon_cfg.pid                    = APP_PRODUCT_ID;
-	beacon_cfg.p_capability           = &cap;
-	beacon_cfg.p_mac                  = dev_mac.addr;
+	uint8_t adv_data[31];
+    uint8_t adv_len;
+
+    // ADV Struct: Flags: LE General Discoverable Mode + BR/EDR Not supported.
+	adv_data[0] = 0x02;
+	adv_data[1] = 0x01;
+	adv_data[2] = 0x06;
+	adv_len     = 3;
 	
-	mibeacon_data_set(&beacon_cfg, data, &total_len);
-
-    /* Indicating Mi Service */
-	ble_advdata_service_data_t serviceData;
-    serviceData.service_uuid = BLE_UUID_MI_SERVICE;
-    serviceData.data.size    = total_len;
-    serviceData.data.p_data  = data;
-	
-    // Build advertising data struct to pass into @ref ble_advertising_init.
-    ble_advdata_t          advdata;
-    memset(&advdata, 0, sizeof(advdata));
-    advdata.name_type          = BLE_ADVDATA_NO_NAME;
-    advdata.include_appearance = false;
-    advdata.flags              = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
-    advdata.p_service_data_array = &serviceData;
-    advdata.service_data_count = 1;
-
-    ble_advdata_t          scanrsp;
-    memset(&scanrsp, 0, sizeof(scanrsp));
-	scanrsp.name_type               = BLE_ADVDATA_FULL_NAME;
-    scanrsp.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
-    scanrsp.uuids_complete.p_uuids  = m_adv_uuids;
-
-	ble_adv_modes_config_t options;
-    memset(&options, 0, sizeof(options));
-    options.ble_adv_fast_enabled  = true;
-    options.ble_adv_fast_interval = APP_ADV_INTERVAL;
-    options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;
-
-    err_code = ble_advertising_init(&advdata, NULL, &options, on_adv_evt, NULL);
-    APP_ERROR_CHECK(err_code);
-
+	uint8_t service_data_len;
+	if(MI_SUCCESS != mible_service_data_set(&mibeacon_cfg, adv_data+3, &service_data_len)){
+		MI_LOG_ERROR("encode service data failed. \r\n");
+		return;
+	}
+    adv_len += service_data_len;
+	MI_LOG_HEXDUMP(adv_data, adv_len);
+	mible_gap_adv_data_set(adv_data, adv_len, NULL, 0);
+	return;
 }
 
 /**@brief Function for initializing buttons and leds.
@@ -616,6 +507,12 @@ static void buttons_leds_init(bool * p_erase_bonds)
     APP_ERROR_CHECK(err_code);
 
     *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
+
+	/* assign BUTTON 3 to clear KEYINFO in the FLASH, for more details to check bsp_event_handler()*/
+    err_code = bsp_event_to_button_action_assign(2,
+											 BSP_BUTTON_ACTION_LONG_PUSH,
+											 BSP_EVENT_RESET);
+    APP_ERROR_CHECK(err_code);
 }
 
 /**@brief Function for placing the application in low power state while waiting for events.
@@ -626,174 +523,179 @@ static void power_manage(void)
     APP_ERROR_CHECK(err_code);
 }
 
-/**
- * @brief TWI events handler.
- */
-void twi0_handler(nrf_drv_twi_evt_t const * p_event, void * p_context)
-{
-	switch (p_event->type) {
-	case NRF_DRV_TWI_EVT_DONE:
-		NRF_LOG_INFO("TWI evt done: %d\n", p_event->xfer_desc.type);
-		m_twi0_xfer_done = true;
-		break;
-
-	default:
-		NRF_LOG_ERROR("TWI evt error %d.\n", p_event->type);
-		break;
-    }
-}
-
-void twi0_init (void)
-{
-    ret_code_t err_code;
-
-    const nrf_drv_twi_config_t msc_config = {
-       .scl                = 28,
-       .sda                = 29,
-       .frequency          = NRF_TWI_FREQ_100K,
-       .interrupt_priority = APP_IRQ_PRIORITY_HIGH,
-       .clear_bus_init     = true
-    };
-
-    err_code = nrf_drv_twi_init(&TWI0, &msc_config, twi0_handler, NULL);
-    APP_ERROR_CHECK(err_code);
-
-    nrf_drv_twi_enable(&TWI0);
-}
-
 void time_init(struct tm * time_ptr);
 
-typedef __packed struct {
-	uint8_t  action;
-	uint8_t  method;
-	uint32_t user_id;
-	uint32_t time;
-} lock_evt_t;
-
-void mi_schd_event_handler(schd_evt_t evt_id)
+/**@brief Function for starting advertising.
+ */
+static void advertising_start(void)
 {
-	NRF_LOG_RAW_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", evt_id);
+	mible_gap_adv_param_t adv_param =(mible_gap_adv_param_t){
+		.adv_type = MIBLE_ADV_TYPE_CONNECTABLE_UNDIRECTED, 
+		.adv_interval_min = MSEC_TO_UNITS(200, UNIT_0_625_MS),
+		.adv_interval_max = MSEC_TO_UNITS(300, UNIT_0_625_MS),
+	};
+    uint32_t err_code = mible_gap_adv_start(&adv_param);
+    if(MI_SUCCESS != err_code){
+		MI_LOG_ERROR("adv failed. %d \n", err_code);
+	}
 }
 
-mi_otp_t otp_list;
 void poll_timer_handler(void * p_context)
 {
 	time_t utc_time = time(NULL);
 	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"%s", nrf_log_push(ctime(&utc_time)));
 
-	uint8_t battery_stat = 1;
-	mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
+//	uint8_t battery_stat = 1;
+//	mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
 
-	NRF_LOG_RAW_INFO("max timer cnt :%d\n", app_timer_op_queue_utilization_get());
+	NRF_LOG_RAW_INFO("max op_queue_utilization :%d\n", app_timer_op_queue_utilization_get());
 
 }
 
+
+int scan_keyboard(uint8_t *pdata, uint8_t len)
+{
+	if (pdata == NULL)
+		return 0;
+
+	return SEGGER_RTT_ReadNoLock(0, pdata, len);
+}
+
+void flush_keyboard_buffer(void)
+{
+    uint8_t tmp[16];
+    while(SEGGER_RTT_ReadNoLock(0, tmp, 16));
+}
+
+void mi_schd_event_handler(schd_evt_t *p_event)
+{
+	MI_LOG_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", p_event->id);
+    if (p_event->id == SCHD_EVT_OOB_REQUEST) {
+        need_kbd_input = true;
+        flush_keyboard_buffer();
+        MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please input your pair code ( MUST be 6 digits ) : \n");
+    }
+        
+}
+
+int mijia_secure_chip_power_manage(bool power_stat)
+{
+    if (power_stat == 1) {
+        nrf_gpio_cfg_output(MSC_PWR_PIN);
+        nrf_gpio_pin_set(MSC_PWR_PIN);
+    } else {
+        nrf_gpio_pin_clear(MSC_PWR_PIN);
+    }
+    return 0;
+}
+
+const iic_config_t iic_config = {
+        .scl_pin  = 24,
+        .sda_pin  = 25,
+        .freq = IIC_100K
+};
+
+
+void ble_lock_ops_handler(uint8_t opcode)
+{
+
+    switch(opcode) {
+    case 0:
+        MI_LOG_INFO(" unlock \n");
+        bsp_board_led_off(1);
+        bsp_board_led_off(2);
+        break;
+
+    case 1:
+        MI_LOG_INFO(" lock \n");
+        bsp_board_led_on(1);
+        break;
+
+    case 2:
+        MI_LOG_INFO(" bolt \n");
+        bsp_board_led_on(2);
+        break;
+
+    default:
+        MI_LOG_ERROR("lock opcode error %d", opcode);
+    }
+
+    lock_event_t lock_event;
+    lock_event.action = opcode;
+    lock_event.method = 0;
+    lock_event.user_id= get_mi_key_id();
+    lock_event.time   = time(NULL);
+
+    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+			
+    reply_lock_stat(opcode);
+    send_lock_log((uint8_t *)&lock_event, sizeof(lock_event));
+}
 
 /**@brief Application main function.
  */
 int main(void)
 {
-    uint32_t errno;
+
     bool erase_bonds;
-	uint8_t  lock_opcode = 1;
-	lock_evt_t lock_event;
 
 	NRF_LOG_INIT(NULL);
-	NRF_LOG_RAW_INFO(RTT_CTRL_CLEAR"Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
+    MI_LOG_INFO("[2J" "Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
 
     // Initialize.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
 
-	twi0_init();
 	time_init(NULL);
 
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
     gap_params_init();
-
     services_init();
     advertising_init();
     conn_params_init();
-	mibeacon_init();
 
-	/* assign BUTTON 3 to clear mi_sysinfo in the FLASH*/
-    errno = bsp_event_to_button_action_assign(2,
-											 BSP_BUTTON_ACTION_LONG_PUSH,
-											 BSP_EVENT_RESET);
-	APP_ERROR_CHECK(errno);
 
-	/* <!> mi_psm_init() must be called after ble_stack_init(). */
-	mi_psm_init();
-	mibeacon_init();
-	mi_scheduler_init(APP_TIMER_TICKS(10, APP_TIMER_PRESCALER), mi_schd_event_handler);
-	
-	mi_scheduler_start(SYS_KEY_RESTORE);
+    mible_libs_config_t config = {
+        .msc_onoff        = mijia_secure_chip_power_manage,
+        .p_msc_iic_config = (void*)&iic_config
+    };
+
+	/* <!> mi_scheduler_init() must be called after ble_stack_init(). */
+    mi_sevice_init();
+	mi_scheduler_init(10, mi_schd_event_handler, &config);
+    mi_scheduler_start(SYS_KEY_RESTORE);
+
+    lock_init_t lock_config;
+    lock_config.opcode_handler = ble_lock_ops_handler;
+    lock_sevice_init(&lock_config);
 
 	app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
-	app_timer_start(poll_timer, APP_TIMER_TICKS(1000, APP_TIMER_PRESCALER), NULL);
+	app_timer_start(poll_timer, APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER), NULL);
 
-#ifdef M_TEST
-	mi_scheduler_start(0);
-#else
 	sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
 	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
 	sd_ble_gap_tx_power_set(0);
-    errno = ble_advertising_start(BLE_ADV_MODE_FAST);
-    APP_ERROR_CHECK(errno);
-#endif
+
+    advertising_start();
 
     // Enter main loop.
-    for (;;)
-    {
-		if (get_lock_opcode(&lock_opcode) == 0) {
-			switch(lock_opcode) {
-				case 0:
-					NRF_LOG_INFO(" unlock \n");
-					bsp_board_led_off(3);
+    for (;;) {
 
-					lock_event.action = 0;
-					lock_event.method = 0;
-					lock_event.user_id= get_mi_key_id();
-					lock_event.time   = time(NULL);
+        if (need_kbd_input) {
+            if (pair_code_num < PAIRCODE_NUMS) {
+                pair_code_num += scan_keyboard(pair_code + pair_code_num, PAIRCODE_NUMS - pair_code_num);
+            }
+            if (pair_code_num == PAIRCODE_NUMS) {
+                pair_code_num = 0;
+                need_kbd_input = false;
+                mi_input_oob(pair_code, sizeof(pair_code));
+            }
+        }
 
-					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
-					break;
-				
-				case 1:
-					NRF_LOG_INFO(" lock \n");
-					bsp_board_led_on(3);
-
-					lock_event.action = 1;
-					lock_event.method = 0;
-					lock_event.user_id= get_mi_key_id();
-					lock_event.time   = time(NULL);
-
-					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
-					break;
-
-				case 2:
-					NRF_LOG_INFO(" bolt \n");
-					bsp_board_led_off(3);
-
-					lock_event.action = 2;
-					lock_event.method = 0;
-					lock_event.user_id= get_mi_key_id();
-					lock_event.time   = time(NULL);
-
-					mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
-					break;
-
-				default:
-					NRF_LOG_ERROR("lock opcode error %d", lock_opcode);
-
-			}
-			
-			send_lock_stat(lock_opcode);
-			send_lock_log((uint8_t *)&lock_event, sizeof(lock_event));
-			lock_opcode = 0;
-		}
-
-		if (NRF_LOG_PROCESS() == false)
+#if (MI_SCHD_PROCESS_IN_MAIN_LOOP==1)
+        mi_schd_process();
+#endif
+        if (NRF_LOG_PROCESS() == false)
         {
             power_manage();
         }

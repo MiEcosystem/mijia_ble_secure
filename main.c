@@ -52,7 +52,7 @@
 #include "mible_log.h"
 #include "common/mible_beacon.h"
 #include "secure_auth/mible_secure_auth.h"
-#include "secure_auth/mi_service_server.h"
+#include "mijia_profiles/mi_service_server.h"
 #include "mijia_profiles/lock_service_server.h"
 #include "mi_config.h"
 

@@ -79,10 +79,10 @@
 #define APP_ADV_TIMEOUT_IN_SECONDS      0                                           /**< The advertising timeout (in units of seconds). */
 
 #define APP_TIMER_PRESCALER             0                                           /**< Value of the RTC1 PRESCALER register. */
-#define APP_TIMER_OP_QUEUE_SIZE         16                                           /**< Size of timer operation queues. */
+#define APP_TIMER_OP_QUEUE_SIZE         16                                          /**< Size of timer operation queues. */
 
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(100, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (10 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (40 ms), Connection interval uses 1.25 ms units. */
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(100, UNIT_1_25_MS)            /**< Minimum acceptable connection interval (10 ms), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)            /**< Maximum acceptable connection interval (40 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(15000, APP_TIMER_PRESCALER) /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (15 seconds). */
@@ -187,7 +187,7 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
 static void conn_params_error_handler(uint32_t nrf_error)
 {
 //    APP_ERROR_HANDLER(nrf_error);
-	NRF_LOG_ERROR("conn param error %X\n", nrf_error);
+    NRF_LOG_ERROR("conn param error %X\n", nrf_error);
 }
 
 
@@ -374,9 +374,9 @@ static void ble_stack_init(void)
     uint32_t err_code;
 
     nrf_clock_lf_cfg_t clock_lf_cfg = {.source        = NRF_CLOCK_LF_SRC_XTAL,
-	                                   .rc_ctiv       = 0,
-	                                   .rc_temp_ctiv  = 0,
-	                                   .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_100_PPM};
+                                       .rc_ctiv       = 0,
+                                       .rc_temp_ctiv  = 0,
+                                       .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_100_PPM};
 
     // Initialize SoftDevice.
     SOFTDEVICE_HANDLER_INIT(&clock_lf_cfg, NULL);
@@ -386,7 +386,7 @@ static void ble_stack_init(void)
                                                     PERIPHERAL_LINK_COUNT,
                                                     &ble_enable_params);
     APP_ERROR_CHECK(err_code);
-	ble_enable_params.common_enable_params.vs_uuid_count = 4;
+    ble_enable_params.common_enable_params.vs_uuid_count = 4;
     //Check the ram settings against the used number of links
     CHECK_RAM_START_ADDR(CENTRAL_LINK_COUNT,PERIPHERAL_LINK_COUNT);
 
@@ -407,7 +407,7 @@ static void ble_stack_init(void)
     APP_ERROR_CHECK(err_code);
 
     // Subscribe for SOC events.
-	err_code = softdevice_sys_evt_handler_set(sys_evt_dispatch);
+    err_code = softdevice_sys_evt_handler_set(sys_evt_dispatch);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -433,9 +433,9 @@ void bsp_event_handler(bsp_event_t event)
             }
             break;
 
-		case BSP_EVENT_RESET:
-			mi_scheduler_start(SYS_KEY_DELETE);
-			break;
+        case BSP_EVENT_RESET:
+            mi_scheduler_start(SYS_KEY_DELETE);
+            break;
 
         default:
             break;
@@ -449,45 +449,45 @@ void bsp_event_handler(bsp_event_t event)
 static void advertising_init(void)
 {
     MI_LOG_INFO("advertising init...\n");
-	mibeacon_frame_ctrl_t frame_ctrl = {
-		.secure_auth    = 1,
-		.version        = 4,
-	};
+    mibeacon_frame_ctrl_t frame_ctrl = {
+        .secure_auth    = 1,
+        .version        = 4,
+    };
 
-	mibeacon_capability_t cap = {.connectable = 1,
-	                             .encryptable = 1,
-	                             .bondAbility = 1};
+    mibeacon_capability_t cap = {.connectable = 1,
+                                 .encryptable = 1,
+                                 .bondAbility = 1};
     mibeacon_cap_sub_io_t IO = {.in_digits = 1};
-	mible_addr_t dev_mac;
-	mible_gap_address_get(dev_mac);
+    mible_addr_t dev_mac;
+    mible_gap_address_get(dev_mac);
 
-	mibeacon_config_t mibeacon_cfg = {
-		.frame_ctrl = frame_ctrl,
-		.pid = PRODUCT_ID,
-		.p_mac = (mible_addr_t*)dev_mac, 
-		.p_capability = &cap,
+    mibeacon_config_t mibeacon_cfg = {
+        .frame_ctrl = frame_ctrl,
+        .pid = PRODUCT_ID,
+        .p_mac = (mible_addr_t*)dev_mac,
+        .p_capability = &cap,
         .p_cap_sub_IO = &IO,
-		.p_obj = NULL,
-	};
+        .p_obj = NULL,
+    };
 
-	uint8_t adv_data[31];
+    uint8_t adv_data[31];
     uint8_t adv_len;
 
     // ADV Struct: Flags: LE General Discoverable Mode + BR/EDR Not supported.
-	adv_data[0] = 0x02;
-	adv_data[1] = 0x01;
-	adv_data[2] = 0x06;
-	adv_len     = 3;
-	
-	uint8_t service_data_len;
-	if(MI_SUCCESS != mible_service_data_set(&mibeacon_cfg, adv_data+3, &service_data_len)){
-		MI_LOG_ERROR("encode service data failed. \r\n");
-		return;
-	}
+    adv_data[0] = 0x02;
+    adv_data[1] = 0x01;
+    adv_data[2] = 0x06;
+    adv_len     = 3;
+
+    uint8_t service_data_len;
+    if(MI_SUCCESS != mible_service_data_set(&mibeacon_cfg, adv_data+3, &service_data_len)){
+        MI_LOG_ERROR("encode service data failed. \r\n");
+        return;
+    }
     adv_len += service_data_len;
-	MI_LOG_HEXDUMP(adv_data, adv_len);
-	mible_gap_adv_data_set(adv_data, adv_len, NULL, 0);
-	return;
+    MI_LOG_HEXDUMP(adv_data, adv_len);
+    mible_gap_adv_data_set(adv_data, adv_len, NULL, 0);
+    return;
 }
 
 /**@brief Function for initializing buttons and leds.
@@ -508,10 +508,10 @@ static void buttons_leds_init(bool * p_erase_bonds)
 
     *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
 
-	/* assign BUTTON 3 to clear KEYINFO in the FLASH, for more details to check bsp_event_handler()*/
+    /* assign BUTTON 3 to clear KEYINFO in the FLASH, for more details to check bsp_event_handler()*/
     err_code = bsp_event_to_button_action_assign(2,
-											 BSP_BUTTON_ACTION_LONG_PUSH,
-											 BSP_EVENT_RESET);
+                                             BSP_BUTTON_ACTION_LONG_PUSH,
+                                             BSP_EVENT_RESET);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -529,36 +529,36 @@ void time_init(struct tm * time_ptr);
  */
 static void advertising_start(void)
 {
-	mible_gap_adv_param_t adv_param =(mible_gap_adv_param_t){
-		.adv_type = MIBLE_ADV_TYPE_CONNECTABLE_UNDIRECTED, 
-		.adv_interval_min = MSEC_TO_UNITS(200, UNIT_0_625_MS),
-		.adv_interval_max = MSEC_TO_UNITS(300, UNIT_0_625_MS),
-	};
+    mible_gap_adv_param_t adv_param =(mible_gap_adv_param_t){
+        .adv_type = MIBLE_ADV_TYPE_CONNECTABLE_UNDIRECTED,
+        .adv_interval_min = MSEC_TO_UNITS(200, UNIT_0_625_MS),
+        .adv_interval_max = MSEC_TO_UNITS(300, UNIT_0_625_MS),
+    };
     uint32_t err_code = mible_gap_adv_start(&adv_param);
     if(MI_SUCCESS != err_code){
-		MI_LOG_ERROR("adv failed. %d \n", err_code);
-	}
+        MI_LOG_ERROR("adv failed. %d \n", err_code);
+    }
 }
 
 void poll_timer_handler(void * p_context)
 {
-	time_t utc_time = time(NULL);
-	NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"%s", nrf_log_push(ctime(&utc_time)));
+    time_t utc_time = time(NULL);
+    NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"%s", nrf_log_push(ctime(&utc_time)));
 
-//	uint8_t battery_stat = 1;
-//	mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
+//  uint8_t battery_stat = 1;
+//  mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
 
-	NRF_LOG_RAW_INFO("max op_queue_utilization :%d\n", app_timer_op_queue_utilization_get());
+    NRF_LOG_RAW_INFO("max op_queue_utilization :%d\n", app_timer_op_queue_utilization_get());
 
 }
 
 
 int scan_keyboard(uint8_t *pdata, uint8_t len)
 {
-	if (pdata == NULL)
-		return 0;
+    if (pdata == NULL)
+        return 0;
 
-	return SEGGER_RTT_ReadNoLock(0, pdata, len);
+    return SEGGER_RTT_ReadNoLock(0, pdata, len);
 }
 
 void flush_keyboard_buffer(void)
@@ -569,13 +569,13 @@ void flush_keyboard_buffer(void)
 
 void mi_schd_event_handler(schd_evt_t *p_event)
 {
-	MI_LOG_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", p_event->id);
+    MI_LOG_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", p_event->id);
     if (p_event->id == SCHD_EVT_OOB_REQUEST) {
         need_kbd_input = true;
         flush_keyboard_buffer();
         MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please input your pair code ( MUST be 6 digits ) : \n");
     }
-        
+
 }
 
 int mijia_secure_chip_power_manage(bool power_stat)
@@ -627,7 +627,7 @@ void ble_lock_ops_handler(uint8_t opcode)
     lock_event.time   = time(NULL);
 
     mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
-			
+
     reply_lock_stat(opcode);
     send_lock_log((uint8_t *)&lock_event, sizeof(lock_event));
 }
@@ -639,13 +639,13 @@ int main(void)
 
     bool erase_bonds;
 
-	NRF_LOG_INIT(NULL);
+    NRF_LOG_INIT(NULL);
     MI_LOG_INFO("[2J" "Compiled  %s %s\n", (uint32_t)__DATE__, (uint32_t)__TIME__);
 
     // Initialize.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
 
-	time_init(NULL);
+    time_init(NULL);
 
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
@@ -660,21 +660,21 @@ int main(void)
         .p_msc_iic_config = (void*)&iic_config
     };
 
-	/* <!> mi_scheduler_init() must be called after ble_stack_init(). */
+    /* <!> mi_scheduler_init() must be called after ble_stack_init(). */
     mi_sevice_init();
-	mi_scheduler_init(10, mi_schd_event_handler, &config);
+    mi_scheduler_init(10, mi_schd_event_handler, &config);
     mi_scheduler_start(SYS_KEY_RESTORE);
 
     lock_init_t lock_config;
     lock_config.opcode_handler = ble_lock_ops_handler;
     lock_sevice_init(&lock_config);
 
-	app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
-	app_timer_start(poll_timer, APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER), NULL);
+    app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
+    app_timer_start(poll_timer, APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER), NULL);
 
-	sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
-	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
-	sd_ble_gap_tx_power_set(0);
+    sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
+    sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
+    sd_ble_gap_tx_power_set(0);
 
     advertising_start();
 
@@ -705,21 +705,21 @@ int main(void)
 
 void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info)
 {
-	error_info_t* pinfo = (error_info_t *)info;
-	char * const p_str = (void *)(pinfo->p_file_name);
+    error_info_t* pinfo = (error_info_t *)info;
+    char * const p_str = (void *)(pinfo->p_file_name);
     NRF_LOG_ERROR(" Oops ! ");
 
     switch (id)
     {
         case NRF_FAULT_ID_SDK_ASSERT:
-			NRF_LOG_RAW_INFO("ERROR at %s : %d\n", nrf_log_push(p_str),
-			                                       pinfo->line_num  );
+            NRF_LOG_RAW_INFO("ERROR at %s : %d\n", nrf_log_push(p_str),
+                                                   pinfo->line_num  );
             break;
 
         case NRF_FAULT_ID_SDK_ERROR:
-			NRF_LOG_RAW_INFO("ERRNO %d at %s : %d\n", pinfo->err_code,
-			                                          nrf_log_push(p_str),
-			                                          pinfo->line_num);
+            NRF_LOG_RAW_INFO("ERRNO %d at %s : %d\n", pinfo->err_code,
+                                                      nrf_log_push(p_str),
+                                                      pinfo->line_num);
             break;
     }
 

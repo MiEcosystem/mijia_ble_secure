@@ -1,32 +1,28 @@
-;/* Copyright (c) 2012 ARM LIMITED
-;
-;   All rights reserved.
-;   Redistribution and use in source and binary forms, with or without
-;   modification, are permitted provided that the following conditions are met:
-;   - Redistributions of source code must retain the above copyright
-;     notice, this list of conditions and the following disclaimer.
-;   - Redistributions in binary form must reproduce the above copyright
-;     notice, this list of conditions and the following disclaimer in the
-;     documentation and/or other materials provided with the distribution.
-;   - Neither the name of ARM nor the names of its contributors may be used
-;     to endorse or promote products derived from this software without
-;     specific prior written permission.
-;   *
-;   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-;   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-;   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-;   ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
-;   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-;   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-;   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-;   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-;   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-;   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-;   POSSIBILITY OF SUCH DAMAGE.
-;   ---------------------------------------------------------------------------*/
+; Copyright (c) 2009-2018 ARM Limited. All rights reserved.
+; 
+;     SPDX-License-Identifier: Apache-2.0
+; 
+; Licensed under the Apache License, Version 2.0 (the License); you may
+; not use this file except in compliance with the License.
+; You may obtain a copy of the License at
+; 
+;     www.apache.org/licenses/LICENSE-2.0
+; 
+; Unless required by applicable law or agreed to in writing, software
+; distributed under the License is distributed on an AS IS BASIS, WITHOUT
+; WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+; See the License for the specific language governing permissions and
+; limitations under the License.
+; 
+; NOTICE: This file has been modified by Nordic Semiconductor ASA.
 
                 IF :DEF: __STARTUP_CONFIG
+#ifdef  __STARTUP_CONFIG
 #include "startup_config.h"
+#ifndef __STARTUP_CONFIG_STACK_ALIGNEMENT
+#define __STARTUP_CONFIG_STACK_ALIGNEMENT 3
+#endif
+#endif
                 ENDIF
 
                 IF :DEF: __STARTUP_CONFIG
@@ -34,10 +30,16 @@ Stack_Size      EQU __STARTUP_CONFIG_STACK_SIZE
                 ELIF :DEF: __STACK_SIZE
 Stack_Size      EQU __STACK_SIZE
                 ELSE
-Stack_Size      EQU     8192
+Stack_Size      EQU 8192
+                ENDIF
+                
+                IF :DEF: __STARTUP_CONFIG
+Stack_Align     EQU __STARTUP_CONFIG_STACK_ALIGNEMENT
+                ELSE
+Stack_Align     EQU 3
                 ENDIF
 
-                AREA    STACK, NOINIT, READWRITE, ALIGN=3
+                AREA    STACK, NOINIT, READWRITE, ALIGN=Stack_Align
 Stack_Mem       SPACE   Stack_Size
 __initial_sp
 
@@ -46,7 +48,7 @@ Heap_Size       EQU __STARTUP_CONFIG_HEAP_SIZE
                 ELIF :DEF: __HEAP_SIZE
 Heap_Size       EQU __HEAP_SIZE
                 ELSE
-Heap_Size       EQU     8192
+Heap_Size       EQU 8192
                 ENDIF
 
                 AREA    HEAP, NOINIT, READWRITE, ALIGN=3
@@ -121,143 +123,15 @@ __Vectors       DCD     __initial_sp              ; Top of Stack
                 DCD     RTC2_IRQHandler
                 DCD     I2S_IRQHandler
                 DCD     FPU_IRQHandler
+                DCD     USBD_IRQHandler
+                DCD     UARTE1_IRQHandler
+                DCD     QSPI_IRQHandler
+                DCD     CRYPTOCELL_IRQHandler
                 DCD     0                         ; Reserved
                 DCD     0                         ; Reserved
+                DCD     PWM3_IRQHandler
                 DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
-                DCD     0                         ; Reserved
+                DCD     SPIM3_IRQHandler
                 DCD     0                         ; Reserved
                 DCD     0                         ; Reserved
                 DCD     0                         ; Reserved
@@ -427,6 +301,12 @@ Default_Handler PROC
                 EXPORT   RTC2_IRQHandler [WEAK]
                 EXPORT   I2S_IRQHandler [WEAK]
                 EXPORT   FPU_IRQHandler [WEAK]
+                EXPORT   USBD_IRQHandler [WEAK]
+                EXPORT   UARTE1_IRQHandler [WEAK]
+                EXPORT   QSPI_IRQHandler [WEAK]
+                EXPORT   CRYPTOCELL_IRQHandler [WEAK]
+                EXPORT   PWM3_IRQHandler [WEAK]
+                EXPORT   SPIM3_IRQHandler [WEAK]
 POWER_CLOCK_IRQHandler
 RADIO_IRQHandler
 UARTE0_UART0_IRQHandler
@@ -464,6 +344,12 @@ SPIM2_SPIS2_SPI2_IRQHandler
 RTC2_IRQHandler
 I2S_IRQHandler
 FPU_IRQHandler
+USBD_IRQHandler
+UARTE1_IRQHandler
+QSPI_IRQHandler
+CRYPTOCELL_IRQHandler
+PWM3_IRQHandler
+SPIM3_IRQHandler
                 B .
                 ENDP
                 ALIGN

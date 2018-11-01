@@ -665,10 +665,16 @@ void flush_keyboard_buffer(void)
 void mi_schd_event_handler(schd_evt_t *p_event)
 {
 	MI_LOG_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", p_event->id);
+
     if (p_event->id == SCHD_EVT_OOB_REQUEST) {
         need_kbd_input = true;
         flush_keyboard_buffer();
         MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please input your pair code ( MUST be 6 digits ) : \n");
+    } else {
+        uint8_t did[8];
+        get_mi_device_id(did);
+        MI_LOG_INFO("device ID (hex):\n");
+        MI_LOG_HEXDUMP(did, 8);
     }
         
 }

@@ -123,6 +123,8 @@
 NRF_BLE_GATT_DEF(m_gatt);                                                       /**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);                                                         /**< Context for the Queued Write module.*/
 APP_TIMER_DEF(m_poll_timer);
+APP_TIMER_DEF(m_bindconfirm_timer);
+
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;                        /**< Handle of the current connection. */
 
 /* YOUR_JOB: Declare all services structure your application is using
@@ -130,9 +132,10 @@ static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;                        
  */
 
 // YOUR_JOB: Use UUIDs for service(s) used in your application.
-
+static void advertising_init(bool need_bind_confirm);
 static void advertising_start(void);
 static void poll_timer_handler(void * p_context);
+static void bind_confirm_timeout(void * p_context);
 /**@brief Callback function for asserts in the SoftDevice.
  *
  * @details This function will be called in case of an assert in the SoftDevice.
@@ -170,6 +173,9 @@ static void timers_init(void)
        err_code = app_timer_create(&m_app_timer_id, APP_TIMER_MODE_REPEATED, timer_timeout_handler);
        APP_ERROR_CHECK(err_code); */
     err_code = app_timer_create(&m_poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
+    MI_ERR_CHECK(err_code);
+
+    err_code = app_timer_create(&m_bindconfirm_timer, APP_TIMER_MODE_SINGLE_SHOT, bind_confirm_timeout);
     MI_ERR_CHECK(err_code);
 }
 
@@ -501,6 +507,12 @@ static void bsp_event_handler(bsp_event_t event)
 			mi_scheduler_start(SYS_KEY_DELETE);
             break;
 
+        case BSP_EVENT_BOND:
+            advertising_init(1);
+            ret_code_t err_code = app_timer_start(m_bindconfirm_timer, APP_TIMER_TICKS(5000), NULL);
+            MI_ERR_CHECK(err_code);
+            break;
+
         default:
             break;
     }
@@ -509,19 +521,20 @@ static void bsp_event_handler(bsp_event_t event)
 
 /**@brief Function for initializing the Advertising functionality.
  */
-static void advertising_init(void)
+static void advertising_init(bool need_bind_confirm)
 {
     MI_LOG_INFO("advertising init...\n");
 	mibeacon_frame_ctrl_t frame_ctrl = {
 		.secure_auth    = 1,
 		.version        = 4,
+        .bond_confirm   = need_bind_confirm,
 	};
 
 	mibeacon_capability_t cap = {.connectable = 1,
 	                             .encryptable = 1,
 	                             .bondAbility = 1};
     mibeacon_cap_sub_io_t IO = {.in_digits = 1};
-	mible_addr_t dev_mac = {0xE4, 0xCC, 0x9E, 0xD0, 0x15, 0xC4};
+	mible_addr_t dev_mac;
 	mible_gap_address_get(dev_mac);
 
 	mibeacon_config_t mibeacon_cfg = {
@@ -579,6 +592,14 @@ static void buttons_leds_init(bool * p_erase_bonds)
 											 BSP_BUTTON_ACTION_LONG_PUSH,
 											 BSP_EVENT_RESET);
     APP_ERROR_CHECK(err_code);
+
+	/* assign BUTTON 4 to clear KEYINFO in the FLASH, for more details to check bsp_event_handler()*/
+    err_code = bsp_event_to_button_action_assign(3,
+											 BSP_BUTTON_ACTION_LONG_PUSH,
+											 BSP_EVENT_BOND);
+    APP_ERROR_CHECK(err_code);
+
+advertising_init(0);
 }
 
 
@@ -631,7 +652,15 @@ static void advertising_start(void)
 	}
 }
 
-void poll_timer_handler(void * p_context)
+
+static void bind_confirm_timeout(void * p_context)
+{
+	MI_LOG_WARNING("bind confirm bit clear.\n");
+    advertising_init(0);
+}
+
+
+static void poll_timer_handler(void * p_context)
 {
 	time_t utc_time = time(NULL);
 	MI_LOG_INFO("%s", ctime(&utc_time));
@@ -759,7 +788,7 @@ int main(void)
     ble_stack_init();
     gap_params_init();
     gatt_init();
-    advertising_init();
+    advertising_init(0);
     services_init();
     conn_params_init();
 

@@ -93,9 +93,7 @@
 
 #define DEVICE_NAME                     "Nordic_Template"                       /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME               "NordicSemiconductor"                   /**< Manufacturer. Will be passed to Device Information Service. */
-#define APP_ADV_INTERVAL                300                                     /**< The advertising interval (in units of 0.625 ms. This value corresponds to 187.5 ms). */
 
-#define APP_ADV_DURATION                18000                                   /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
 #define APP_BLE_OBSERVER_PRIO           3                                       /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 #define APP_BLE_CONN_CFG_TAG            1                                       /**< A tag identifying the SoftDevice BLE configuration. */
 
@@ -107,15 +105,6 @@
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(30000)                   /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(60000)                  /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT    3                                       /**< Number of attempts before giving up the connection parameter negotiation. */
-
-#define SEC_PARAM_BOND                  1                                       /**< Perform bonding. */
-#define SEC_PARAM_MITM                  0                                       /**< Man In The Middle protection not required. */
-#define SEC_PARAM_LESC                  0                                       /**< LE Secure Connections not enabled. */
-#define SEC_PARAM_KEYPRESS              0                                       /**< Keypress notifications not enabled. */
-#define SEC_PARAM_IO_CAPABILITIES       BLE_GAP_IO_CAPS_NONE                    /**< No I/O capabilities. */
-#define SEC_PARAM_OOB                   0                                       /**< Out Of Band data not available. */
-#define SEC_PARAM_MIN_KEY_SIZE          7                                       /**< Minimum encryption key size. */
-#define SEC_PARAM_MAX_KEY_SIZE          16                                      /**< Maximum encryption key size. */
 
 #define DEAD_BEEF                       0xDEADBEEF                              /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
@@ -509,7 +498,7 @@ static void bsp_event_handler(bsp_event_t event)
 
         case BSP_EVENT_BOND:
             advertising_init(1);
-            ret_code_t err_code = app_timer_start(m_bindconfirm_timer, APP_TIMER_TICKS(5000), NULL);
+            err_code = app_timer_start(m_bindconfirm_timer, APP_TIMER_TICKS(5000), NULL);
             MI_ERR_CHECK(err_code);
             break;
 
@@ -599,7 +588,6 @@ static void buttons_leds_init(bool * p_erase_bonds)
 											 BSP_EVENT_BOND);
     APP_ERROR_CHECK(err_code);
 
-advertising_init(0);
 }
 
 

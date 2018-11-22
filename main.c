@@ -502,6 +502,10 @@ static void bsp_event_handler(bsp_event_t event)
             MI_ERR_CHECK(err_code);
             break;
 
+        case BSP_EVENT_KEY_1:
+            mi_scheduler_start(SYS_MSC_SELF_TEST);
+            break;
+
         default:
             break;
     }
@@ -570,11 +574,16 @@ static void buttons_leds_init(bool * p_erase_bonds)
     err_code = bsp_init(BSP_INIT_LEDS | BSP_INIT_BUTTONS, bsp_event_handler);
     APP_ERROR_CHECK(err_code);
 
-    err_code = bsp_btn_ble_init(NULL, &startup_event);
+//    err_code = bsp_btn_ble_init(NULL, &startup_event);
+//    APP_ERROR_CHECK(err_code);
+
+//    *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
+
+	/* assign BUTTON 2 to initate MSC_SELF_TEST, for more details to check bsp_event_handler()*/
+    err_code = bsp_event_to_button_action_assign(1,
+											 BSP_BUTTON_ACTION_PUSH,
+											 BSP_EVENT_KEY_1);
     APP_ERROR_CHECK(err_code);
-
-    *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
-
 
 	/* assign BUTTON 3 to clear KEYINFO in the FLASH, for more details to check bsp_event_handler()*/
     err_code = bsp_event_to_button_action_assign(2,
@@ -582,12 +591,11 @@ static void buttons_leds_init(bool * p_erase_bonds)
 											 BSP_EVENT_RESET);
     APP_ERROR_CHECK(err_code);
 
-	/* assign BUTTON 4 to clear KEYINFO in the FLASH, for more details to check bsp_event_handler()*/
+	/* assign BUTTON 4 to set the bind confirm bit in mibeacon, for more details to check bsp_event_handler()*/
     err_code = bsp_event_to_button_action_assign(3,
 											 BSP_BUTTON_ACTION_LONG_PUSH,
 											 BSP_EVENT_BOND);
     APP_ERROR_CHECK(err_code);
-
 }
 
 

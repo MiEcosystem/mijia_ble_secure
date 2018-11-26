@@ -437,6 +437,10 @@ void bsp_event_handler(bsp_event_t event)
             mi_scheduler_start(SYS_KEY_DELETE);
             break;
 
+        case BSP_EVENT_KEY_3:
+            mi_scheduler_start(SYS_MSC_SELF_TEST);
+            break;
+
         default:
             break;
     }
@@ -512,6 +516,11 @@ static void buttons_leds_init(bool * p_erase_bonds)
     err_code = bsp_event_to_button_action_assign(2,
                                              BSP_BUTTON_ACTION_LONG_PUSH,
                                              BSP_EVENT_RESET);
+
+    /* assign BUTTON 3 to initate MSC self test, for more details to check bsp_event_handler()*/
+    err_code = bsp_event_to_button_action_assign(3,
+                                             BSP_BUTTON_ACTION_LONG_PUSH,
+                                             BSP_EVENT_KEY_3);
     APP_ERROR_CHECK(err_code);
 }
 

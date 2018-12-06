@@ -569,7 +569,7 @@ static void advertising_init(bool need_bind_confirm)
 static void buttons_leds_init(bool * p_erase_bonds)
 {
     ret_code_t err_code;
-    bsp_event_t startup_event;
+//    bsp_event_t startup_event;
 
     err_code = bsp_init(BSP_INIT_LEDS | BSP_INIT_BUTTONS, bsp_event_handler);
     APP_ERROR_CHECK(err_code);
@@ -757,16 +757,16 @@ void ble_lock_ops_handler(uint8_t opcode)
         MI_LOG_ERROR("lock opcode error %d", opcode);
     }
 
-    lock_event_t lock_event;
-    lock_event.action = opcode;
-    lock_event.method = 0;
-    lock_event.user_id= get_mi_key_id();
-    lock_event.time   = time(NULL);
+    lock_event_t obj_lock_event;
+    obj_lock_event.action = opcode;
+    obj_lock_event.method = 0;
+    obj_lock_event.user_id= get_mi_key_id();
+    obj_lock_event.time   = time(NULL);
 
-    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
 			
     reply_lock_stat(opcode);
-    send_lock_log((uint8_t *)&lock_event, sizeof(lock_event));
+    send_lock_log((uint8_t *)&obj_lock_event, sizeof(obj_lock_event));
 }
 
 /**@brief Function for application main entry.
@@ -796,13 +796,13 @@ int main(void)
     };
 
 	/* <!> mi_scheduler_init() must be called after ble_stack_init(). */
-    mi_sevice_init();
+    mi_service_init();
 	mi_scheduler_init(10, mi_schd_event_handler, &config);
     mi_scheduler_start(SYS_KEY_RESTORE);
 
     lock_init_t lock_config;
     lock_config.opcode_handler = ble_lock_ops_handler;
-    lock_sevice_init(&lock_config);
+    lock_service_init(&lock_config);
 
     // Start execution.
     application_timers_start();

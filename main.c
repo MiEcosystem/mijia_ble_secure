@@ -468,7 +468,7 @@ static void advertising_init(void)
     mibeacon_config_t mibeacon_cfg = {
         .frame_ctrl = frame_ctrl,
         .pid = PRODUCT_ID,
-        .p_mac = (mible_addr_t*)dev_mac,
+        .p_mac = &dev_mac,
         .p_capability = &cap,
         .p_cap_sub_IO = &IO,
         .p_obj = NULL,
@@ -554,11 +554,10 @@ void poll_timer_handler(void * p_context)
     time_t utc_time = time(NULL);
     NRF_LOG_RAW_INFO(NRF_LOG_COLOR_CODE_GREEN"%s", nrf_log_push(ctime(&utc_time)));
 
-//  uint8_t battery_stat = 1;
-//  mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
-
-    NRF_LOG_RAW_INFO("max op_queue_utilization :%d\n", app_timer_op_queue_utilization_get());
-
+    if (get_mi_reg_stat()) {
+        uint8_t battery_stat = 100;
+        mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
+    }
 }
 
 
@@ -670,16 +669,16 @@ int main(void)
     };
 
     /* <!> mi_scheduler_init() must be called after ble_stack_init(). */
-    mi_sevice_init();
+    mi_service_init();
     mi_scheduler_init(10, mi_schd_event_handler, &config);
     mi_scheduler_start(SYS_KEY_RESTORE);
 
     lock_init_t lock_config;
     lock_config.opcode_handler = ble_lock_ops_handler;
-    lock_sevice_init(&lock_config);
+    lock_service_init(&lock_config);
 
     app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
-    app_timer_start(poll_timer, APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER), NULL);
+    app_timer_start(poll_timer, APP_TIMER_TICKS(60000, APP_TIMER_PRESCALER), NULL);
 
     sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
     sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);

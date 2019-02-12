@@ -56,7 +56,6 @@
 #include "mijia_profiles/lock_service_server.h"
 #include "mi_config.h"
 
-#define MSC_PWR_PIN                     23
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT 0                                           /**< Include the service_changed characteristic. If not enabled, the server's database cannot be changed for the lifetime of the device. */
 
@@ -99,6 +98,22 @@ uint8_t pair_code_num;
 uint8_t pair_code[PAIRCODE_NUMS];
 
 static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;    /**< Handle of the current connection. */
+
+#if defined(BOARD_PCA10028)
+#define MSC_PWR_PIN 25
+const iic_config_t iic_config = {
+        .scl_pin  = 28,
+        .sda_pin  = 29,
+        .freq = IIC_100K
+};
+#elif defined(BOARD_PCA10040)
+#define MSC_PWR_PIN 23
+const iic_config_t iic_config = {
+        .scl_pin  = 24,
+        .sda_pin  = 25,
+        .freq = IIC_100K
+};
+#endif
 
 
 /**@brief Function for assert macro callback.
@@ -500,17 +515,17 @@ static void advertising_init(void)
  */
 static void buttons_leds_init(bool * p_erase_bonds)
 {
-    bsp_event_t startup_event;
+//    bsp_event_t startup_event;
 
     uint32_t err_code = bsp_init(BSP_INIT_LED | BSP_INIT_BUTTONS,
                                  APP_TIMER_TICKS(100, APP_TIMER_PRESCALER),
                                  bsp_event_handler);
     APP_ERROR_CHECK(err_code);
 
-    err_code = bsp_btn_ble_init(NULL, &startup_event);
-    APP_ERROR_CHECK(err_code);
+//    err_code = bsp_btn_ble_init(NULL, &startup_event);
+//    APP_ERROR_CHECK(err_code);
 
-    *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
+//    *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
 
     /* assign BUTTON 3 to clear KEYINFO in the FLASH, for more details to check bsp_event_handler()*/
     err_code = bsp_event_to_button_action_assign(2,
@@ -597,11 +612,6 @@ int mijia_secure_chip_power_manage(bool power_stat)
     return 0;
 }
 
-const iic_config_t iic_config = {
-        .scl_pin  = 24,
-        .sda_pin  = 25,
-        .freq = IIC_100K
-};
 
 
 void ble_lock_ops_handler(uint8_t opcode)

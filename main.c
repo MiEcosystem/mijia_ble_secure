@@ -796,13 +796,13 @@ int main(void)
     };
 
 	/* <!> mi_scheduler_init() must be called after ble_stack_init(). */
-    mi_sevice_init();
+    mi_service_init();
 	mi_scheduler_init(10, mi_schd_event_handler, &config);
     mi_scheduler_start(SYS_KEY_RESTORE);
 
     lock_init_t lock_config;
     lock_config.opcode_handler = ble_lock_ops_handler;
-    lock_sevice_init(&lock_config);
+    lock_service_init(&lock_config);
 
     // Start execution.
     application_timers_start();

@@ -72,6 +72,13 @@ void initMcu(void)
   rtccInit.cntMode               = rtccCntModeNormal;
   RTCC_Init(&rtccInit);
 
+#if defined(_SILICON_LABS_32B_SERIES_1_CONFIG_3)
+  /* xG13 devices have two RTCCs, one for the stack and another for the application.
+   * The clock for RTCC needs to be enabled in application code. In xG12 RTCC init
+   * is handled by the stack */
+  CMU_ClockEnable(cmuClock_RTCC, true);
+#endif
+
 #if defined(_EMU_CMD_EM01VSCALE0_MASK)
   // Set up EM0, EM1 energy mode configuration
   EMU_EM01Init_TypeDef em01Init = EMU_EM01INIT_DEFAULT;

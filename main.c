@@ -81,7 +81,7 @@
 #define EXT_SIGNAL_PB0_SHORT_PRESS      0x01
 #define EXT_SIGNAL_PB0_LONG_PRESS       0x02
 
-#define OBJ_DATA_UPDATE_INTERVAL_S     10
+#define OBJ_DATA_UPDATE_INTERVAL_S      180
 
 static uint8_t bluetooth_stack_heap[DEFAULT_BLUETOOTH_HEAP(MAX_CONNECTIONS)];
 
@@ -171,7 +171,7 @@ static void enqueue_new_objs()
     lock.method = 0;
     lock.user_id= 0xAABBCCDD;
     lock.time   = time(NULL);
-    mibeacon_obj_enque(MI_EVT_LOCK_LEGACY, sizeof(lock), &lock);
+    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock), &lock);
 
     battery = battery < 100 ? battery + 1 : 0;
     mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery), &battery);
@@ -216,7 +216,6 @@ static void process_system_boot(struct gecko_cmd_packet *evt)
     MI_LOG_INFO("system stack %d.%0d.%0d-%d, heap %d bytes\n", boot_info.major, boot_info.minor, boot_info.patch, boot_info.build,sizeof(bluetooth_stack_heap));
 
     gecko_cmd_system_set_tx_power(0);
-
     /* Start general advertising and enable connections. */
     advertising_init(0);
     advertising_start();

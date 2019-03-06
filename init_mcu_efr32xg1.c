@@ -139,6 +139,7 @@ static void initMcu_clocks(void)
   // Enabling HFBUSCLKLE clock for LE peripherals
   CMU_ClockEnable(cmuClock_HFLE, true);
 
+#if(BSP_CLK_LFXO_PRESENT)
   // Initialize LFXO
   CMU_LFXOInit_TypeDef lfxoInit = BSP_CLK_LFXO_INIT;
   lfxoInit.ctune = BSP_CLK_LFXO_CTUNE;
@@ -151,4 +152,10 @@ static void initMcu_clocks(void)
   CMU_ClockSelectSet(cmuClock_LFA, cmuSelect_LFXO);
   CMU_ClockSelectSet(cmuClock_LFB, cmuSelect_LFXO);
   CMU_ClockSelectSet(cmuClock_LFE, cmuSelect_LFXO);
+#else
+  CMU_OscillatorEnable(cmuOsc_LFRCO, true, true);
+  CMU_ClockSelectSet(cmuClock_LFA, cmuSelect_LFRCO);
+  CMU_ClockSelectSet(cmuClock_LFB, cmuSelect_LFRCO);
+  CMU_ClockSelectSet(cmuClock_LFE, cmuSelect_LFRCO);
+#endif
 }

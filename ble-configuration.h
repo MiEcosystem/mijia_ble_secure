@@ -23,20 +23,19 @@
 
 
 // Top level macros
-#define SILABS_AF_DEVICE_NAME "silabs_ble_secure"
+#define SILABS_AF_DEVICE_NAME "soc-empty"
 
 
 // Generated plugin macros
 
 
 // Custom macros
-#define CUSTOMIZED -1
 #define BRD4104A  1
 
 #ifdef EMBER_AF_BOARD_TYPE
 #undef EMBER_AF_BOARD_TYPE
 #endif
-#define EMBER_AF_BOARD_TYPE CUSTOMIZED
+#define EMBER_AF_BOARD_TYPE BRD4104A
 
 
 #endif // __BLE_CONFIG__

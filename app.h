@@ -23,7 +23,7 @@
 #define DEBUG_LEVEL 0
 
 /* Set this value to 1 if you want to disable deep sleep completely */
-#define DISABLE_SLEEP 0
+#define DISABLE_SLEEP 1
 
 #if DEBUG_LEVEL
 #include "retargetserial.h"

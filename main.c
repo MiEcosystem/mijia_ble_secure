@@ -90,6 +90,7 @@ static gecko_configuration_t config = {
   .pa.input = GECKO_RADIO_PA_INPUT_DCDC,               /* Configure PA input to DCDC */
 #endif // defined(FEATURE_PA_INPUT_FROM_VBAT)
 #endif // (HAL_PA_ENABLE)
+  .max_timers = 8,
 };
 
 /**

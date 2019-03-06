@@ -1,17 +1,16 @@
 /***************************************************************************//**
- * @file
+ * @file application_properties.h
  * @brief Representation of Application Properties
+ * @author Silicon Labs
+ * @version 1.6.0
  *******************************************************************************
  * # License
- * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
+ * <b>Copyright 2016 Silicon Laboratories, Inc. http://www.silabs.com</b>
  *******************************************************************************
  *
- * The licensor of this software is Silicon Laboratories Inc.  Your use of this
- * software is governed by the terms of Silicon Labs Master Software License
- * Agreement (MSLA) available at
- * www.silabs.com/about-us/legal/master-software-license-agreement.  This
- * software is distributed to you in Source Code format and is governed by the
- * sections of the MSLA applicable to Source Code.
+ * This file is licensed under the Silabs License Agreement. See the file
+ * "Silabs_License_Agreement.txt" for details. Before using this software for
+ * any purpose, you must agree to the terms of that agreement.
  *
  ******************************************************************************/
 #ifndef APPLICATION_PROPERTIES_H
@@ -52,16 +51,8 @@
     0xf1, 0xb6, 0x14, 0xb8                 \
 }
 
-/// Byte-reversed version of ::APPLICATION_PROPERTIES_MAGIC
-#define APPLICATION_PROPERTIES_REVERSED  { \
-    0xb8, 0x14, 0xb6, 0xf1,                \
-    0xe0, 0xcf, 0xf3, 0xad,                \
-    0xb7, 0xdd, 0x25, 0xc9,                \
-    0xfa, 0x79, 0xb7, 0x13                 \
-}
-
 /// Version number of the AppliationProperties_t struct
-#define APPLICATION_PROPERTIES_VERSION   0x00000101
+#define APPLICATION_PROPERTIES_VERSION   0x00000100
 
 /// The application is not signed
 #define APPLICATION_SIGNATURE_NONE       (0UL)
@@ -83,8 +74,6 @@
 #define APPLICATION_TYPE_MCU             (1UL << 4UL)
 /// The application contains a Bluetooth application
 #define APPLICATION_TYPE_BLUETOOTH_APP   (1UL << 5UL)
-/// The application contains a bootloader
-#define APPLICATION_TYPE_BOOTLOADER      (1UL << 6UL)
 
 /// Application Data
 typedef struct ApplicationData {
@@ -99,20 +88,6 @@ typedef struct ApplicationData {
   uint8_t productId[16];
 } ApplicationData_t;
 
-/// Application Certificate
-typedef struct ApplicationCertificate {
-  /// Version of the certificate structure
-  uint8_t structVersion;
-  /// Reserved flags
-  uint8_t flags[3];
-  /// Public key
-  uint8_t key[64];
-  /// The version number of this certificate
-  uint32_t version;
-  /// Signature of the certificate
-  uint8_t signature[64];
-} ApplicationCertificate_t;
-
 /// Application Properties struct
 typedef struct {
   /// @brief Magic value indicating this is an ApplicationProperties_t struct.
@@ -126,10 +101,6 @@ typedef struct {
   uint32_t signatureLocation;
   /// Information about the application
   ApplicationData_t app;
-  /// Pointer to information about the certificate
-  ApplicationCertificate_t *cert;
-  /// Pointer to Long Token Data Section
-  uint8_t *longTokenSectionAddress;
 } ApplicationProperties_t;
 
 /** @} // addtogroup ApplicationProperties */

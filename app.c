@@ -26,34 +26,32 @@
 
 #include "app.h"
 
-/* Print boot message */
-static void bootMessage(struct gecko_msg_system_boot_evt_t *bootevt);
-
-/* Flag for indicating DFU Reset must be performed */
-static uint8_t boot_to_dfu = 0;
+/* mijia ble  */
+#include "mible_api.h"
+#include "mible_log.h"
 
 /* Main application */
 void appMain(gecko_configuration_t *pconfig)
 {
-#if DISABLE_SLEEP > 0
+#if DISABLE_SLEEP
   pconfig->sleep.flags = 0;
 #endif
 
-  /* Initialize debug prints. Note: debug prints are off by default. See DEBUG_LEVEL in app.h */
-  initLog();
+  MI_LOG_INFO(RTT_CTRL_CLEAR"\n");
+  MI_LOG_INFO("Compiled %s %s\n", __DATE__, __TIME__);
+  MI_LOG_INFO("system clock %d Hz\n", SystemCoreClockGet());
 
   /* Initialize stack */
-  gecko_init(pconfig);
+  gecko_stack_init(pconfig);
+  gecko_bgapi_class_system_init();
+  gecko_bgapi_class_le_gap_init();
+  gecko_bgapi_class_gatt_server_init();
+  gecko_bgapi_class_hardware_init();
+  gecko_bgapi_class_flash_init();
 
   while (1) {
     /* Event pointer for handling events */
     struct gecko_cmd_packet* evt;
-
-    /* if there are no events pending then the next call to gecko_wait_event() may cause
-     * device go to deep sleep. Make sure that debug prints are flushed before going to sleep */
-    if (!gecko_event_pending()) {
-      flushLog();
-    }
 
     /* Check for stack event. This is a blocking event listener. If you want non-blocking please see UG136. */
     evt = gecko_wait_event();
@@ -78,22 +76,4 @@ void appMain(gecko_configuration_t *pconfig)
         break;
     }
   }
-}
-
-/* Print stack version and local Bluetooth address as boot message */
-static void bootMessage(struct gecko_msg_system_boot_evt_t *bootevt)
-{
-#if DEBUG_LEVEL
-  bd_addr local_addr;
-  int i;
-
-  printLog("stack version: %u.%u.%u\r\n", bootevt->major, bootevt->minor, bootevt->patch);
-  local_addr = gecko_cmd_system_get_bt_address()->address;
-
-  printLog("local BT device address: ");
-  for (i = 0; i < 5; i++) {
-    printLog("%2.2x:", local_addr.addr[5 - i]);
-  }
-  printLog("%2.2x\r\n", local_addr.addr[0]);
-#endif
 }

@@ -1,7 +1,7 @@
 #### Hardware Platform
 * nRF51-DK PCA10028 
-* nRF52-DK PCA10040
 
+*<!> nRF52 demo project is in this branch [**nordic**](https://github.com/MiEcosystem/mijia_ble_secure/tree/nordic)*
 #### Requirement
 - arm MDK 5.25
 - SEGGER Jlink

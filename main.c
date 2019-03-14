@@ -519,7 +519,7 @@ static void advertising_init(bool need_bind_confirm)
     MI_LOG_INFO("advertising init...\n");
 	mibeacon_frame_ctrl_t frame_ctrl = {
 		.secure_auth    = 1,
-		.version        = 4,
+		.version        = 5,
         .bond_confirm   = need_bind_confirm,
 	};
 
@@ -661,8 +661,11 @@ static void poll_timer_handler(void * p_context)
 	time_t utc_time = time(NULL);
 	MI_LOG_INFO("%s", ctime(&utc_time));
 
-//	uint8_t battery_stat = 0xA6;
-//	mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
+    // if device has been registered, it could boardcast mibeacon objects.
+    if (get_mi_reg_stat()) {
+        uint8_t battery_stat = 100;
+        mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
+    }
 
 }
 
@@ -687,21 +690,19 @@ void flush_keyboard_buffer(void)
     while(SEGGER_RTT_ReadNoLock(0, tmp, 16));
 }
 
+
 void mi_schd_event_handler(schd_evt_t *p_event)
 {
 	MI_LOG_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", p_event->id);
-
-    if (p_event->id == SCHD_EVT_OOB_REQUEST) {
+    switch(p_event->id) {
+    case SCHD_EVT_OOB_REQUEST:
         need_kbd_input = true;
         flush_keyboard_buffer();
         MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please input your pair code ( MUST be 6 digits ) : \n");
-    } else {
-        uint8_t did[8];
-        get_mi_device_id(did);
-        MI_LOG_INFO("device ID (hex):\n");
-        MI_LOG_HEXDUMP(did, 8);
+        break;
+    default:
+        break;
     }
-        
 }
 
 #ifdef NRF52840_XXAA
@@ -807,7 +808,7 @@ int main(void)
     // Start execution.
     application_timers_start();
     advertising_start();
-
+    
     // Enter main loop.
     for (;;) {
 

@@ -3295,6 +3295,16 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\mijia_ble_libs\cryptography\mi_crypto_backend_msc.c</FilePath>
             </File>
+            <File>
+              <FileName>mjac_utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mijia_ble_libs\cryptography\mja1\mjac_utils.c</FilePath>
+            </File>
+            <File>
+              <FileName>mjac_wrapper.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mijia_ble_libs\cryptography\mja1\mjac_wrapper.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -6530,6 +6540,16 @@
               <FileName>mi_crypto_backend_msc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mijia_ble_libs\cryptography\mi_crypto_backend_msc.c</FilePath>
+            </File>
+            <File>
+              <FileName>mjac_utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mijia_ble_libs\cryptography\mja1\mjac_utils.c</FilePath>
+            </File>
+            <File>
+              <FileName>mjac_wrapper.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mijia_ble_libs\cryptography\mja1\mjac_wrapper.c</FilePath>
             </File>
           </Files>
         </Group>

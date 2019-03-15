@@ -11,7 +11,7 @@
 
 # How to use
 
-1. You need to download nRF5 SDK 15.2.0 from [here](https://www.nordicsemi.com/eng/nordic/Products/nRF52-DK/nRF5-SDK-zip/59014)
+1. You need to download nRF5 SDK 15.2.0 from [here](https://www.nordicsemi.com/Software-and-Tools/Software/nRF5-SDK/Download#infotabs)
 2. $ cd SDK_15.2.0\examples\ble_peripheral\ directory.
 3. $ git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b nordic
 3. change PRODUCT_ID to your product ID (i.e. pid), that you got when registered in [Mi IoT](https://iot.mi.com/index.html). The default PID is stand for Xiaomi BLE secure devboard.

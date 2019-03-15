@@ -519,7 +519,7 @@ static void advertising_init(bool need_bind_confirm)
     MI_LOG_INFO("advertising init...\n");
 	mibeacon_frame_ctrl_t frame_ctrl = {
 		.secure_auth    = 1,
-		.version        = 4,
+		.version        = 5,
         .bond_confirm   = need_bind_confirm,
 	};
 
@@ -661,9 +661,11 @@ static void poll_timer_handler(void * p_context)
 	time_t utc_time = time(NULL);
 	MI_LOG_INFO("%s", ctime(&utc_time));
 
-//	uint8_t battery_stat = 0xA6;
-//	mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
-
+    // if device has been registered, it could boardcast mibeacon objects.
+    if (get_mi_reg_stat()) {
+        uint8_t battery_stat = 100;
+        mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
+    }
 }
 
 void time_init(struct tm * time_ptr);

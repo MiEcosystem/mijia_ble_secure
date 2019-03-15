@@ -35,7 +35,7 @@ appPlugin: stack_bridge=false
     <informativeText>Abstract: The generic_access service contains generic information about the device. All available Characteristics are readonly. </informativeText>
     <characteristic id="device_name" name="Device Name" sourceId="org.bluetooth.characteristic.gap.device_name" uuid="2A00">
       <informativeText/>
-      <value length="20" type="utf-8" variable_length="true">ble legacy demo</value>
+      <value length="20" type="utf-8" variable_length="true">secure demo</value>
       <properties const="false" const_requirement="optional" read="true" read_requirement="mandatory"/>
     </characteristic>
   </service>
@@ -63,8 +63,26 @@ appPlugin: stack_bridge=false
     </characteristic>
     <characteristic id="ota_data" name="OTA data" sourceId="custom.type" uuid="0018">
       <informativeText>Custom characteristic</informativeText>
-      <value length="20" type="user" variable_length="false"/>
+      <value length="20" type="user" variable_length="true"/>
       <properties notify="true" notify_requirement="optional" write_no_response="true" write_no_response_requirement="optional"/>
+    </characteristic>
+  </service>
+  <service advertise="false" name="Mijia lock service" requirement="mandatory" sourceId="custom.type" type="primary" uuid="00001000-0065-6c62-2e74-6f696d2e696d">
+    <informativeText>Custom service</informativeText>
+    <characteristic id="lock_ops" name="Lock Operation" sourceId="custom.type" uuid="00001001-0065-6c62-2e74-6f696d2e696d">
+      <informativeText>Custom characteristic</informativeText>
+      <value length="7" type="user" variable_length="false">0x00</value>
+      <properties write="true" write_requirement="optional"/>
+    </characteristic>
+    <characteristic id="lock_stat" name="Lock State" sourceId="custom.type" uuid="00001002-0065-6c62-2e74-6f696d2e696d">
+      <informativeText>Custom characteristic</informativeText>
+      <value length="7" type="user" variable_length="false">0x00</value>
+      <properties notify="true" notify_requirement="optional" read="true" read_requirement="optional"/>
+    </characteristic>
+    <characteristic id="lock_logs" name="Lock logs" sourceId="custom.type" uuid="00001003-0065-6c62-2e74-6f696d2e696d">
+      <informativeText>Custom characteristic</informativeText>
+      <value length="20" type="user" variable_length="true">0x00</value>
+      <properties notify="true" notify_requirement="optional" read="true" read_requirement="optional"/>
     </characteristic>
   </service>
 </gatt>

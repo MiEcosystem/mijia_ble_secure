@@ -50,7 +50,6 @@
 #include "secure_auth/mible_secure_auth.h"
 #include "mijia_profiles/mi_service_server.h"
 #include "mijia_profiles/lock_service_server.h"
-#include "cryptography/mi_mesh_otp.h"
 
 #undef  MI_LOG_MODULE_NAME
 #define MI_LOG_MODULE_NAME __FILE__
@@ -66,7 +65,6 @@
 #ifndef PRODUCT_ID
 #define PRODUCT_ID                     0x01CF // xiaomi dev board
 #endif
-
 
 #define MSEC_TO_UNITS(TIME, RESOLUTION) (((TIME) * 1000) / (RESOLUTION))
 #define MS_2_TIMERTICK(ms)             ((TIMER_CLK_FREQ * (uint32)(ms)) / 1000)
@@ -88,17 +86,27 @@ static uint8_t bluetooth_stack_heap[DEFAULT_BLUETOOTH_HEAP(MAX_CONNECTIONS)];
 // Gecko configuration parameters (see gecko_configuration.h)
 static const gecko_configuration_t config = {
         .config_flags = 0,
-        .sleep.flags = 0,
+        .sleep.flags = SLEEP_FLAGS_DEEP_SLEEP_ENABLE,
         .bluetooth.max_connections = MAX_CONNECTIONS,
         .bluetooth.heap = bluetooth_stack_heap,
         .bluetooth.heap_size = sizeof(bluetooth_stack_heap),
-        .bluetooth.sleep_clock_accuracy = 0, // ppm
+        .bluetooth.sleep_clock_accuracy = 100, // ppm
         .gattdb = &bg_gattdb_data,
 #if (HAL_PA_ENABLE) && defined(FEATURE_PA_HIGH_POWER)
         .pa.config_enable = 1, // Enable high power PA
         .pa.input = GECKO_RADIO_PA_INPUT_VBAT, // Configure PA input to VBAT
 #endif // (HAL_PA_ENABLE) && defined(FEATURE_PA_HIGH_POWER)
         .max_timers = 8,
+};
+
+static const iic_config_t msc_iic_config = {
+        .scl_pin = BSP_I2C0_SCL_PIN,
+        .scl_port = BSP_I2C0_SCL_PORT,
+        .scl_extra_conf = BSP_I2C0_SCL_LOC,
+        .sda_pin = BSP_I2C0_SDA_PIN,
+        .sda_port = BSP_I2C0_SDA_PORT,
+        .sda_extra_conf = BSP_I2C0_SDA_LOC,
+        .freq = IIC_100K,
 };
 
 #define PAIRCODE_NUMS 6
@@ -108,6 +116,7 @@ uint8_t pair_code[PAIRCODE_NUMS];
 /// button press timestamp for very long/long/short Push Button 0 press detection
 static uint32 pb0_press;
 
+extern void time_init(struct tm * time_ptr);
 static void advertising_init(uint8_t need_bind_confirm);
 static void advertising_start(void);
 
@@ -147,7 +156,7 @@ void gpio_irq_handler(uint8_t pin)
 }
 
 
-static void button_init(void)
+void button_init(void)
 {
     // configure pushbutton PB0 and PB1 as inputs, with pull-up enabled
     GPIO_PinModeSet(BSP_BUTTON0_PORT, BSP_BUTTON0_PIN, gpioModeInputPull, 1);
@@ -209,9 +218,55 @@ void mi_schd_event_handler(schd_evt_t *p_event)
     }
 }
 
+static bool m_allow_sleep = true;
+static int msc_pwr_manage(bool power_stat)
+{
+    if (power_stat == 1) {
+        GPIO_PinModeSet(gpioPortA, 0, gpioModeWiredAndPullUp, 1);
+        GPIO_PinOutSet(gpioPortA, 0);
+        m_allow_sleep = false;
+    } else {
+        GPIO_PinOutClear(gpioPortA, 0);
+        GPIO_PinModeSet(gpioPortA, 0, gpioModeDisabled, 0);
+        m_allow_sleep = true;
+    }
+    return 0;
+}
+
+void lock_ops_handler (uint8_t opcode)
+{
+    switch(opcode) {
+    case 0:
+        MI_LOG_INFO(" unlock \n");
+        break;
+
+    case 1:
+        MI_LOG_INFO(" lock \n");
+        break;
+
+    case 2:
+        MI_LOG_INFO(" bolt \n");
+        break;
+
+    default:
+        MI_LOG_ERROR("lock opcode error %d", opcode);
+    }
+
+    lock_event_t obj_lock_event;
+    obj_lock_event.action = opcode;
+    obj_lock_event.method = 0;
+    obj_lock_event.user_id= get_mi_key_id();
+    obj_lock_event.time   = time(NULL);
+
+    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
+
+    reply_lock_stat(opcode);
+    send_lock_log((uint8_t *)&obj_lock_event, sizeof(obj_lock_event));
+}
 
 static void process_system_boot(struct gecko_cmd_packet *evt)
 {
+
     struct gecko_msg_system_boot_evt_t boot_info = evt->data.evt_system_boot;
     MI_LOG_INFO("system stack %d.%0d.%0d-%d, heap %d bytes\n", boot_info.major, boot_info.minor, boot_info.patch, boot_info.build,sizeof(bluetooth_stack_heap));
 
@@ -219,8 +274,20 @@ static void process_system_boot(struct gecko_cmd_packet *evt)
     /* Start general advertising and enable connections. */
     advertising_init(0);
     advertising_start();
+
     mi_service_init();
-    mi_scheduler_init(10, mi_schd_event_handler, NULL);
+
+    lock_init_t lock_cfg = {
+            .opcode_handler = lock_ops_handler
+    };
+    lock_service_init(&lock_cfg);
+
+    mible_libs_config_t lib_cfg = {
+            .msc_onoff = msc_pwr_manage,
+            .p_msc_iic_config = &msc_iic_config,
+    };
+
+    mi_scheduler_init(10, mi_schd_event_handler, &lib_cfg);
     mi_scheduler_start(SYS_KEY_RESTORE);
 }
 
@@ -260,6 +327,29 @@ static void process_external_signal(struct gecko_cmd_packet *evt)
     }
 }
 
+void user_stack_event_handler(struct gecko_cmd_packet* evt)
+{
+    /* Handle events */
+    switch (BGLIB_MSG_ID(evt->header)) {
+    /* This boot event is generated when the system boots up after reset.
+     * Do not call any stack commands before receiving the boot event.
+     * Here the system is set to start advertising immediately after boot procedure. */
+    case gecko_evt_system_boot_id:
+        process_system_boot(evt);
+        break;
+
+    case gecko_evt_hardware_soft_timer_id:
+        process_softtimer(evt);
+        break;
+
+    case gecko_evt_system_external_signal_id:
+        process_external_signal(evt);
+        break;
+
+    default:
+        break;
+    }
+}
 
 int main()
 {
@@ -284,39 +374,27 @@ int main()
     gecko_bgapi_class_flash_init();
 
     button_init();
-    time_init();
+    time_init(NULL);
 
     /* Event pointer for handling events */
     struct gecko_cmd_packet* evt;
 
     while (1) {
-        /* Check for stack event. */
-        evt = gecko_wait_event();
-        mible_stack_event_handler(evt);
+        /* Process stack event */
+        do {
+            evt = gecko_peek_event();
+            if (evt != NULL) {
+                mible_stack_event_handler(evt);
 
-        /* Handle events */
-        switch (BGLIB_MSG_ID(evt->header)) {
-        /* This boot event is generated when the system boots up after reset.
-         * Do not call any stack commands before receiving the boot event.
-         * Here the system is set to start advertising immediately after boot procedure. */
-        case gecko_evt_system_boot_id:
-            process_system_boot(evt);
-            break;
+                /* customized event handler can be added here. */
+                user_stack_event_handler(evt);
+            }
+        } while (evt != NULL);
 
-        case gecko_evt_hardware_soft_timer_id:
-            process_softtimer(evt);
-            break;
-
-        case gecko_evt_system_external_signal_id:
-            process_external_signal(evt);
-            break;
-
-        default:
-            break;
-        }
-
+        /* Process mi scheduler */
         mi_schd_process();
 
+        /* Scan keyboard */
         if (need_kbd_input) {
             if (pair_code_num < PAIRCODE_NUMS) {
                 pair_code_num += scan_keyboard(pair_code + pair_code_num, PAIRCODE_NUMS - pair_code_num);
@@ -326,6 +404,14 @@ int main()
                 need_kbd_input = false;
                 mi_input_oob(pair_code, sizeof(pair_code));
             }
+        }
+
+        /* Enter low power mode */
+        if (m_allow_sleep == true){
+            /* Go to sleep. Sleeping will be avoided if there isn't enough time to sleep */
+            gecko_sleep_for_ms(gecko_can_sleep_ms());
+        } else {
+            /* Block EM2/3/4 entry, because of I2C master driver only work in EM0/1. */
         }
     }
 }
@@ -337,7 +423,7 @@ static void advertising_init(uint8_t need_bind_confirm)
 
     mibeacon_frame_ctrl_t frame_ctrl = {
             .secure_auth  = 1,
-            .version      = 4,
+            .version      = 5,
             .bond_confirm = need_bind_confirm
     };
 

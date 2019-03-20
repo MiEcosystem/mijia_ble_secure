@@ -352,7 +352,7 @@ static void application_timers_start(void)
        ret_code_t err_code;
        err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
        APP_ERROR_CHECK(err_code); */
-    ret_code_t err_code = app_timer_start(m_poll_timer, APP_TIMER_TICKS(5000), NULL);
+    ret_code_t err_code = app_timer_start(m_poll_timer, APP_TIMER_TICKS(60000), NULL);
     MI_ERR_CHECK(err_code);
 }
 
@@ -557,7 +557,7 @@ static void advertising_init(bool need_bind_confirm)
 	
 	MI_LOG_HEXDUMP(adv_data, adv_len);
 
-	mible_gap_adv_data_set(adv_data, adv_len, NULL, 0);
+	mible_gap_adv_data_set(adv_data, adv_len, adv_data, 0);
 
 	return;
 }
@@ -666,15 +666,18 @@ static void poll_timer_handler(void * p_context)
         uint8_t battery_stat = 100;
         mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
     }
-
 }
 
 void time_init(struct tm * time_ptr);
 
+
 #define PAIRCODE_NUMS 6
-bool need_kbd_input;
-uint8_t pair_code_num;
-uint8_t pair_code[PAIRCODE_NUMS];
+static bool need_kbd_input;
+static uint8_t pair_code_num;
+static uint8_t pair_code[PAIRCODE_NUMS];
+static uint8_t qr_code[16] = {
+0xa0,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa,0xab,0xac,0xad,0xae,0xaf,
+};
 
 int scan_keyboard(uint8_t *pdata, uint8_t len)
 {
@@ -694,12 +697,32 @@ void flush_keyboard_buffer(void)
 void mi_schd_event_handler(schd_evt_t *p_event)
 {
 	MI_LOG_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", p_event->id);
-    switch(p_event->id) {
+    switch (p_event->id) {
     case SCHD_EVT_OOB_REQUEST:
-        need_kbd_input = true;
-        flush_keyboard_buffer();
-        MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please input your pair code ( MUST be 6 digits ) : \n");
+        MI_LOG_INFO("App selected IO cap is 0x%04X\n", p_event->data.IO_capability);
+        switch (p_event->data.IO_capability) {
+        case 0x0001:
+            need_kbd_input = true;
+            flush_keyboard_buffer();
+            MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please input your pair code ( MUST be 6 digits ) : \n");
+            break;
+
+        case 0x0080:
+            mi_input_oob(qr_code, 16);
+            MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please scan device QR code.\n");
+            break;
+
+        default:
+            MI_LOG_ERROR("Selected IO cap is not supported.\n");
+            mible_gap_disconnect(0);
+        }
         break;
+
+    case SCHD_EVT_KEY_DEL_SUCC:
+        // device has been reset, restart adv mibeacon contains IO cap.
+        advertising_init(0);
+        break;
+
     default:
         break;
     }

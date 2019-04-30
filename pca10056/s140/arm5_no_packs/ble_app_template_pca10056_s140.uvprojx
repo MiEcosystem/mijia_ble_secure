@@ -184,6 +184,7 @@
             <hadXRAM>0</hadXRAM>
             <uocXRam>0</uocXRam>
             <RvdsVP>2</RvdsVP>
+            <RvdsMve>0</RvdsMve>
             <hadIRAM2>0</hadIRAM2>
             <hadIROM2>0</hadIROM2>
             <StupSel>8</StupSel>
@@ -3289,6 +3290,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\mijia_ble_libs\mijia_profiles\mi_service_server.c</FilePath>
             </File>
+            <File>
+              <FileName>stdio_service_server.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mijia_ble_libs\mijia_profiles\stdio_service_server.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -3477,6 +3483,7 @@
             <hadXRAM>0</hadXRAM>
             <uocXRam>0</uocXRam>
             <RvdsVP>2</RvdsVP>
+            <RvdsMve>0</RvdsMve>
             <hadIRAM2>0</hadIRAM2>
             <hadIROM2>0</hadIROM2>
             <StupSel>8</StupSel>
@@ -6581,6 +6588,11 @@
               <FileName>mi_service_server.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\mijia_ble_libs\mijia_profiles\mi_service_server.c</FilePath>
+            </File>
+            <File>
+              <FileName>stdio_service_server.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\mijia_ble_libs\mijia_profiles\stdio_service_server.c</FilePath>
             </File>
           </Files>
         </Group>

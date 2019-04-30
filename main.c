@@ -89,6 +89,7 @@
 #include "secure_auth/mible_secure_auth.h"
 #include "mijia_profiles/mi_service_server.h"
 #include "mijia_profiles/lock_service_server.h"
+#include "mijia_profiles/stdio_service_server.h"
 #include "mi_config.h"
 
 #define DEVICE_NAME                     "Nordic_Template"                       /**< Name of device. Will be included in the advertising data. */
@@ -759,7 +760,7 @@ int mijia_secure_chip_power_manage(bool power_stat)
 
 void ble_lock_ops_handler(uint8_t opcode)
 {
-
+    int errno;
     switch(opcode) {
     case 0:
         MI_LOG_INFO(" unlock \n");
@@ -790,7 +791,20 @@ void ble_lock_ops_handler(uint8_t opcode)
     mibeacon_obj_enque(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
 			
     reply_lock_stat(opcode);
-    send_lock_log((uint8_t *)&obj_lock_event, sizeof(obj_lock_event));
+    errno = send_lock_log(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
+    MI_ERR_CHECK(errno);
+}
+
+void stdio_rx_handler(uint8_t* p, uint8_t l)
+{
+    int errno;
+    /* RX plain text (It has been decrypted) */
+    MI_LOG_INFO("RX raw data\n");
+    MI_LOG_HEXDUMP(p, l);
+
+    /* TX plain text (It will be encrypted before send out.) */
+    errno = stdio_tx(p, l);
+    MI_ERR_CHECK(errno);
 }
 
 /**@brief Function for application main entry.
@@ -827,7 +841,8 @@ int main(void)
     lock_init_t lock_config;
     lock_config.opcode_handler = ble_lock_ops_handler;
     lock_service_init(&lock_config);
-
+    stdio_service_init(stdio_rx_handler);
+    
     // Start execution.
     application_timers_start();
     advertising_start();

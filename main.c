@@ -89,6 +89,7 @@
 #include "secure_auth/mible_secure_auth.h"
 #include "mijia_profiles/mi_service_server.h"
 #include "mijia_profiles/lock_service_server.h"
+#include "mijia_profiles/stdio_service_server.h"
 #include "mi_config.h"
 
 #define DEVICE_NAME                     "Nordic_Template"                       /**< Name of device. Will be included in the advertising data. */
@@ -352,7 +353,7 @@ static void application_timers_start(void)
        ret_code_t err_code;
        err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
        APP_ERROR_CHECK(err_code); */
-    ret_code_t err_code = app_timer_start(m_poll_timer, APP_TIMER_TICKS(5000), NULL);
+    ret_code_t err_code = app_timer_start(m_poll_timer, APP_TIMER_TICKS(60000), NULL);
     MI_ERR_CHECK(err_code);
 }
 
@@ -557,7 +558,7 @@ static void advertising_init(bool need_bind_confirm)
 	
 	MI_LOG_HEXDUMP(adv_data, adv_len);
 
-	mible_gap_adv_data_set(adv_data, adv_len, NULL, 0);
+	mible_gap_adv_data_set(adv_data, adv_len, adv_data, 0);
 
 	return;
 }
@@ -569,7 +570,7 @@ static void advertising_init(bool need_bind_confirm)
 static void buttons_leds_init(bool * p_erase_bonds)
 {
     ret_code_t err_code;
-    bsp_event_t startup_event;
+//    bsp_event_t startup_event;
 
     err_code = bsp_init(BSP_INIT_LEDS | BSP_INIT_BUTTONS, bsp_event_handler);
     APP_ERROR_CHECK(err_code);
@@ -670,10 +671,14 @@ static void poll_timer_handler(void * p_context)
 
 void time_init(struct tm * time_ptr);
 
+
 #define PAIRCODE_NUMS 6
-bool need_kbd_input;
-uint8_t pair_code_num;
-uint8_t pair_code[PAIRCODE_NUMS];
+static bool need_kbd_input;
+static uint8_t pair_code_num;
+static uint8_t pair_code[PAIRCODE_NUMS];
+static uint8_t qr_code[16] = {
+0xa0,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa,0xab,0xac,0xad,0xae,0xaf,
+};
 
 int scan_keyboard(uint8_t *pdata, uint8_t len)
 {
@@ -689,21 +694,39 @@ void flush_keyboard_buffer(void)
     while(SEGGER_RTT_ReadNoLock(0, tmp, 16));
 }
 
+
 void mi_schd_event_handler(schd_evt_t *p_event)
 {
 	MI_LOG_INFO("USER CUSTOM CALLBACK RECV EVT ID %d\n", p_event->id);
+    switch (p_event->id) {
+    case SCHD_EVT_OOB_REQUEST:
+        MI_LOG_INFO("App selected IO cap is 0x%04X\n", p_event->data.IO_capability);
+        switch (p_event->data.IO_capability) {
+        case 0x0001:
+            need_kbd_input = true;
+            flush_keyboard_buffer();
+            MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please input your pair code ( MUST be 6 digits ) : \n");
+            break;
 
-    if (p_event->id == SCHD_EVT_OOB_REQUEST) {
-        need_kbd_input = true;
-        flush_keyboard_buffer();
-        MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please input your pair code ( MUST be 6 digits ) : \n");
-    } else {
-        uint8_t did[8];
-        get_mi_device_id(did);
-        MI_LOG_INFO("device ID (hex):\n");
-        MI_LOG_HEXDUMP(did, 8);
+        case 0x0080:
+            mi_input_oob(qr_code, 16);
+            MI_LOG_INFO(MI_LOG_COLOR_GREEN "Please scan device QR code.\n");
+            break;
+
+        default:
+            MI_LOG_ERROR("Selected IO cap is not supported.\n");
+            mible_gap_disconnect(0);
+        }
+        break;
+
+    case SCHD_EVT_KEY_DEL_SUCC:
+        // device has been reset, restart adv mibeacon contains IO cap.
+        advertising_init(0);
+        break;
+
+    default:
+        break;
     }
-        
 }
 
 #ifdef NRF52840_XXAA
@@ -737,7 +760,7 @@ int mijia_secure_chip_power_manage(bool power_stat)
 
 void ble_lock_ops_handler(uint8_t opcode)
 {
-
+    int errno;
     switch(opcode) {
     case 0:
         MI_LOG_INFO(" unlock \n");
@@ -759,16 +782,29 @@ void ble_lock_ops_handler(uint8_t opcode)
         MI_LOG_ERROR("lock opcode error %d", opcode);
     }
 
-    lock_event_t lock_event;
-    lock_event.action = opcode;
-    lock_event.method = 0;
-    lock_event.user_id= get_mi_key_id();
-    lock_event.time   = time(NULL);
+    lock_event_t obj_lock_event;
+    obj_lock_event.action = opcode;
+    obj_lock_event.method = 0;
+    obj_lock_event.user_id= get_mi_key_id();
+    obj_lock_event.time   = time(NULL);
 
-    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
 			
     reply_lock_stat(opcode);
-    send_lock_log((uint8_t *)&lock_event, sizeof(lock_event));
+    errno = send_lock_log(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
+    MI_ERR_CHECK(errno);
+}
+
+void stdio_rx_handler(uint8_t* p, uint8_t l)
+{
+    int errno;
+    /* RX plain text (It has been decrypted) */
+    MI_LOG_INFO("RX raw data\n");
+    MI_LOG_HEXDUMP(p, l);
+
+    /* TX plain text (It will be encrypted before send out.) */
+    errno = stdio_tx(p, l);
+    MI_ERR_CHECK(errno);
 }
 
 /**@brief Function for application main entry.
@@ -805,11 +841,12 @@ int main(void)
     lock_init_t lock_config;
     lock_config.opcode_handler = ble_lock_ops_handler;
     lock_service_init(&lock_config);
-
+    stdio_service_init(stdio_rx_handler);
+    
     // Start execution.
     application_timers_start();
     advertising_start();
-
+    
     // Enter main loop.
     for (;;) {
 

@@ -261,7 +261,7 @@ void lock_ops_handler (uint8_t opcode)
     mibeacon_obj_enque(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
 
     reply_lock_stat(opcode);
-    send_lock_log((uint8_t *)&obj_lock_event, sizeof(obj_lock_event));
+    send_lock_log(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
 }
 
 static void process_system_boot(struct gecko_cmd_packet *evt)

@@ -57,7 +57,7 @@
 
 #include "mi_config.h"
 
-#define BLE_GATEWAY_TEST               1
+#define BLE_GATEWAY_TEST               0
 
 #ifndef MAX_CONNECTIONS
 #define MAX_CONNECTIONS                2
@@ -76,8 +76,9 @@
 
 /// Number of ticks after which press is considered to be long (1s)
 #define LONG_PRESS_TIME_TICKS           (32768)
-#define EXT_SIGNAL_PB0_SHORT_PRESS      0x01
-#define EXT_SIGNAL_PB0_LONG_PRESS       0x02
+#define EXT_SIGNAL_PB0_SHORT_PRESS      (1<<0)
+#define EXT_SIGNAL_PB0_LONG_PRESS       (1<<1)
+#define EXT_SIGNAL_PB1_SHORT_PRESS      (1<<2)
 
 #define OBJ_DATA_UPDATE_INTERVAL_S      180
 
@@ -114,7 +115,7 @@ bool need_kbd_input;
 uint8_t pair_code_num;
 uint8_t pair_code[PAIRCODE_NUMS];
 /// button press timestamp for very long/long/short Push Button 0 press detection
-static uint32 pb0_press;
+static uint32 pb0_press, pb1_press;
 
 extern void time_init(struct tm * time_ptr);
 static void advertising_init(uint8_t need_bind_confirm);
@@ -153,6 +154,21 @@ void gpio_irq_handler(uint8_t pin)
             }
         }
     }
+
+    if (pin == BSP_BUTTON1_PIN) {
+        if (GPIO_PinInGet(BSP_BUTTON0_PORT, BSP_BUTTON1_PIN) == 0) {
+            // PB0 pressed - record RTCC timestamp
+            pb1_press = RTCC_CounterGet();
+        } else {
+            // PB0 released - check if it was short or long press
+            t_diff = RTCC_CounterGet() - pb1_press;
+            if (t_diff < LONG_PRESS_TIME_TICKS) {
+                gecko_external_signal(EXT_SIGNAL_PB1_SHORT_PRESS);
+            } else {
+
+            }
+        }
+    }
 }
 
 
@@ -160,14 +176,17 @@ void button_init(void)
 {
     // configure pushbutton PB0 and PB1 as inputs, with pull-up enabled
     GPIO_PinModeSet(BSP_BUTTON0_PORT, BSP_BUTTON0_PIN, gpioModeInputPull, 1);
+    GPIO_PinModeSet(BSP_BUTTON1_PORT, BSP_BUTTON1_PIN, gpioModeInputPull, 1);
 
     GPIOINT_Init();
 
     /* configure interrupt for PB0 and PB1, both falling and rising edges */
     GPIO_ExtIntConfig(BSP_BUTTON0_PORT, BSP_BUTTON0_PIN, BSP_BUTTON0_PIN, true, true, true);
+    GPIO_ExtIntConfig(BSP_BUTTON1_PORT, BSP_BUTTON1_PIN, BSP_BUTTON1_PIN, true, true, true);
 
     /* register the callback function that is invoked when interrupt occurs */
     GPIOINT_CallbackRegister(BSP_BUTTON0_PIN, gpio_irq_handler);
+    GPIOINT_CallbackRegister(BSP_BUTTON1_PIN, gpio_irq_handler);
 }
 
 
@@ -315,15 +334,21 @@ static void process_softtimer(struct gecko_cmd_packet *evt)
 static void process_external_signal(struct gecko_cmd_packet *evt)
 {
     if (evt->data.evt_system_external_signal.extsignals & EXT_SIGNAL_PB0_SHORT_PRESS) {
-        MI_LOG_INFO("short press\n");
+        MI_LOG_DEBUG("Set bind confirm bit in mibeacon.\n");
         advertising_init(1);
         gecko_cmd_hardware_set_soft_timer(SEC_2_TIMERTICK(10), TIMER_ID_CLEAR_BIND_CFM, 1);
     }
 
     if (evt->data.evt_system_external_signal.extsignals & EXT_SIGNAL_PB0_LONG_PRESS) {
-        MI_LOG_INFO("long press\n");
+    	MI_LOG_DEBUG("Factory reset.\n");
         mi_scheduler_start(SYS_KEY_DELETE);
         gecko_cmd_hardware_set_soft_timer(0, TIMER_ID_OBJ_PERIOD_ADV, 0);
+    }
+
+    if (evt->data.evt_system_external_signal.extsignals & EXT_SIGNAL_PB1_SHORT_PRESS) {
+    	MI_LOG_DEBUG("MSC Self test.\n");
+        mi_scheduler_start(SYS_MSC_SELF_TEST);
+
     }
 }
 

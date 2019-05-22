@@ -1,8 +1,7 @@
 #include <time.h>
 #include <string.h>
+#include <stdio.h>
 #include "native_gecko.h"
-
-#pragma import(__use_no_semihosting)
 
 static time_t offset_time_in_sec;             /* Time passed since Unix epoch */
 static const char * _month[] =  {

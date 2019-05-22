@@ -1568,7 +1568,7 @@ RAIL_RadioState_t RAIL_GetRadioState(RAIL_Handle_t railHandle);
 /// RAIL_SetTxPower(railHandle, powerLevel);
 /// @endcode
 ///
-/// @note: All lines following "RAIL_TxPower_t power = 100;" can be
+/// @note All lines following "RAIL_TxPower_t power = 100;" can be
 /// replaced with the provided utility function, \ref RAIL_SetTxPowerDbm.
 /// However, the full example here was provided for clarity. See the
 /// documentation on \ref RAIL_SetTxPowerDbm for more details.
@@ -2661,8 +2661,12 @@ RAIL_Status_t RAIL_ReleaseRxPacket(RAIL_Handle_t railHandle,
  * as the wait time is not consistent, so scheduling a scheduler
  * slot cannot be done accurately.
  *
- * @note: If RX channel hopping is turned on, this API
- * should not be used. Instead see RAIL_GetChannelHoppingRssi().
+ * @note If RX Antenna Diversity is enabled via \ref RAIL_ConfigRxOptions(),
+ *   pass true for the wait parameter otherwise it's very likely
+ *   \ref RAIL_RSSI_INVALID will be returned.
+ *
+ * @note If RX channel hopping is turned on, this API
+ *   should not be used. Instead see RAIL_GetChannelHoppingRssi().
  */
 int16_t RAIL_GetRssi(RAIL_Handle_t railHandle, bool wait);
 
@@ -3052,7 +3056,7 @@ RAIL_Status_t RAIL_EnableAddressFilterAddress(RAIL_Handle_t railHandle,
 /// in \ref RAIL_AutoAckConfig_t. When disabling, the "ackTimeout" field
 /// isn't used.
 ///
-/// @note: Auto-ACKing may not be enabled while RX Channel Hopping is enabled.
+/// @note Auto-ACKing may not be enabled while RX Channel Hopping is enabled.
 ///
 RAIL_Status_t RAIL_ConfigAutoAck(RAIL_Handle_t railHandle,
                                  const RAIL_AutoAckConfig_t *config);

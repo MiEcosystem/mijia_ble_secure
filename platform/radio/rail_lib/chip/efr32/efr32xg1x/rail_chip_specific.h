@@ -124,7 +124,7 @@ typedef struct RAILSched_Config {
  * @brief The size, in 32-bit words, of RAIL_StateBuffer_t to store RAIL
  *   internal state for the EFR32XG13 series.
  */
-#define EFR32XG13_RAIL_STATE_UINT32_BUFFER_SIZE 84
+#define EFR32XG13_RAIL_STATE_UINT32_BUFFER_SIZE 86
 
 /**
  * @def EFR32XG14_RAIL_STATE_UINT32_BUFFER_SIZE

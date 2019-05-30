@@ -57,7 +57,6 @@
 
 #include "mi_config.h"
 
-#define BLE_GATEWAY_TEST               0
 
 #ifndef MAX_CONNECTIONS
 #define MAX_CONNECTIONS                2
@@ -70,7 +69,6 @@
 #define MS_2_TIMERTICK(ms)             ((TIMER_CLK_FREQ * (uint32)(ms)) / 1000)
 #define SEC_2_TIMERTICK(sec)           ((TIMER_CLK_FREQ * (sec)))
 
-#define TIMER_ID_RANDOM_DELAY          10
 #define TIMER_ID_OBJ_PERIOD_ADV        11
 #define TIMER_ID_CLEAR_BIND_CFM        12
 
@@ -79,8 +77,6 @@
 #define EXT_SIGNAL_PB0_SHORT_PRESS      (1<<0)
 #define EXT_SIGNAL_PB0_LONG_PRESS       (1<<1)
 #define EXT_SIGNAL_PB1_SHORT_PRESS      (1<<2)
-
-#define OBJ_DATA_UPDATE_INTERVAL_S      180
 
 static uint8_t bluetooth_stack_heap[DEFAULT_BLUETOOTH_HEAP(MAX_CONNECTIONS)];
 
@@ -107,7 +103,7 @@ static const iic_config_t msc_iic_config = {
         .sda_pin = BSP_I2C0_SDA_PIN,
         .sda_port = BSP_I2C0_SDA_PORT,
         .sda_extra_conf = BSP_I2C0_SDA_LOC,
-        .freq = IIC_100K,
+        .freq = HAVE_MSC==1 ? IIC_100K : IIC_400K,
 };
 
 #define PAIRCODE_NUMS 6
@@ -192,16 +188,8 @@ void button_init(void)
 
 static void enqueue_new_objs()
 {
-    static int8_t  battery;
-
-    lock_event_t lock;
-    lock.action = 0;
-    lock.method = 0;
-    lock.user_id= 0xAABBCCDD;
-    lock.time   = time(NULL);
-    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock), &lock);
-
-    battery = battery < 100 ? battery + 1 : 0;
+	// get your battery
+    int8_t  battery = 100;
     mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery), &battery);
 }
 
@@ -217,21 +205,9 @@ void mi_schd_event_handler(schd_evt_t *p_event)
         break;
 
     case SCHD_EVT_REG_SUCCESS:
-        enqueue_new_objs();
-        break;
-
-#if BLE_GATEWAY_TEST
-    case SCHD_EVT_KEY_FOUND:
-    {
-            uint32_t delay_ms;
-            memcpy(&delay_ms, gecko_cmd_system_get_random_data(4)->data.data, 4);
-            delay_ms %= 60000;
-            MI_LOG_INFO("start object adv after %d ms\n", delay_ms);
-            gecko_cmd_hardware_set_soft_timer(MS_2_TIMERTICK(delay_ms), TIMER_ID_RANDOM_DELAY, 1);
-    }
-        break;
-#endif
-
+    	// start periodic advertise objects.
+    	gecko_cmd_hardware_set_soft_timer(SEC_2_TIMERTICK(600), TIMER_ID_OBJ_PERIOD_ADV, 0);
+    	break;
     default:
         break;
     }
@@ -316,11 +292,6 @@ static void process_softtimer(struct gecko_cmd_packet *evt)
     switch (evt->data.evt_hardware_soft_timer.handle) {
     case TIMER_ID_OBJ_PERIOD_ADV:
         MI_LOG_WARNING("systime %d\n", gecko_cmd_hardware_get_time()->seconds);
-        enqueue_new_objs();
-        break;
-
-    case TIMER_ID_RANDOM_DELAY:
-        gecko_cmd_hardware_set_soft_timer(SEC_2_TIMERTICK(OBJ_DATA_UPDATE_INTERVAL_S), TIMER_ID_OBJ_PERIOD_ADV, 0);
         enqueue_new_objs();
         break;
 

@@ -1,27 +1,13 @@
-#### Hardware Platform
-* nRF51-DK PCA10028 
+## 支持的硬件平台
 
-*<!> nRF52 demo project is in this branch [**nordic**](https://github.com/MiEcosystem/mijia_ble_secure/tree/nordic)*
-#### Requirement
-- arm MDK 5.25
-- SEGGER Jlink
-- Git
+* nRF51-DK PCA10028
 
-#### How to use
+nRF52硬件请参考[nordic分支](https://github.com/MiEcosystem/mijia_ble_secure/tree/nordic)
 
-1. download nRF5 SDK 12.3.0 [here](https://www.nordicsemi.com/Software-and-Tools/Software/nRF5-SDK/Download#infotabs)
-2. $ cd SDK_12.3.0\examples\ble_peripheral\ directory.
-3. $ git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b nordic_legacy
-3. change PRODUCT_ID to your product ID (i.e. pid), that you got when registered in [Mi IoT](https://iot.mi.com/index.html).
+## 使用说明
 
-#### Diagnose
+1. 下载 [nRF5 SDK 12.3.0](https://www.nordicsemi.com/Software-and-Tools/Software/nRF5-SDK/Download#infotabs)
+2. 进入到文件目录 SDK_12.3.0\examples\ble_peripheral\
+3. 运行 git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b nordic_legacy
 
-Make sure you have installed JLink.
-```bash
-$ JLinkExe -device NRF51422_XXAA -if swd -speed 8000 -RTTTelnetPort 2000
-```
-Then open a new terminal tab:
-```bash
-$ telnet 127.0.0.1 2000
-```
-The log infomation will be print in this telnet session.
+更多信息请参考[米家高安全级接入产品开发](https://github.com/MiEcosystem/miio_open/blob/master/ble/06-%E7%B1%B3%E5%AE%B6%E9%AB%98%E5%AE%89%E5%85%A8%E7%BA%A7BLE%E6%8E%A5%E5%85%A5%E4%BA%A7%E5%93%81%E5%BC%80%E5%8F%91.md)

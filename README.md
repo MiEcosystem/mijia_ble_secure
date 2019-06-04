@@ -1,45 +1,16 @@
-Hardware Platform
-======
-Silicon Labs WSTK 4001 with 4104A EFR32BG13 Core board
+## 硬件平台
 
-Requirement
-======
-- [Simiplicity Studio IDE](https://www.silabs.com/products/development-tools/software/simplicity-studio)
-- [SEGGER Jlink](https://www.segger.com/downloads/jlink/)
-- [Git](https://git-scm.com/downloads)
+- Silicon Labs WSTK 4001 with 4104A EFR32BG13 Core board
 
-How to use
-======
-Before you type the command below, make sure you can access the [**mijia ble libs**](https://github.com/MiEcosystem/mijia_ble_libs) repo.
-```bash
-$ git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b silabs
-```
-then import the project in Simiplicity Studio IDE.
+## 使用说明
 
-A mijia security chip is required for Xiaomi BLE secure authentication. This project will take the default BSP_IIC0 (SCL PC10 / SDA PC11) as the IIC port that communicate with security chip.
+1. 运行 git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b silabs
+2. 将工程导入Simiplicity Studio IDE
+3. 安全芯片需连接此芯片默认的IIC接口 BSP_IIC0 (SCL PC10 / SDA PC11)
 
+更多信息请参考[米家高安全级接入产品开发](https://github.com/MiEcosystem/miio_open/blob/master/ble/06-%E7%B1%B3%E5%AE%B6%E9%AB%98%E5%AE%89%E5%85%A8%E7%BA%A7BLE%E6%8E%A5%E5%85%A5%E4%BA%A7%E5%93%81%E5%BC%80%E5%8F%91.md)
 
-Diagnose
-======
-### unix-like
-Install JLink and add it to your path. <br>
-```bash
-$ JLinkExe -device EFR32BG13PXXXF512 -if swd -speed 8000 -RTTTelnetPort 4000
-```
-Then open a new terminal tab and execute:
-```bash
-$ telnet 127.0.0.1 4000
-```
-You will find the log information in this telnet session.
-
-### windows 
-Use the J-Link RTT Viewer to get those log information.
-
-More Documents
-======
-### Fundamentals
+## 参考资料
 * [UG103.14: BLE Fundamentals](https://www.silabs.com/documents/login/user-guides/ug103-14-fundamentals-ble.pdf)
 * [UG136: Silicon Labs Bluetooth C Application Developer's Guide](https://www.silabs.com/documents/login/user-guides/ug136-ble-c-soc-dev-guide.pdf)
-
-### Quick Start Guide
 * [QSG139: Getting Started with Bluetooth Software Development](https://www.silabs.com/documents/login/quick-start-guides/qsg139-getting-started-with-bluetooth.pdf)

@@ -1,30 +1,14 @@
-# Hardware Platform
+## 支持的硬件平台
+
 - nRF52832-DK PCA10040
 - nRF52840-DK PCA10056
 
-*<!> nRF51 demo project is in the branch [**nordic_legacy**](https://github.com/MiEcosystem/mijia_ble_secure/tree/nordic_legacy)*
+nRF51硬件请参考[nordic_legacy分支](https://github.com/MiEcosystem/mijia_ble_secure/tree/nordic_legacy)
 
-# Requirement
-- arm MDK 5.25
-- SEGGER Jlink
-- Git
+## 使用说明
 
-# How to use
+1. 下载 [nRF5 SDK 15.2.0](https://www.nordicsemi.com/Software-and-Tools/Software/nRF5-SDK/Download#infotabs)
+2. 进入到文件目录 SDK_15.2.0\examples\ble_peripheral\
+3. 执行 git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b nordic
 
-1. You need to download nRF5 SDK 15.2.0 from [here](https://www.nordicsemi.com/Software-and-Tools/Software/nRF5-SDK/Download#infotabs)
-2. $ cd SDK_15.2.0\examples\ble_peripheral\ directory.
-3. $ git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b nordic
-3. change PRODUCT_ID to your product ID (i.e. pid), that you got when registered in [Mi IoT](https://iot.mi.com/index.html). The default PID is stand for Xiaomi BLE secure devboard.
-
-# Diagnose
-### Unix-like system
-Make sure you have installed JLink and add it to your path. <br>
-$ JLinkExe -device NRF52832_XXAA -if swd -speed 1000 -RTTTelnetPort 2000 <br>
-or<br>
-$ JLinkExe -device NRF52840_XXAA -if swd -speed 1000 -RTTTelnetPort 2000 <br>
-Then open a new terminal tab and execute:<br>
-$ telnet 127.0.0.1 2000<br>
-You will find the log information in this telnet session.
-
-### windows 
-Use the J-Link RTT Viewer to get those log information.
+更多信息请参考[米家高安全级接入产品开发](https://github.com/MiEcosystem/miio_open/blob/master/ble/06-%E7%B1%B3%E5%AE%B6%E9%AB%98%E5%AE%89%E5%85%A8%E7%BA%A7BLE%E6%8E%A5%E5%85%A5%E4%BA%A7%E5%93%81%E5%BC%80%E5%8F%91.md)

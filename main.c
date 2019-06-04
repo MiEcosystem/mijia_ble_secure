@@ -59,7 +59,7 @@
 
 
 #ifndef MAX_CONNECTIONS
-#define MAX_CONNECTIONS                2
+#define MAX_CONNECTIONS                1
 #endif
 #ifndef PRODUCT_ID
 #define PRODUCT_ID                     0x01CF // xiaomi dev board

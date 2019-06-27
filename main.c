@@ -92,16 +92,16 @@
 #include "mijia_profiles/stdio_service_server.h"
 #include "mi_config.h"
 
-#define DEVICE_NAME                     "Nordic_Template"                       /**< Name of device. Will be included in the advertising data. */
-#define MANUFACTURER_NAME               "NordicSemiconductor"                   /**< Manufacturer. Will be passed to Device Information Service. */
+#define DEVICE_NAME                     "secure_demo"                       /**< Name of device. Will be included in the advertising data. */
+#define MANUFACTURER_NAME               "Xiaomi Inc."                   /**< Manufacturer. Will be passed to Device Information Service. */
 
 #define APP_BLE_OBSERVER_PRIO           3                                       /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 #define APP_BLE_CONN_CFG_TAG            1                                       /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.1 seconds). */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(60, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.2 second). */
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)         /**< Minimum acceptable connection interval (15 ms). */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(30, UNIT_1_25_MS)         /**< Maximum acceptable connection interval (30 ms). */
 #define SLAVE_LATENCY                   0                                       /**< Slave latency. */
-#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)         /**< Connection supervisory timeout (4 seconds). */
+#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(900,  UNIT_10_MS)         /**< Connection supervisory timeout (0.9 s). */
 
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(30000)                   /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(60000)                  /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */

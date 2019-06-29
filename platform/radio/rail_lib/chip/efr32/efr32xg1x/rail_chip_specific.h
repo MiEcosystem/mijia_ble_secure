@@ -41,7 +41,7 @@ extern "C" {
  * @def TRANSITION_TIME_US
  * @brief Time it takes to take care of protocol switching.
  */
-#define TRANSITION_TIME_US 450
+#define TRANSITION_TIME_US 435
 
 /**
  * @def EFR32XG1_RAIL_SCHEDULER_STATE_UINT32_BUFFER_SIZE
@@ -110,14 +110,14 @@ typedef struct RAILSched_Config {
  * @brief The size, in 32-bit words, of RAIL_StateBuffer_t to store RAIL
  *   internal state for the EFR32XG1 series.
  */
-#define EFR32XG1_RAIL_STATE_UINT32_BUFFER_SIZE 84
+#define EFR32XG1_RAIL_STATE_UINT32_BUFFER_SIZE 86
 
 /**
  * @def EFR32XG12_RAIL_STATE_UINT32_BUFFER_SIZE
  * @brief The size, in 32-bit words, of RAIL_StateBuffer_t to store RAIL
  *   internal state for the EFR32XG12 series.
  */
-#define EFR32XG12_RAIL_STATE_UINT32_BUFFER_SIZE 84
+#define EFR32XG12_RAIL_STATE_UINT32_BUFFER_SIZE 86
 
 /**
  * @def EFR32XG13_RAIL_STATE_UINT32_BUFFER_SIZE
@@ -131,7 +131,7 @@ typedef struct RAILSched_Config {
  * @brief The size, in 32-bit words, of RAIL_StateBuffer_t to store RAIL
  *   internal state for the EFR32XG14 series.
  */
-#define EFR32XG14_RAIL_STATE_UINT32_BUFFER_SIZE 84
+#define EFR32XG14_RAIL_STATE_UINT32_BUFFER_SIZE 86
 
 #if (_SILICON_LABS_32B_SERIES_1_CONFIG == 1)
 #define RAIL_STATE_UINT32_BUFFER_SIZE EFR32XG1_RAIL_STATE_UINT32_BUFFER_SIZE
@@ -597,19 +597,19 @@ typedef struct RAIL_PtiConfig {
   /** Data output (DOUT) location for pin/port */
   uint8_t doutLoc;
   /** Data output (DOUT) GPIO port */
-  GPIO_Port_TypeDef doutPort;
+  uint8_t doutPort;
   /** Data output (DOUT) GPIO pin */
   uint8_t doutPin;
   /** Data clock (DCLK) location for pin/port. Only used in SPI mode */
   uint8_t dclkLoc;
   /** Data clock (DCLK) GPIO port. Only used in SPI mode */
-  GPIO_Port_TypeDef dclkPort;
+  uint8_t dclkPort;
   /** Data clock (DCLK) GPIO pin. Only used in SPI mode */
   uint8_t dclkPin;
   /** Data frame (DFRAME) location for pin/port */
   uint8_t dframeLoc;
   /** Data frame (DFRAME) GPIO port */
-  GPIO_Port_TypeDef dframePort;
+  uint8_t dframePort;
   /** Data frame (DFRAME) GPIO pin */
   uint8_t dframePin;
 } RAIL_PtiConfig_t;
@@ -658,13 +658,13 @@ typedef struct RAIL_AntennaConfig {
   /** Antenna 0 location for pin/port */
   uint8_t ant0Loc;
   /** Antenna 0 output GPIO port */
-  GPIO_Port_TypeDef ant0Port;
+  uint8_t ant0Port;
   /** Antenna 0 output GPIO pin */
   uint8_t ant0Pin;
   /** Antenna 1 location for pin/port */
   uint8_t ant1Loc;
   /** Antenna 1 output GPIO port */
-  GPIO_Port_TypeDef ant1Port;
+  uint8_t ant1Port;
   /** Antenna 1 output GPIO pin */
   uint8_t ant1Pin;
 } RAIL_AntennaConfig_t;

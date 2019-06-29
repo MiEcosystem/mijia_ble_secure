@@ -2,7 +2,7 @@
  * @file
  * @brief General Purpose IO (GPIO) peripheral API
  *   devices.
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -207,13 +207,22 @@ void GPIO_ExtIntConfig(GPIO_Port_TypeDef port,
                        << (_GPIO_EXTIPSELL_EXTIPSEL1_SHIFT * intNo),
                        port << (_GPIO_EXTIPSELL_EXTIPSEL1_SHIFT * intNo));
   } else {
-#if defined(_GPIO_EXTIPSELH_MASK) && !defined(_SILICON_LABS_32B_SERIES_2)
+#if defined(_GPIO_EXTIPSELH_MASK)
     tmp = intNo - 8;
+#if defined(_GPIO_EXTIPSELH_EXTIPSEL0_MASK)
+    BUS_RegMaskedWrite(&GPIO->EXTIPSELH,
+                       _GPIO_EXTIPSELH_EXTIPSEL0_MASK
+                       << (_GPIO_EXTIPSELH_EXTIPSEL1_SHIFT * tmp),
+                       port << (_GPIO_EXTIPSELH_EXTIPSEL1_SHIFT * tmp));
+#elif defined(_GPIO_EXTIPSELH_EXTIPSEL8_MASK)
     BUS_RegMaskedWrite(&GPIO->EXTIPSELH,
                        _GPIO_EXTIPSELH_EXTIPSEL8_MASK
                        << (_GPIO_EXTIPSELH_EXTIPSEL9_SHIFT * tmp),
                        port << (_GPIO_EXTIPSELH_EXTIPSEL9_SHIFT * tmp));
+#else
+#error Invalid GPIO_EXTIPINSELH bit fields
 #endif
+#endif /* #if defined(_GPIO_EXTIPSELH_MASK) */
   }
 
 #if defined(_GPIO_EXTIPINSELL_MASK)

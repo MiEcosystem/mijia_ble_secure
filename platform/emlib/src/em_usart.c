@@ -2,7 +2,7 @@
  * @file
  * @brief Universal synchronous/asynchronous receiver/transmitter (USART/UART)
  *   Peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -150,9 +150,9 @@
   #endif
 #endif
 
-#if (UART_COUNT == 1)
+#if (UART_COUNT == 1) && !defined(_UART_IPVERSION_MASK)
   #define UART_REF_VALID(ref)    ((ref) == UART0)
-#elif (UART_COUNT == 2)
+#elif (UART_COUNT == 2) && !defined(_UART_IPVERSION_MASK)
   #define UART_REF_VALID(ref)    (((ref) == UART0) || ((ref) == UART1))
 #else
   #define UART_REF_VALID(ref)    (0)
@@ -191,9 +191,12 @@ static void prsRxInput(USART_TypeDef *usart, USART_PRS_Channel_t ch)
     PRS->CONSUMER_USART0_RX = ch;
   } else if (usart == USART1) {
     PRS->CONSUMER_USART1_RX = ch;
-  } else if (usart == USART2) {
+  }
+#if USART_COUNT > 2
+  else if (usart == USART2) {
     PRS->CONSUMER_USART2_RX = ch;
   }
+#endif
   usart->CTRLX |= USART_CTRLX_RXPRSEN;
 #endif
 }
@@ -219,9 +222,12 @@ static void prsIrInput(USART_TypeDef *usart, USART_PRS_Channel_t ch)
     PRS->CONSUMER_USART0_IR = ch;
   } else if (usart == USART1) {
     PRS->CONSUMER_USART1_IR = ch;
-  } else if (usart == USART2) {
+  }
+#if USART_COUNT > 2
+  else if (usart == USART2) {
     PRS->CONSUMER_USART2_IR = ch;
   }
+#endif
   usart->IRCTRL |= USART_IRCTRL_IRPRSEN;
 #endif
 }
@@ -246,9 +252,12 @@ static void prsTriggerInput(USART_TypeDef *usart, USART_PRS_Channel_t ch)
     PRS->CONSUMER_USART0_TRIGGER = ch;
   } else if (usart == USART1) {
     PRS->CONSUMER_USART1_TRIGGER = ch;
-  } else if (usart == USART2) {
+  }
+#if USART_COUNT > 2
+  else if (usart == USART2) {
     PRS->CONSUMER_USART2_TRIGGER = ch;
   }
+#endif
 #endif
 }
 

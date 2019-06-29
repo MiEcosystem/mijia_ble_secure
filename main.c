@@ -61,8 +61,8 @@
 #ifndef MAX_CONNECTIONS
 #define MAX_CONNECTIONS                1
 #endif
-#ifndef PRODUCT_ID
-#define PRODUCT_ID                     0x01CF // xiaomi dev board
+#ifndef MAX_ADVERTISERS
+#define MAX_ADVERTISERS                2
 #endif
 
 #define MSEC_TO_UNITS(TIME, RESOLUTION) (((TIME) * 1000) / (RESOLUTION))
@@ -80,20 +80,32 @@
 
 static uint8_t bluetooth_stack_heap[DEFAULT_BLUETOOTH_HEAP(MAX_CONNECTIONS)];
 
-// Gecko configuration parameters (see gecko_configuration.h)
-static const gecko_configuration_t config = {
-        .config_flags = 0,
-        .sleep.flags = SLEEP_FLAGS_DEEP_SLEEP_ENABLE,
-        .bluetooth.max_connections = MAX_CONNECTIONS,
-        .bluetooth.heap = bluetooth_stack_heap,
-        .bluetooth.heap_size = sizeof(bluetooth_stack_heap),
-        .bluetooth.sleep_clock_accuracy = 100, // ppm
-        .gattdb = &bg_gattdb_data,
-#if (HAL_PA_ENABLE) && defined(FEATURE_PA_HIGH_POWER)
-        .pa.config_enable = 1, // Enable high power PA
-        .pa.input = GECKO_RADIO_PA_INPUT_VBAT, // Configure PA input to VBAT
+/* Bluetooth stack configuration parameters (see "UG136: Silicon Labs Bluetooth C Application Developer's Guide" for details on each parameter) */
+static gecko_configuration_t config = {
+  .config_flags = 0,                                   /* Check flag options from UG136 */
+#if defined(FEATURE_LFXO)
+  .sleep.flags = SLEEP_FLAGS_DEEP_SLEEP_ENABLE,        /* Sleep is enabled */
+#else
+  .sleep.flags = 0,
+#endif // LFXO
+  .bluetooth.max_connections = MAX_CONNECTIONS,        /* Maximum number of simultaneous connections */
+  .bluetooth.max_advertisers = MAX_ADVERTISERS,        /* Maximum number of advertisement sets */
+  .bluetooth.heap = bluetooth_stack_heap,              /* Bluetooth stack memory for connection management */
+  .bluetooth.heap_size = sizeof(bluetooth_stack_heap), /* Bluetooth stack memory for connection management */
+  .bluetooth.sleep_clock_accuracy = 100,               /* Accuracy of the Low Frequency Crystal Oscillator in ppm. *
+                                                        * Do not modify if you are using a module                  */
+  .gattdb = &bg_gattdb_data,                           /* Pointer to GATT database */
+#if (HAL_PA_ENABLE)
+  .pa.config_enable = 1, // Enable high power PA
+#if defined(FEATURE_PA_INPUT_FROM_VBAT)
+  .pa.input = GECKO_RADIO_PA_INPUT_VBAT, // Configure PA input to VBAT
+#else
+  .pa.input = GECKO_RADIO_PA_INPUT_DCDC,               /* Configure PA input to DCDC */
 #endif // (HAL_PA_ENABLE) && defined(FEATURE_PA_HIGH_POWER)
-        .max_timers = 8,
+#endif // (HAL_PA_ENABLE)
+  .rf.flags = GECKO_RF_CONFIG_ANTENNA,                 /* Enable antenna configuration. */
+  .rf.antenna = GECKO_RF_ANTENNA,                      /* Select antenna path! */
+  .max_timers = 8,
 };
 
 static const iic_config_t msc_iic_config = {

@@ -25,12 +25,9 @@
 #include "hal-config-ioexp.h"
 #endif
 
-#if defined(FEATURE_FEM)
-#include "hal-config-fem.h"
-#endif
 
 #define HAL_EXTFLASH_FREQUENCY                        (1000000)
-#define HAL_DCDC_BYPASS                               (1)
+
 #define HAL_PA_ENABLE                                 (1)
 
 #define HAL_PTI_ENABLE                                (1)

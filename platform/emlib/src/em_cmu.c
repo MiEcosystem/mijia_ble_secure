@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Clock management unit (CMU) Peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -51,8 +51,9 @@
  * @addtogroup CMU
  * @brief Clock management unit (CMU) Peripheral API
  * @details
- *  This module contains functions to control the CMU peripheral of Silicon
- *  Labs 32-bit MCUs and SoCs. The CMU controls oscillators and clocks.
+ *  This module contains functions for the CMU peripheral of Silicon Labs 32-bit
+ *  MCUs and SoCs. The CMU module controls oscillators, clocks gates, clock
+ *  multiplexers, pre-scalers, calibration modules and wait-states.
  * @{
  ******************************************************************************/
 
@@ -64,6 +65,7 @@
  ******************************   DEFINES   ************************************
  ******************************************************************************/
 
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
 // Maximum allowed core frequency vs. wait-states on flash accesses.
 #define CMU_MAX_FLASHREAD_FREQ_0WS        39000000UL
 #define CMU_MAX_FLASHREAD_FREQ_1WS        80000000UL
@@ -72,8 +74,17 @@
 #define CMU_MAX_SRAM_FREQ_0WS             50000000UL
 #define CMU_MAX_SRAM_FREQ_1WS             80000000UL
 
+#elif defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+// Maximum allowed core frequency vs. wait-states on flash accesses.
+#define CMU_MAX_FLASHREAD_FREQ_0WS        40000000UL
+#define CMU_MAX_FLASHREAD_FREQ_1WS        80000000UL
+#endif
+
 // Maximum allowed PCLK frequency.
 #define CMU_MAX_PCLK_FREQ                 50000000UL
+
+// Maximum allowed RHCLK frequency.
+#define CMU_MAX_RHCLK_FREQ                40000000UL
 
 /*******************************************************************************
  **************************   LOCAL VARIABLES   ********************************
@@ -87,25 +98,22 @@ static const struct hfrcoCalTableElement{
   uint32_t  value;
   CMU_HFRCODPLLFreq_TypeDef band;
 } hfrcoCalTable[] =
-
-// TODO: Get confirmation on min/max freq limits
-
 {
   //  minFreq   maxFreq    HFRCOCAL value  band
-  {  860000UL, 1050000UL, 0x82401F00UL, cmuHFRCODPLLFreq_1M0Hz         },
-  { 1050000UL, 1280000UL, 0xA2411F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 1280000UL, 1480000UL, 0xA2421F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 1480000UL, 1800000UL, 0xB6439F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 1800000UL, 2110000UL, 0x81401F00UL, cmuHFRCODPLLFreq_2M0Hz         },
-  { 2110000UL, 2560000UL, 0xA1411F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 2560000UL, 2970000UL, 0xA1421F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 2970000UL, 3600000UL, 0xB5439F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 3600000UL, 4220000UL, 0x80401F00UL, cmuHFRCODPLLFreq_4M0Hz         },
-  { 4220000UL, 5120000UL, 0xA0411F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 5120000UL, 5930000UL, 0xA0421F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 5930000UL, 7520000UL, 0xB4439F00UL, cmuHFRCODPLLFreq_7M0Hz         },
-  { 7520000UL, 9520000UL, 0xB4449F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
-  { 9520000UL, 11800000UL, 0xB4459F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0  },
+  {  900000UL, 1080000UL, 0x82401F00UL, cmuHFRCODPLLFreq_1M0Hz         },
+  { 1080000UL, 1300000UL, 0xA2411F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 1300000UL, 1530000UL, 0xA2421F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 1530000UL, 1800000UL, 0xB6439F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 1800000UL, 2150000UL, 0x81401F00UL, cmuHFRCODPLLFreq_2M0Hz         },
+  { 2150000UL, 2600000UL, 0xA1411F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 2600000UL, 3050000UL, 0xA1421F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 3050000UL, 3600000UL, 0xB5439F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 3600000UL, 4300000UL, 0x80401F00UL, cmuHFRCODPLLFreq_4M0Hz         },
+  { 4300000UL, 5200000UL, 0xA0411F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 5200000UL, 6100000UL, 0xA0421F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 6100000UL, 7800000UL, 0xB4439F00UL, cmuHFRCODPLLFreq_7M0Hz         },
+  { 7800000UL, 9800000UL, 0xB4449F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0   },
+  { 9800000UL, 11800000UL, 0xB4459F3AUL, (CMU_HFRCODPLLFreq_TypeDef)0  },
   { 11800000UL, 14400000UL, 0xB4669F00UL, cmuHFRCODPLLFreq_13M0Hz      },
   { 14400000UL, 17200000UL, 0xB4679F00UL, cmuHFRCODPLLFreq_16M0Hz      },
   { 17200000UL, 19700000UL, 0xA8689F00UL, cmuHFRCODPLLFreq_19M0Hz      },
@@ -126,23 +134,624 @@ static const struct hfrcoCalTableElement{
  **************************   LOCAL PROTOTYPES   *******************************
  ******************************************************************************/
 
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+static void     em01GrpbClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
+static void     euart0ClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
+static void     rhclkPrescMax(void);
+static void     rhclkPrescOptimize(void);
+#endif
+
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
+static uint32_t HFRCOEM23DevinfoGet(CMU_HFRCOEM23Freq_TypeDef freq);
+static void     traceClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
+static void     wdog1ClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
+#endif
+
 static void     dpllRefClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
 static void     em01GrpaClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
 static void     em23GrpaClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
 static void     em4GrpaClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
+static void     flashWaitStateControl(uint32_t coreFreq, int vscale);
 static uint32_t HFRCODPLLDevinfoGet(CMU_HFRCODPLLFreq_TypeDef freq);
-static uint32_t HFRCOEM23DevinfoGet(CMU_HFRCOEM23Freq_TypeDef freq);
 static void     iadcClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
 static void     pclkDivMax(void);
 static void     pclkDivOptimize(void);
 static void     rtccClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
-static void     traceClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
 static void     waitStateMax(void);
-static void     waitStateSet(uint32_t coreFreq);
 static void     wdog0ClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
-static void     wdog1ClkGet(uint32_t *freq, CMU_Select_TypeDef *sel);
 
 /** @endcond */
+
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+/*******************************************************************************
+ **************************   GLOBAL FUNCTIONS   *******************************
+ ******************************************************************************/
+
+/***************************************************************************//**
+ * @brief
+ *   Enable/disable a clock.
+ *
+ * @details
+ *   Module clocks sre disabled after reset. If a module clock is disabled, the
+ *   registers of that module are not accessible and accessing such registers
+ *   will hardfault the Cortex core.
+ *
+ * @param[in] clock
+ *   The clock to enable/disable.
+ *
+ * @param[in] enable
+ *   @li true - enable specified clock.
+ *   @li false - disable specified clock.
+ ******************************************************************************/
+void CMU_ClockEnable(CMU_Clock_TypeDef clock, bool enable)
+{
+  volatile uint32_t *reg = NULL;
+  uint32_t          bit;
+
+  /* Identify the enable register. */
+  if (((unsigned)clock >> CMU_EN_REG_POS) == CMU_NO_EN_REG) {
+    EFM_ASSERT(false);                      /* No enable for this clock. */
+  } else if (((unsigned)clock >> CMU_EN_REG_POS) == CMU_CLKEN0_EN_REG) {
+    reg = &CMU->CLKEN0;
+  } else if (((unsigned)clock >> CMU_EN_REG_POS) == CMU_CLKEN1_EN_REG) {
+    reg = &CMU->CLKEN1;
+  } else {
+    reg = &CMU->CRYPTOACCCLKCTRL;
+  }
+
+  /* Get the bit position used to enable/disable. */
+  bit = ((unsigned)clock >> CMU_EN_BIT_POS) & CMU_EN_BIT_MASK;
+
+  /* Set/clear bit as requested. */
+  BUS_RegBitWrite(reg, bit, (uint32_t)enable);
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Get clock frequency for a clock point.
+ *
+ * @param[in] clock
+ *   Clock point to fetch frequency for.
+ *
+ * @return
+ *   The current frequency in Hz.
+ ******************************************************************************/
+uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
+{
+  uint32_t ret = 0U;
+
+  switch (clock) {
+    case cmuClock_SYSCLK:
+      ret = SystemSYSCLKGet();
+      break;
+
+    case cmuClock_HCLK:
+    case cmuClock_CORE:
+    case cmuClock_ICACHE:
+    case cmuClock_MSC:
+    case cmuClock_LDMA:
+    case cmuClock_SMU:
+    case cmuClock_CRYPTOACC:
+    case cmuClock_RADIOAES:
+    case cmuClock_CRYPTOAES:
+    case cmuClock_CRYPTOPK:
+      ret = SystemHCLKGet();
+      break;
+
+    case cmuClock_EXPCLK:
+      ret = SystemSYSCLKGet() / CMU_ClockDivGet(cmuClock_EXPCLK);
+      break;
+
+    case cmuClock_PCLK:
+    case cmuClock_USART0:
+    case cmuClock_USART1:
+    case cmuClock_I2C1:
+    case cmuClock_PRS:
+    case cmuClock_GPIO:
+    case cmuClock_GPCRC:
+    case cmuClock_LDMAXBAR:
+    case cmuClock_SYSCFG:
+    case cmuClock_DCDC:
+    case cmuClock_BURAM:
+    case cmuClock_DPLL0:
+      ret = SystemHCLKGet() / CMU_ClockDivGet(cmuClock_PCLK);
+      break;
+
+    case cmuClock_LSPCLK:
+    case cmuClock_I2C0:
+    case cmuClock_AMUXCP0:
+      ret = SystemHCLKGet() / CMU_ClockDivGet(cmuClock_PCLK) / 2U;
+      break;
+
+    case cmuClock_TRACECLK:
+      ret = SystemSYSCLKGet() / CMU_ClockDivGet(cmuClock_TRACECLK);
+      break;
+
+    case cmuClock_TIMER0:
+    case cmuClock_TIMER1:
+    case cmuClock_TIMER2:
+    case cmuClock_TIMER3:
+    case cmuClock_TIMER4:
+    case cmuClock_EM01GRPACLK:
+      em01GrpaClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_PDM:
+    case cmuClock_EM01GRPBCLK:
+      em01GrpbClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_EUART0:
+    case cmuClock_EUART0CLK:
+      euart0ClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_IADC0:
+    case cmuClock_IADCCLK:
+      iadcClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_SYSTICK:
+    case cmuClock_LETIMER0:
+    case cmuClock_EM23GRPACLK:
+      em23GrpaClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_WDOG0:
+    case cmuClock_WDOG0CLK:
+      wdog0ClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_RTCC:
+    case cmuClock_RTCCCLK:
+      rtccClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_BURTC:
+    case cmuClock_EM4GRPACLK:
+      em4GrpaClkGet(&ret, NULL);
+      break;
+
+    default:
+      EFM_ASSERT(false);
+      break;
+  }
+  return ret;
+}
+
+/*******************************************************************************
+ **************************   LOCAL FUNCTIONS   ********************************
+ ******************************************************************************/
+
+/***************************************************************************//**
+ * @brief
+ *   Get selected oscillator and frequency for @ref cmuClock_EM01GRPBCLK
+ *   clock tree.
+ *
+ * @param[out] freq
+ *   The frequency.
+ *
+ * @param[out] sel
+ *   The selected oscillator.
+ ******************************************************************************/
+static void em01GrpbClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
+{
+  uint32_t f = 0U;
+  CMU_Select_TypeDef s;
+
+  switch (CMU->EM01GRPBCLKCTRL & _CMU_EM01GRPBCLKCTRL_CLKSEL_MASK) {
+    case _CMU_EM01GRPBCLKCTRL_CLKSEL_HFRCODPLL:
+      f = SystemHFRCODPLLClockGet();
+      s = cmuSelect_HFRCODPLL;
+      break;
+
+    case _CMU_EM01GRPBCLKCTRL_CLKSEL_HFRCODPLLRT:
+      f = SystemHFRCODPLLClockGet();
+      s = cmuSelect_HFRCODPLLRT;
+      break;
+
+    case _CMU_EM01GRPBCLKCTRL_CLKSEL_HFXO:
+      f = SystemHFXOClockGet();
+      s = cmuSelect_HFXO;
+      break;
+
+    case _CMU_EM01GRPBCLKCTRL_CLKSEL_HFXORT:
+      f = SystemHFXOClockGet();
+      s = cmuSelect_HFXORT;
+      break;
+
+    case _CMU_EM01GRPBCLKCTRL_CLKSEL_FSRCO:
+      f = SystemFSRCOClockGet();
+      s = cmuSelect_FSRCO;
+      break;
+
+    case _CMU_EM01GRPBCLKCTRL_CLKSEL_CLKIN0:
+      f = SystemCLKIN0Get();
+      s = cmuSelect_CLKIN0;
+      break;
+
+    default:
+      s = cmuSelect_Error;
+      EFM_ASSERT(false);
+      break;
+  }
+
+  if (freq != NULL) {
+    *freq = f;
+  }
+  if (sel != NULL) {
+    *sel = s;
+  }
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Get selected oscillator and frequency for @ref cmuClock_EUART0CLK
+ *   clock tree.
+ *
+ * @param[out] freq
+ *   The frequency.
+ *
+ * @param[out] sel
+ *   The selected oscillator.
+ ******************************************************************************/
+static void euart0ClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
+{
+  switch (CMU->EUART0CLKCTRL & _CMU_EUART0CLKCTRL_CLKSEL_MASK) {
+    case _CMU_EUART0CLKCTRL_CLKSEL_EM01GRPACLK:
+      em01GrpaClkGet(freq, sel);
+      break;
+
+    case _CMU_EUART0CLKCTRL_CLKSEL_EM23GRPACLK:
+      em23GrpaClkGet(freq, sel);
+      break;
+
+    default:
+      if (freq != NULL) {
+        *freq = 0U;
+      }
+      if (sel != NULL) {
+        *sel = cmuSelect_Error;
+      }
+      EFM_ASSERT(false);
+      break;
+  }
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Set maximum allowed prescaler for radio clock tree (RHCLK).
+ ******************************************************************************/
+static void rhclkPrescMax(void)
+{
+  // Set largest prescaler (DIV2).
+  CMU->SYSCLKCTRL_SET = CMU_SYSCLKCTRL_RHCLKPRESC;
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Set radio clock tree prescaler to achieve highest possible frequency
+ *   and still be within spec.
+ ******************************************************************************/
+static void rhclkPrescOptimize(void)
+{
+  if (CMU_ClockFreqGet(cmuClock_SYSCLK) <= CMU_MAX_RHCLK_FREQ) {
+    // Set smallest prescaler (DIV1).
+    CMU->SYSCLKCTRL_CLR = CMU_SYSCLKCTRL_RHCLKPRESC;
+  }
+}
+
+#endif  // defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
+/*******************************************************************************
+ **************************   GLOBAL FUNCTIONS   *******************************
+ ******************************************************************************/
+
+/***************************************************************************//**
+ * @brief
+ *   Get clock frequency for a clock point.
+ *
+ * @param[in] clock
+ *   Clock point to fetch frequency for.
+ *
+ * @return
+ *   The current frequency in Hz.
+ ******************************************************************************/
+uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
+{
+  uint32_t ret = 0U;
+
+  switch (clock) {
+    case cmuClock_SYSCLK:
+      ret = SystemSYSCLKGet();
+      break;
+
+    case cmuClock_CORE:
+    case cmuClock_HCLK:
+    case cmuClock_LDMA:
+    case cmuClock_GPCRC:
+      ret = SystemHCLKGet();
+      break;
+
+    case cmuClock_EXPCLK:
+      ret = SystemSYSCLKGet() / CMU_ClockDivGet(cmuClock_EXPCLK);
+      break;
+
+    case cmuClock_I2C1:
+    case cmuClock_PRS:
+    case cmuClock_PCLK:
+    case cmuClock_GPIO:
+    case cmuClock_USART0:
+    case cmuClock_USART1:
+    case cmuClock_USART2:
+      ret = SystemHCLKGet() / CMU_ClockDivGet(cmuClock_PCLK);
+      break;
+
+    case cmuClock_I2C0:
+    case cmuClock_LSPCLK:
+      ret = SystemHCLKGet() / CMU_ClockDivGet(cmuClock_PCLK) / 2U;
+      break;
+
+    case cmuClock_IADC0:
+    case cmuClock_IADCCLK:
+      iadcClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_TIMER0:
+    case cmuClock_TIMER1:
+    case cmuClock_TIMER2:
+    case cmuClock_TIMER3:
+    case cmuClock_EM01GRPACLK:
+      em01GrpaClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_SYSTICK:
+    case cmuClock_LETIMER0:
+    case cmuClock_EM23GRPACLK:
+      em23GrpaClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_BURTC:
+    case cmuClock_EM4GRPACLK:
+      em4GrpaClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_WDOG0:
+    case cmuClock_WDOG0CLK:
+      wdog0ClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_WDOG1:
+    case cmuClock_WDOG1CLK:
+      wdog1ClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_DPLLREFCLK:
+      dpllRefClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_TRACECLK:
+      traceClkGet(&ret, NULL);
+      break;
+
+    case cmuClock_RTCC:
+    case cmuClock_RTCCCLK:
+      rtccClkGet(&ret, NULL);
+      break;
+
+    default:
+      EFM_ASSERT(false);
+      break;
+  }
+  return ret;
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Get HFRCOEM23 band in use.
+ *
+ * @return
+ *   HFRCOEM23 band in use.
+ ******************************************************************************/
+CMU_HFRCOEM23Freq_TypeDef CMU_HFRCOEM23BandGet(void)
+{
+  return (CMU_HFRCOEM23Freq_TypeDef)SystemHFRCOEM23ClockGet();
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Set HFRCOEM23 band and the tuning value based on the value in the
+ *   calibration table made during production.
+ *
+ * @param[in] freq
+ *   HFRCOEM23 frequency band to activate.
+ ******************************************************************************/
+void CMU_HFRCOEM23BandSet(CMU_HFRCOEM23Freq_TypeDef freq)
+{
+  uint32_t freqCal;
+
+  // Get calibration data from DEVINFO
+  freqCal = HFRCOEM23DevinfoGet(freq);
+  EFM_ASSERT((freqCal != 0UL) && (freqCal != UINT_MAX));
+
+  // Set divider for 1, 2 and 4MHz bands
+  freqCal &= ~_HFRCO_CAL_CLKDIV_MASK;
+  switch (freq) {
+    case cmuHFRCOEM23Freq_1M0Hz:
+      freqCal |= HFRCO_CAL_CLKDIV_DIV4;
+      break;
+
+    case cmuHFRCOEM23Freq_2M0Hz:
+      freqCal |= HFRCO_CAL_CLKDIV_DIV2;
+      break;
+
+    default:
+      break;
+  }
+
+  // Activate new band selection
+  HFRCOEM23->CAL = freqCal;
+}
+
+/** @cond DO_NOT_INCLUDE_WITH_DOXYGEN */
+
+/*******************************************************************************
+ **************************   LOCAL FUNCTIONS   ********************************
+ ******************************************************************************/
+
+/***************************************************************************//**
+ * @brief
+ *   Get calibrated HFRCOEM23 tuning value from Device information (DI) page
+ *   for a given frequency. Calibration value is not available for all frequency
+ *   bands.
+ *
+ * @param[in] freq
+ *   HFRCOEM23 frequency band
+ ******************************************************************************/
+static uint32_t HFRCOEM23DevinfoGet(CMU_HFRCOEM23Freq_TypeDef freq)
+{
+  uint32_t ret = 0U;
+
+  switch (freq) {
+    // 1, 2 and 4MHz share the same calibration word
+    case cmuHFRCOEM23Freq_1M0Hz:
+    case cmuHFRCOEM23Freq_2M0Hz:
+    case cmuHFRCOEM23Freq_4M0Hz:
+      ret = DEVINFO->HFRCOEM23CAL[0].HFRCOEM23CAL;
+      break;
+
+    case cmuHFRCOEM23Freq_13M0Hz:
+      ret = DEVINFO->HFRCOEM23CAL[6].HFRCOEM23CAL;
+      break;
+
+    case cmuHFRCOEM23Freq_16M0Hz:
+      ret = DEVINFO->HFRCOEM23CAL[7].HFRCOEM23CAL;
+      break;
+
+    case cmuHFRCOEM23Freq_19M0Hz:
+      ret = DEVINFO->HFRCOEM23CAL[8].HFRCOEM23CAL;
+      break;
+
+    case cmuHFRCOEM23Freq_26M0Hz:
+      ret = DEVINFO->HFRCOEM23CAL[10].HFRCOEM23CAL;
+      break;
+
+    case cmuHFRCOEM23Freq_32M0Hz:
+      ret = DEVINFO->HFRCOEM23CAL[11].HFRCOEM23CAL;
+      break;
+
+    case cmuHFRCOEM23Freq_40M0Hz:
+      ret = DEVINFO->HFRCOEM23CAL[12].HFRCOEM23CAL;
+      break;
+
+    case cmuHFRCOEM23Freq_UserDefined:
+      break;
+
+    default:
+      EFM_ASSERT(false);
+      break;
+  }
+  return ret;
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Get selected oscillator and frequency for @ref cmuClock_TRACECLK
+ *   clock tree.
+ *
+ * @param[out] freq
+ *   The frequency.
+ *
+ * @param[out] sel
+ *   The selected oscillator.
+ ******************************************************************************/
+static void traceClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
+{
+  uint32_t f = 0U;
+  CMU_Select_TypeDef s;
+
+  switch (CMU->TRACECLKCTRL & _CMU_TRACECLKCTRL_CLKSEL_MASK) {
+    case _CMU_TRACECLKCTRL_CLKSEL_HCLK:
+      f = SystemHCLKGet();
+      s = cmuSelect_HCLK;
+      break;
+
+    case _CMU_TRACECLKCTRL_CLKSEL_HFRCOEM23:
+      f = SystemHFRCOEM23ClockGet();
+      s = cmuSelect_HFRCOEM23;
+      break;
+
+    default:
+      s = cmuSelect_Error;
+      EFM_ASSERT(false);
+      break;
+  }
+
+  if (freq != NULL) {
+    *freq = f;
+  }
+  if (sel != NULL) {
+    *sel = s;
+  }
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Get selected oscillator and frequency for @ref cmuClock_WDOG1CLK
+ *   clock tree.
+ *
+ * @param[out] freq
+ *   The frequency.
+ *
+ * @param[out] sel
+ *   The selected oscillator.
+ ******************************************************************************/
+static void wdog1ClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
+{
+  uint32_t f = 0U;
+  CMU_Select_TypeDef s;
+
+  switch (CMU->WDOG1CLKCTRL & _CMU_WDOG1CLKCTRL_CLKSEL_MASK) {
+    case _CMU_WDOG1CLKCTRL_CLKSEL_LFRCO:
+      f = SystemLFRCOClockGet();
+      s = cmuSelect_LFRCO;
+      break;
+
+    case _CMU_WDOG1CLKCTRL_CLKSEL_LFXO:
+      f = SystemLFXOClockGet();
+      s = cmuSelect_LFXO;
+      break;
+
+    case _CMU_WDOG1CLKCTRL_CLKSEL_ULFRCO:
+      f = SystemULFRCOClockGet();
+      s = cmuSelect_ULFRCO;
+      break;
+
+    case _CMU_WDOG1CLKCTRL_CLKSEL_HCLKDIV1024:
+      f = SystemHCLKGet() / 1024U;
+      s = cmuSelect_HCLKDIV1024;
+      break;
+
+    default:
+      s = cmuSelect_Error;
+      EFM_ASSERT(false);
+      break;
+  }
+
+  if (freq != NULL) {
+    *freq = f;
+  }
+  if (sel != NULL) {
+    *sel = s;
+  }
+}
+
+/** @endcond */
+
+#endif  // defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
+
+// The following code is common for all SERIES_2 configurations.
 
 /*******************************************************************************
  **************************   GLOBAL FUNCTIONS   *******************************
@@ -243,9 +852,11 @@ void CMU_CalibrateConfig(uint32_t downCycles, CMU_Select_TypeDef downSel,
       calCtrl |= CMU_CALCTRL_DOWNSEL_HFRCODPLL;
       break;
 
+#if defined(HFRCOEM23_PRESENT)
     case cmuSelect_HFRCOEM23:
       calCtrl |= CMU_CALCTRL_DOWNSEL_HFRCOEM23;
       break;
+#endif
 
     case cmuSelect_FSRCO:
       calCtrl |= CMU_CALCTRL_DOWNSEL_FSRCO;
@@ -285,9 +896,11 @@ void CMU_CalibrateConfig(uint32_t downCycles, CMU_Select_TypeDef downSel,
       calCtrl |= CMU_CALCTRL_UPSEL_HFRCODPLL;
       break;
 
+#if defined(HFRCOEM23_PRESENT)
     case cmuSelect_HFRCOEM23:
       calCtrl |= CMU_CALCTRL_UPSEL_HFRCOEM23;
       break;
+#endif
 
     case cmuSelect_FSRCO:
       calCtrl |= CMU_CALCTRL_UPSEL_FSRCO;
@@ -392,9 +1005,11 @@ void CMU_ClkOutPinConfig(uint32_t           clkNo,
       tmp = CMU_EXPORTCLKCTRL_CLKOUTSEL0_HFRCODPLL;
       break;
 
+#if defined(HFRCOEM23_PRESENT)
     case cmuSelect_HFRCOEM23:
       tmp = CMU_EXPORTCLKCTRL_CLKOUTSEL0_HFRCOEM23;
       break;
+#endif
 
     case cmuSelect_EXPCLK:
       tmp  = CMU_EXPORTCLKCTRL_CLKOUTSEL0_HFEXPCLK;
@@ -472,10 +1087,34 @@ CMU_ClkDiv_TypeDef CMU_ClockDivGet(CMU_Clock_TypeDef clock)
     case cmuClock_CORE:
       ret = (CMU->SYSCLKCTRL & _CMU_SYSCLKCTRL_HCLKPRESC_MASK)
             >> _CMU_SYSCLKCTRL_HCLKPRESC_SHIFT;
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
       if (ret == 2U ) {   // Unused value, illegal prescaler
         EFM_ASSERT(false);
       }
+#elif defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+      if (!((ret == _CMU_SYSCLKCTRL_HCLKPRESC_DIV1)
+            || (ret == _CMU_SYSCLKCTRL_HCLKPRESC_DIV2)
+            || (ret == _CMU_SYSCLKCTRL_HCLKPRESC_DIV4)
+            || (ret == _CMU_SYSCLKCTRL_HCLKPRESC_DIV8)
+            || (ret == _CMU_SYSCLKCTRL_HCLKPRESC_DIV16))) {
+        // Illegal prescaler
+        EFM_ASSERT(false);
+      }
+#endif
       break;
+
+#if defined(_CMU_TRACECLKCTRL_PRESC_MASK)
+    case cmuClock_TRACECLK:
+      ret = (CMU->TRACECLKCTRL & _CMU_TRACECLKCTRL_PRESC_MASK)
+            >> _CMU_TRACECLKCTRL_PRESC_SHIFT;
+      if (!((ret == _CMU_TRACECLKCTRL_PRESC_DIV1)
+            || (ret == _CMU_TRACECLKCTRL_PRESC_DIV2)
+            || (ret == _CMU_TRACECLKCTRL_PRESC_DIV4))) {
+        // Illegal prescaler
+        EFM_ASSERT(false);
+      }
+      break;
+#endif
 
     case cmuClock_EXPCLK:
       ret = (CMU->EXPORTCLKCTRL & _CMU_EXPORTCLKCTRL_PRESC_MASK)
@@ -488,7 +1127,6 @@ CMU_ClkDiv_TypeDef CMU_ClockDivGet(CMU_Clock_TypeDef clock)
       break;
 
     default:
-      EFM_ASSERT(false);
       break;
   }
   return 1U + ret;
@@ -511,11 +1149,20 @@ void CMU_ClockDivSet(CMU_Clock_TypeDef clock, CMU_ClkDiv_TypeDef div)
   switch (clock) {
     case cmuClock_HCLK:
     case cmuClock_CORE:
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
       EFM_ASSERT((div == 1U) || (div == 2U) || (div == 4U));
+#elif defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+      EFM_ASSERT((div == 1U) || (div == 2U) || (div == 4U)
+                 || (div == 8U) || (div == 16U));
+#endif
 
       // Set max wait-states and PCLK divisor while changing core clock
       waitStateMax();
       pclkDivMax();
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+      // Set largest prescaler for radio clock tree
+      rhclkPrescMax();
+#endif
 
       // Set new divisor
       CMU->SYSCLKCTRL = (CMU->SYSCLKCTRL & ~_CMU_SYSCLKCTRL_HCLKPRESC_MASK)
@@ -526,7 +1173,19 @@ void CMU_ClockDivSet(CMU_Clock_TypeDef clock, CMU_ClkDiv_TypeDef div)
 
       // Set optimal PCLK divisor
       pclkDivOptimize();
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+      // Set optimal RHCLK prescaler
+      rhclkPrescOptimize();
+#endif
       break;
+
+#if defined(_CMU_TRACECLKCTRL_PRESC_MASK)
+    case cmuClock_TRACECLK:
+      EFM_ASSERT((div == 1U) || (div == 2U) || (div == 4U));
+      CMU->TRACECLKCTRL = (CMU->TRACECLKCTRL & ~_CMU_TRACECLKCTRL_PRESC_MASK)
+                          | ((div - 1U) << _CMU_TRACECLKCTRL_PRESC_SHIFT);
+      break;
+#endif
 
     case cmuClock_EXPCLK:
       EFM_ASSERT((div >= 1U) && (div <= 32U));
@@ -544,105 +1203,6 @@ void CMU_ClockDivSet(CMU_Clock_TypeDef clock, CMU_ClkDiv_TypeDef div)
       EFM_ASSERT(false);
       break;
   }
-}
-
-/***************************************************************************//**
- * @brief
- *   Get clock frequency for a clock point.
- *
- * @param[in] clock
- *   Clock point to fetch frequency for.
- *
- * @return
- *   The current frequency in Hz.
- ******************************************************************************/
-uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
-{
-  uint32_t ret = 0U;
-
-  switch (clock) {
-    case cmuClock_SYSCLK:
-      ret = SystemSYSCLKGet();
-      break;
-
-    case cmuClock_CORE:
-    case cmuClock_HCLK:
-    case cmuClock_LDMA:
-    case cmuClock_GPCRC:
-      ret = SystemHCLKGet();
-      break;
-
-    case cmuClock_EXPCLK:
-      ret = SystemSYSCLKGet() / CMU_ClockDivGet(cmuClock_EXPCLK);
-      break;
-
-    case cmuClock_I2C1:
-    case cmuClock_PRS:
-    case cmuClock_PCLK:
-    case cmuClock_GPIO:
-    case cmuClock_USART0:
-    case cmuClock_USART1:
-    case cmuClock_USART2:
-      ret = SystemHCLKGet() / CMU_ClockDivGet(cmuClock_PCLK);
-      break;
-
-    case cmuClock_I2C0:
-    case cmuClock_LSPCLK:
-      ret = SystemHCLKGet() / CMU_ClockDivGet(cmuClock_PCLK) / 2U;
-      break;
-
-    case cmuClock_IADC0:
-    case cmuClock_IADCCLK:
-      iadcClkGet(&ret, NULL);
-      break;
-
-    case cmuClock_TIMER0:
-    case cmuClock_TIMER1:
-    case cmuClock_TIMER2:
-    case cmuClock_TIMER3:
-    case cmuClock_EM01GRPACLK:
-      em01GrpaClkGet(&ret, NULL);
-      break;
-
-    case cmuClock_SYSTICK:
-    case cmuClock_LETIMER0:
-    case cmuClock_EM23GRPACLK:
-      em23GrpaClkGet(&ret, NULL);
-      break;
-
-    case cmuClock_BURTC:
-    case cmuClock_EM4GRPACLK:
-      em4GrpaClkGet(&ret, NULL);
-      break;
-
-    case cmuClock_WDOG0:
-    case cmuClock_WDOG0CLK:
-      wdog0ClkGet(&ret, NULL);
-      break;
-
-    case cmuClock_WDOG1:
-    case cmuClock_WDOG1CLK:
-      wdog1ClkGet(&ret, NULL);
-      break;
-
-    case cmuClock_DPLLREFCLK:
-      dpllRefClkGet(&ret, NULL);
-      break;
-
-    case cmuClock_TRACECLK:
-      traceClkGet(&ret, NULL);
-      break;
-
-    case cmuClock_RTCC:
-    case cmuClock_RTCCCLK:
-      rtccClkGet(&ret, NULL);
-      break;
-
-    default:
-      EFM_ASSERT(false);
-      break;
-  }
-  return ret;
 }
 
 /***************************************************************************//**
@@ -715,27 +1275,47 @@ CMU_Select_TypeDef CMU_ClockSelectGet(CMU_Clock_TypeDef clock)
       em4GrpaClkGet(NULL, &ret);
       break;
 
+#if defined(_CMU_EM01GRPBCLKCTRL_CLKSEL_MASK)
+// -----------------------------------------------------------------------------
+    case cmuClock_PDMREF:
+    case cmuClock_EM01GRPBCLK:
+      em01GrpbClkGet(NULL, &ret);
+      break;
+#endif
+
 // -----------------------------------------------------------------------------
     case cmuClock_WDOG0:
     case cmuClock_WDOG0CLK:
       wdog0ClkGet(NULL, &ret);
       break;
 
+#if defined(_CMU_WDOG1CLKCTRL_CLKSEL_MASK)
 // -----------------------------------------------------------------------------
     case cmuClock_WDOG1:
     case cmuClock_WDOG1CLK:
       wdog1ClkGet(NULL, &ret);
       break;
+#endif
 
 // -----------------------------------------------------------------------------
     case cmuClock_DPLLREFCLK:
       dpllRefClkGet(NULL, &ret);
       break;
 
+#if defined(_CMU_TRACECLKCTRL_CLKSEL_MASK)
 // -----------------------------------------------------------------------------
     case cmuClock_TRACECLK:
       traceClkGet(NULL, &ret);
       break;
+#endif
+
+#if defined(_CMU_EUART0CLKCTRL_CLKSEL_MASK)
+// -----------------------------------------------------------------------------
+    case cmuClock_EUART0:
+    case cmuClock_EUART0CLK:
+      euart0ClkGet(NULL, &ret);
+      break;
+#endif
 
 // -----------------------------------------------------------------------------
     case cmuClock_RTCC:
@@ -777,7 +1357,10 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
 
         case cmuSelect_HFXO:
           tmp = CMU_SYSCLKCTRL_CLKSEL_HFXO;
-          // Make sure HFXO is enabled
+#if defined(_CMU_CLKEN0_MASK)
+          CMU->CLKEN0_SET = CMU_CLKEN0_HFXO0;
+#endif
+          // Make sure HFXO is enabled.
           oscForceEnStatus = (HFXO0->CTRL & HFXO_CTRL_DISONDEMAND) != 0;
           HFXO0->CTRL_SET = HFXO_CTRL_FORCEEN;
           break;
@@ -795,18 +1378,26 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
           break;
       }
 
-      // Set max wait-states and PCLK divisor while changing core clock
+      // Set max wait-states and PCLK divisor while changing core clock.
       waitStateMax();
       pclkDivMax();
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+      // Set largest prescaler for radio clock tree
+      rhclkPrescMax();
+#endif
 
-      // Switch to selected oscillator
+      // Switch to selected oscillator.
       CMU->SYSCLKCTRL = (CMU->SYSCLKCTRL & ~_CMU_SYSCLKCTRL_CLKSEL_MASK) | tmp;
 
-      // Update CMSIS core clock variable and set optimum wait-states
+      // Update CMSIS core clock variable and set optimum wait-states.
       CMU_UpdateWaitStates(SystemCoreClockGet(), 0);
 
       // Set optimal PCLK divisor
       pclkDivOptimize();
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+      // Set optimal RHCLK prescaler
+      rhclkPrescOptimize();
+#endif
 
       if (oscForceEnStatus == false) {
         switch (ref) {
@@ -828,9 +1419,11 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
           tmp = CMU_IADCCLKCTRL_CLKSEL_EM01GRPACLK;
           break;
 
+#if defined(HFRCOEM23_PRESENT)
         case cmuSelect_HFRCOEM23:
           tmp = CMU_IADCCLKCTRL_CLKSEL_HFRCOEM23;
           break;
+#endif
 
         case cmuSelect_FSRCO:
           tmp = CMU_IADCCLKCTRL_CLKSEL_FSRCO;
@@ -859,9 +1452,11 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
           tmp = CMU_EM01GRPACLKCTRL_CLKSEL_HFXO;
           break;
 
+#if defined(HFRCOEM23_PRESENT)
         case cmuSelect_HFRCOEM23:
           tmp = CMU_EM01GRPACLKCTRL_CLKSEL_HFRCOEM23;
           break;
+#endif
 
         case cmuSelect_FSRCO:
           tmp = CMU_EM01GRPACLKCTRL_CLKSEL_FSRCO;
@@ -924,6 +1519,44 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
                              & ~_CMU_EM4GRPACLKCTRL_CLKSEL_MASK) | tmp;
       break;
 
+#if defined(_CMU_EM01GRPBCLKCTRL_CLKSEL_MASK)
+// -----------------------------------------------------------------------------
+    case cmuClock_PDMREF:
+    case cmuClock_EM01GRPBCLK:
+      switch (ref) {
+        case cmuSelect_HFRCODPLL:
+          tmp = CMU_EM01GRPBCLKCTRL_CLKSEL_HFRCODPLL;
+          break;
+
+        case cmuSelect_HFXO:
+          tmp = CMU_EM01GRPBCLKCTRL_CLKSEL_HFXO;
+          break;
+
+        case cmuSelect_FSRCO:
+          tmp = CMU_EM01GRPBCLKCTRL_CLKSEL_FSRCO;
+          break;
+
+        case cmuSelect_CLKIN0:
+          tmp = CMU_EM01GRPBCLKCTRL_CLKSEL_CLKIN0;
+          break;
+
+        case cmuSelect_HFRCODPLLRT:
+          tmp = CMU_EM01GRPBCLKCTRL_CLKSEL_HFRCODPLLRT;
+          break;
+
+        case cmuSelect_HFXORT:
+          tmp = CMU_EM01GRPBCLKCTRL_CLKSEL_HFXORT;
+          break;
+
+        default:
+          EFM_ASSERT(false);
+          break;
+      }
+      CMU->EM01GRPBCLKCTRL = (CMU->EM01GRPBCLKCTRL
+                              & ~_CMU_EM01GRPBCLKCTRL_CLKSEL_MASK) | tmp;
+      break;
+#endif
+
 // -----------------------------------------------------------------------------
     case cmuClock_WDOG0:
     case cmuClock_WDOG0CLK:
@@ -952,6 +1585,7 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
                           | tmp;
       break;
 
+#if defined(_CMU_WDOG1CLKCTRL_CLKSEL_MASK)
 // -----------------------------------------------------------------------------
     case cmuClock_WDOG1:
     case cmuClock_WDOG1CLK:
@@ -979,6 +1613,7 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
       CMU->WDOG1CLKCTRL = (CMU->WDOG1CLKCTRL & ~_CMU_WDOG1CLKCTRL_CLKSEL_MASK)
                           | tmp;
       break;
+#endif
 
 // -----------------------------------------------------------------------------
     case cmuClock_DPLLREFCLK:
@@ -1007,6 +1642,7 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
                              & ~_CMU_DPLLREFCLKCTRL_CLKSEL_MASK) | tmp;
       break;
 
+#if defined(_CMU_TRACECLKCTRL_CLKSEL_MASK)
 // -----------------------------------------------------------------------------
     case cmuClock_TRACECLK:
       switch (ref) {
@@ -1025,6 +1661,29 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
       CMU->TRACECLKCTRL = (CMU->TRACECLKCTRL & ~_CMU_TRACECLKCTRL_CLKSEL_MASK)
                           | tmp;
       break;
+#endif
+
+#if defined(_CMU_EUART0CLKCTRL_CLKSEL_MASK)
+// -----------------------------------------------------------------------------
+    case cmuClock_EUART0:
+    case cmuClock_EUART0CLK:
+      switch (ref) {
+        case cmuSelect_EM01GRPACLK:
+          tmp = _CMU_EUART0CLKCTRL_CLKSEL_EM01GRPACLK;
+          break;
+
+        case cmuSelect_EM23GRPACLK:
+          tmp = _CMU_EUART0CLKCTRL_CLKSEL_EM23GRPACLK;
+          break;
+
+        default:
+          EFM_ASSERT(false);
+          break;
+      }
+      CMU->EUART0CLKCTRL = (CMU->EUART0CLKCTRL & ~_CMU_EUART0CLKCTRL_CLKSEL_MASK)
+                           | tmp;
+      break;
+#endif
 
 // -----------------------------------------------------------------------------
     case cmuClock_RTCC:
@@ -1124,6 +1783,10 @@ bool CMU_DPLLLock(const CMU_DPLLInit_TypeDef *init)
     // Set max wait-states and PCLK divisor while changing core clock
     waitStateMax();
     pclkDivMax();
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+    // Set largest prescaler for radio clock tree
+    rhclkPrescMax();
+#endif
 
     // Increase HCLK divider value (if possible) while locking DPLL to
     // avoid over-clocking.
@@ -1137,6 +1800,10 @@ bool CMU_DPLLLock(const CMU_DPLLInit_TypeDef *init)
       hclkDivIncreased = false;
     }
   }
+
+#if defined(CMU_CLKEN0_DPLL0)
+  CMU->CLKEN0_SET = CMU_CLKEN0_DPLL0 | CMU_CLKEN0_HFRCO0;
+#endif
 
   // Make sure DPLL is disabled before configuring
   DPLL0->EN_CLR = DPLL_EN_EN;
@@ -1173,6 +1840,10 @@ bool CMU_DPLLLock(const CMU_DPLLInit_TypeDef *init)
     // Set optimal wait-states and PCLK divisor
     CMU_UpdateWaitStates(sysFreq, 0);
     pclkDivOptimize();
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+    // Set optimal RHCLK prescaler
+    rhclkPrescOptimize();
+#endif
   }
 
   if (lockStatus == DPLL_IF_LOCK) {
@@ -1209,6 +1880,10 @@ void CMU_HFRCODPLLBandSet(CMU_HFRCODPLLFreq_TypeDef freq)
   freqCal = HFRCODPLLDevinfoGet(freq);
   EFM_ASSERT((freqCal != 0UL) && (freqCal != UINT_MAX));
 
+#if defined(CMU_CLKEN0_DPLL0)
+  CMU->CLKEN0_SET = CMU_CLKEN0_DPLL0 | CMU_CLKEN0_HFRCO0;
+#endif
+
   // Make sure DPLL is disabled before configuring
   if (DPLL0->EN_CLR == DPLL_EN_EN) {
     DPLL0->EN_CLR = DPLL_EN_EN;
@@ -1223,6 +1898,10 @@ void CMU_HFRCODPLLBandSet(CMU_HFRCODPLLFreq_TypeDef freq)
   if (CMU_ClockSelectGet(cmuClock_SYSCLK) == cmuSelect_HFRCODPLL) {
     waitStateMax();
     pclkDivMax();
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+    // Set largest prescaler for radio clock tree
+    rhclkPrescMax();
+#endif
   }
 
   // Set divider for 1, 2 and 4MHz bands
@@ -1251,54 +1930,11 @@ void CMU_HFRCODPLLBandSet(CMU_HFRCODPLLFreq_TypeDef freq)
     EFM_ASSERT(sysFreq <= (uint32_t)freq);
     CMU_UpdateWaitStates(sysFreq, 0);
     pclkDivOptimize();
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+    // Set optimal RHCLK prescaler
+    rhclkPrescOptimize();
+#endif
   }
-}
-
-/***************************************************************************//**
- * @brief
- *   Get HFRCOEM23 band in use.
- *
- * @return
- *   HFRCOEM23 band in use.
- ******************************************************************************/
-CMU_HFRCOEM23Freq_TypeDef CMU_HFRCOEM23BandGet(void)
-{
-  return (CMU_HFRCOEM23Freq_TypeDef)SystemHFRCOEM23ClockGet();
-}
-
-/***************************************************************************//**
- * @brief
- *   Set HFRCOEM23 band and the tuning value based on the value in the
- *   calibration table made during production.
- *
- * @param[in] freq
- *   HFRCOEM23 frequency band to activate.
- ******************************************************************************/
-void CMU_HFRCOEM23BandSet(CMU_HFRCOEM23Freq_TypeDef freq)
-{
-  uint32_t freqCal;
-
-  // Get calibration data from DEVINFO
-  freqCal = HFRCOEM23DevinfoGet(freq);
-  EFM_ASSERT((freqCal != 0UL) && (freqCal != UINT_MAX));
-
-  // Set divider for 1, 2 and 4MHz bands
-  freqCal &= ~_HFRCO_CAL_CLKDIV_MASK;
-  switch (freq) {
-    case cmuHFRCOEM23Freq_1M0Hz:
-      freqCal |= HFRCO_CAL_CLKDIV_DIV4;
-      break;
-
-    case cmuHFRCOEM23Freq_2M0Hz:
-      freqCal |= HFRCO_CAL_CLKDIV_DIV2;
-      break;
-
-    default:
-      break;
-  }
-
-  // Activate new band selection
-  HFRCOEM23->CAL = freqCal;
 }
 
 /**************************************************************************//**
@@ -1352,17 +1988,22 @@ void CMU_HFXOInit(const CMU_HFXOInit_TypeDef *hfxoInit)
     return;
   }
 
-  // Unlock register interface
+#if defined(CMU_CLKEN0_HFXO0)
+  // Enable HFXO module clock.
+  CMU->CLKEN0_SET = CMU_CLKEN0_HFXO0;
+#endif
+
+  // Unlock register interface.
   HFXO0->LOCK = HFXO_LOCK_LOCKKEY_UNLOCK;
 
-  // Disable HFXO
+  // Disable HFXO.
   HFXO0->CTRL_SET = HFXO_CTRL_DISONDEMAND;
   HFXO0->CTRL_CLR = HFXO_CTRL_FORCEEN;
   while ((HFXO0->STATUS & _HFXO_STATUS_ENS_MASK) != 0U) {
   }
 
   // Configure HFXO as specified in initialization struct, use
-  // timeoutSteadyFirstLock as TIMEOUTSTEADY value
+  // timeoutSteadyFirstLock as TIMEOUTSTEADY value.
   HFXO0->XTALCFG =
     (hfxoInit->timeoutCbLsb        << _HFXO_XTALCFG_TIMEOUTCBLSB_SHIFT)
     | (hfxoInit->timeoutSteadyFirstLock
@@ -1388,7 +2029,7 @@ void CMU_HFXOInit(const CMU_HFXOInit_TypeDef *hfxoInit)
                | (hfxoInit->mode             << _HFXO_CFG_MODE_SHIFT);
 
   if (hfxoInit->mode == cmuHfxoOscMode_Crystal) {
-    // Lock HFXO with FORCEEN bit set and DISONDEMAND bit cleared
+    // Lock HFXO with FORCEEN bit set and DISONDEMAND bit cleared.
     HFXO0->CTRL = (HFXO0->CTRL & ~(_HFXO_CTRL_FORCEXO2GNDANA_MASK
                                    | _HFXO_CTRL_FORCEXI2GNDANA_MASK
                                    | _HFXO_CTRL_DISONDEMAND_MASK
@@ -1397,7 +2038,7 @@ void CMU_HFXOInit(const CMU_HFXOInit_TypeDef *hfxoInit)
                   | (hfxoInit->forceXi2GndAna << _HFXO_CTRL_FORCEXI2GNDANA_SHIFT)
                   | HFXO_CTRL_FORCEEN;
 
-    // Wait for HFXO lock and core bias algorithm to complete
+    // Wait for HFXO lock and core bias algorithm to complete.
     while ((HFXO0->STATUS & (HFXO_STATUS_RDY | HFXO_STATUS_COREBIASOPTRDY
                              | HFXO_STATUS_ENS | HFXO_STATUS_FSMLOCK))
            != (HFXO_STATUS_RDY | HFXO_STATUS_COREBIASOPTRDY | HFXO_STATUS_ENS
@@ -1405,17 +2046,20 @@ void CMU_HFXOInit(const CMU_HFXOInit_TypeDef *hfxoInit)
     }
 
     // We must set DISONDEMAND to be able to enter new values for use on
-    // subsequent locks
+    // subsequent locks.
     HFXO0->CTRL_SET = HFXO_CTRL_DISONDEMAND;
+#if defined(HFXO_CMD_MANUALOVERRIDE)
+    HFXO0->CMD = HFXO_CMD_MANUALOVERRIDE;
+#endif
     while ((HFXO0->STATUS & HFXO_STATUS_FSMLOCK) != 0) {
     }
 
-    // Set new TIMEOUTSTEADY value for use on subsequent locks
+    // Set new TIMEOUTSTEADY value for use on subsequent locks.
     HFXO0->XTALCFG = (HFXO0->XTALCFG & ~_HFXO_XTALCFG_TIMEOUTSTEADY_MASK)
                      | (hfxoInit->timeoutSteady
                         << _HFXO_XTALCFG_TIMEOUTSTEADY_SHIFT);
 
-    // Skip core bias algorithm on subsequent locks
+    // Skip core bias algorithm on subsequent locks.
     HFXO0->XTALCTRL_SET = HFXO_XTALCTRL_SKIPCOREBIASOPT;
 
     if (hfxoInit->disOnDemand == false) {
@@ -1426,7 +2070,7 @@ void CMU_HFXOInit(const CMU_HFXOInit_TypeDef *hfxoInit)
       HFXO0->CTRL_CLR = HFXO_CTRL_FORCEEN;
     }
   } else {
-    // Lock HFXO in EXTERNAL SINE mode
+    // Lock HFXO in EXTERNAL SINE mode.
     HFXO0->CTRL = (HFXO0->CTRL & ~(_HFXO_CTRL_FORCEXO2GNDANA_MASK
                                    | _HFXO_CTRL_FORCEXI2GNDANA_MASK
                                    | _HFXO_CTRL_DISONDEMAND_MASK
@@ -1468,6 +2112,11 @@ void CMU_LFXOInit(const CMU_LFXOInit_TypeDef *lfxoInit)
   // Max internal capacitance tuning value is 0x4F (20 pF)
   uint8_t ctune = SL_MIN(0x4FU, lfxoInit->capTune);
 
+#if defined(CMU_CLKEN0_LFXO)
+  // Enable LFXO module clock.
+  CMU->CLKEN0_SET = CMU_CLKEN0_LFXO;
+#endif
+
   // Unlock register interface
   LFXO->LOCK = LFXO_LOCK_LOCKKEY_UNLOCK;
 
@@ -1496,6 +2145,38 @@ void CMU_LFXOInit(const CMU_LFXOInit_TypeDef *lfxoInit)
   }
 }
 
+/**************************************************************************//**
+ * @brief
+ *   Configure the LFRCO precision.
+ *
+ * @details
+ *   When enabling high precision mode on the LFRCO the hardware will tune
+ *   the oscillator automatically using the HFXO as a reference.
+ *
+ * @param[in] precision
+ *    LFRCO precision, this can be either high or default.
+ *****************************************************************************/
+void CMU_LFRCOSetPrecision(CMU_Precision_TypeDef precision)
+{
+#if defined(LFRCO_CFG_HIGHPRECEN)
+  EFM_ASSERT(38400000 == SystemHFXOClockGet());
+  CMU->CLKEN0_SET = CMU_CLKEN0_LFRCO;
+  LFRCO->CTRL = LFRCO_CTRL_DISONDEMAND; // Force disable
+  while ((LFRCO->STATUS & LFRCO_STATUS_ENS) != 0U) {
+    // Wait for LFRCO to stop
+  }
+
+  if (precision == cmuPrecisionHigh) {
+    LFRCO->CFG = LFRCO_CFG_HIGHPRECEN;
+  } else {
+    LFRCO->CFG = 0;
+  }
+  LFRCO->CTRL = _LFRCO_CTRL_RESETVALUE;
+#else
+  (void) precision;
+#endif
+}
+
 /***************************************************************************//**
  * @brief
  *   Get oscillator frequency tuning setting.
@@ -1511,19 +2192,26 @@ uint32_t CMU_OscillatorTuningGet(CMU_Osc_TypeDef osc)
   uint32_t ret = 0U;
 
   switch (osc) {
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
     case cmuOsc_LFRCO:
       ret = (LFRCO->CAL & _LFRCO_CAL_FREQTRIM_MASK)
             >> _LFRCO_CAL_FREQTRIM_SHIFT;
       break;
+#endif
 
     case cmuOsc_HFRCODPLL:
+#if defined(CMU_CLKEN0_HFRCO0)
+      CMU->CLKEN0_SET = CMU_CLKEN0_HFRCO0;
+#endif
       ret = (HFRCO0->CAL & _HFRCO_CAL_TUNING_MASK) >> _HFRCO_CAL_TUNING_SHIFT;
       break;
 
+#if defined(HFRCOEM23_PRESENT)
     case cmuOsc_HFRCOEM23:
       ret = (HFRCOEM23->CAL & _HFRCO_CAL_TUNING_MASK)
             >> _HFRCO_CAL_TUNING_SHIFT;
       break;
+#endif
 
     default:
       EFM_ASSERT(false);
@@ -1552,15 +2240,22 @@ uint32_t CMU_OscillatorTuningGet(CMU_Osc_TypeDef osc)
 void CMU_OscillatorTuningSet(CMU_Osc_TypeDef osc, uint32_t val)
 {
   switch (osc) {
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
     case cmuOsc_LFRCO:
       EFM_ASSERT(val <= (_LFRCO_CAL_FREQTRIM_MASK
                          >> _LFRCO_CAL_FREQTRIM_SHIFT));
       val &= _LFRCO_CAL_FREQTRIM_MASK >> _LFRCO_CAL_FREQTRIM_SHIFT;
+      while (LFRCO->SYNCBUSY != 0U) {
+      }
       LFRCO->CAL = (LFRCO->CAL & ~_LFRCO_CAL_FREQTRIM_MASK)
                    | (val << _LFRCO_CAL_FREQTRIM_SHIFT);
       break;
+#endif
 
     case cmuOsc_HFRCODPLL:
+#if defined(CMU_CLKEN0_HFRCO0)
+      CMU->CLKEN0_SET = CMU_CLKEN0_HFRCO0;
+#endif
       EFM_ASSERT(val <= (_HFRCO_CAL_TUNING_MASK >> _HFRCO_CAL_TUNING_SHIFT));
       val &= _HFRCO_CAL_TUNING_MASK >> _HFRCO_CAL_TUNING_SHIFT;
       while ((HFRCO0->STATUS & HFRCO_STATUS_SYNCBUSY) != 0UL) {
@@ -1569,6 +2264,7 @@ void CMU_OscillatorTuningSet(CMU_Osc_TypeDef osc, uint32_t val)
                     | (val << _HFRCO_CAL_TUNING_SHIFT);
       break;
 
+#if defined(HFRCOEM23_PRESENT)
     case cmuOsc_HFRCOEM23:
       EFM_ASSERT(val <= (_HFRCO_CAL_TUNING_MASK >> _HFRCO_CAL_TUNING_SHIFT));
       val &= _HFRCO_CAL_TUNING_MASK >> _HFRCO_CAL_TUNING_SHIFT;
@@ -1577,6 +2273,7 @@ void CMU_OscillatorTuningSet(CMU_Osc_TypeDef osc, uint32_t val)
       HFRCOEM23->CAL = (HFRCOEM23->CAL & ~_HFRCO_CAL_TUNING_MASK)
                        | (val << _HFRCO_CAL_TUNING_SHIFT);
       break;
+#endif
 
     default:
       EFM_ASSERT(false);
@@ -1587,158 +2284,33 @@ void CMU_OscillatorTuningSet(CMU_Osc_TypeDef osc, uint32_t val)
 /***************************************************************************//**
  * @brief
  *   Configure wait state settings necessary to switch to a given core clock
- *   frequency.
+ *   frequency at a certain voltage scale level.
  *
  * @details
- *   This function will setup the necessary flash and RAM wait states.
- *   Updating the wait state configuration must be done before
- *   increasing the clock frequency, and it must be done after decreasing the
- *   clock frequency.
+ *   This function will set up the necessary flash wait states. Updating the
+ *   wait state configuration must be done before increasing the clock
+ *   frequency and it must be done after decreasing the clock frequency.
+ *   Updating the wait state configuration must be done before core voltage is
+ *   decreased and it must be done after a core voltage is increased.
  *
  * @param[in] freq
- *   Core clock frequency to configure wait-states for.
+ *   The core clock frequency to configure wait-states.
+ *
+ * @param[in] vscale
+ *   The voltage scale to configure wait-states. Expected values are
+ *   0 or 1, higher number is lower voltage.
+ *   @li 0 = 1.1 V (VSCALE2)
+ *   @li 1 = 1.0 V (VSCALE1)
+ *
  ******************************************************************************/
 void CMU_UpdateWaitStates(uint32_t freq, int vscale)
 {
-  (void)vscale;
-  waitStateSet(freq);
+  flashWaitStateControl(freq, vscale);
 }
-
-/** @cond DO_NOT_INCLUDE_WITH_DOXYGEN */
 
 /*******************************************************************************
  **************************   LOCAL FUNCTIONS   ********************************
  ******************************************************************************/
-
-/***************************************************************************//**
- * @brief
- *   Get calibrated HFRCODPLL tuning value from Device information (DI) page
- *   for a given frequency. Calibration value is not available for all frequency
- *   bands.
- *
- * @param[in] freq
- *   HFRCODPLL frequency band
- ******************************************************************************/
-static uint32_t HFRCODPLLDevinfoGet(CMU_HFRCODPLLFreq_TypeDef freq)
-{
-  uint32_t ret = 0U;
-
-  switch (freq) {
-    // 1, 2 and 4MHz share the same calibration word
-    case cmuHFRCODPLLFreq_1M0Hz:
-    case cmuHFRCODPLLFreq_2M0Hz:
-    case cmuHFRCODPLLFreq_4M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[0].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_7M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[3].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_13M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[6].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_16M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[7].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_19M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[8].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_26M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[10].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_32M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[11].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_38M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[12].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_48M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[13].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_56M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[14].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_64M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[15].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_80M0Hz:
-      ret = DEVINFO->HFRCODPLLCAL[16].HFRCODPLLCAL;
-      break;
-
-    case cmuHFRCODPLLFreq_UserDefined:
-      break;
-
-    default:
-      EFM_ASSERT(false);
-      break;
-  }
-  return ret;
-}
-
-/***************************************************************************//**
- * @brief
- *   Get calibrated HFRCOEM23 tuning value from Device information (DI) page
- *   for a given frequency. Calibration value is not available for all frequency
- *   bands.
- *
- * @param[in] freq
- *   HFRCOEM23 frequency band
- ******************************************************************************/
-static uint32_t HFRCOEM23DevinfoGet(CMU_HFRCOEM23Freq_TypeDef freq)
-{
-  uint32_t ret = 0U;
-
-  switch (freq) {
-    // 1, 2 and 4MHz share the same calibration word
-    case cmuHFRCOEM23Freq_1M0Hz:
-    case cmuHFRCOEM23Freq_2M0Hz:
-    case cmuHFRCOEM23Freq_4M0Hz:
-      ret = DEVINFO->HFRCOEM23CAL[0].HFRCOEM23CAL;
-      break;
-
-    case cmuHFRCOEM23Freq_13M0Hz:
-      ret = DEVINFO->HFRCOEM23CAL[6].HFRCOEM23CAL;
-      break;
-
-    case cmuHFRCOEM23Freq_16M0Hz:
-      ret = DEVINFO->HFRCOEM23CAL[7].HFRCOEM23CAL;
-      break;
-
-    case cmuHFRCOEM23Freq_19M0Hz:
-      ret = DEVINFO->HFRCOEM23CAL[8].HFRCOEM23CAL;
-      break;
-
-    case cmuHFRCOEM23Freq_26M0Hz:
-      ret = DEVINFO->HFRCOEM23CAL[10].HFRCOEM23CAL;
-      break;
-
-    case cmuHFRCOEM23Freq_32M0Hz:
-      ret = DEVINFO->HFRCOEM23CAL[11].HFRCOEM23CAL;
-      break;
-
-    case cmuHFRCOEM23Freq_40M0Hz:
-      ret = DEVINFO->HFRCOEM23CAL[12].HFRCOEM23CAL;
-      break;
-
-    case cmuHFRCOEM23Freq_UserDefined:
-      break;
-
-    default:
-      EFM_ASSERT(false);
-      break;
-  }
-  return ret;
-}
 
 /***************************************************************************//**
  * @brief
@@ -1817,10 +2389,12 @@ static void em01GrpaClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
       s = cmuSelect_HFXO;
       break;
 
+#if defined(HFRCOEM23_PRESENT)
     case _CMU_EM01GRPACLKCTRL_CLKSEL_HFRCOEM23:
       f = SystemHFRCOEM23ClockGet();
       s = cmuSelect_HFRCOEM23;
       break;
+#endif
 
     case _CMU_EM01GRPACLKCTRL_CLKSEL_FSRCO:
       f = SystemFSRCOClockGet();
@@ -1935,6 +2509,139 @@ static void em4GrpaClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
 
 /***************************************************************************//**
  * @brief
+ *   Configure flash access wait states to support the given core clock
+ *   frequency and vscale level.
+ *
+ * @note Current implementation sets wait states depending on frequency only.
+ *   This assumes that applications running on Series 2 Config 2 devices
+ *   never attemtps to set core frequency above 40MHz at VSCALE1 (1.0V).
+ *   Series 2 Config 1 devices does not support vscale.
+ *
+ * @param[in] coreFreq
+ *   The core clock frequency to configure flash wait-states.
+ *
+ * @param[in] vscale
+ *   Voltage Scale level. Supported levels are 0 and 1 where 0 is the default.
+ ******************************************************************************/
+static void flashWaitStateControl(uint32_t coreFreq, int vscale)
+{
+  (void)vscale;
+  uint32_t mode;
+  bool mscLocked;
+
+#if defined(CMU_CLKEN1_MSC)
+  CMU->CLKEN1_SET = CMU_CLKEN1_MSC;
+#endif
+
+  // Make sure the MSC is unlocked
+  mscLocked = (MSC->STATUS & _MSC_STATUS_REGLOCK_MASK)
+              == MSC_STATUS_REGLOCK_LOCKED;
+  MSC->LOCK = MSC_LOCK_LOCKKEY_UNLOCK;
+
+  // Get current flash read setting
+  mode = MSC->READCTRL & ~_MSC_READCTRL_MODE_MASK;
+
+  // Set new mode based on the core clock frequency
+  if (coreFreq <= CMU_MAX_FLASHREAD_FREQ_0WS) {
+    mode |= MSC_READCTRL_MODE_WS0;
+  } else {
+    mode |= MSC_READCTRL_MODE_WS1;
+  }
+  MSC->READCTRL = mode;
+
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
+  // Get current sram read setting
+  mode = SYSCFG->DMEM0RAMCTRL & ~_SYSCFG_DMEM0RAMCTRL_RAMWSEN_MASK;
+
+  // Set new mode based on the core clock frequency
+  if (coreFreq > CMU_MAX_SRAM_FREQ_0WS) {
+    mode |= 1 << _SYSCFG_DMEM0RAMCTRL_RAMWSEN_SHIFT;
+  }
+  SYSCFG->DMEM0RAMCTRL = mode;
+#endif
+
+  if (mscLocked) {
+    MSC->LOCK = MSC_LOCK_LOCKKEY_LOCK;
+  }
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Get calibrated HFRCODPLL tuning value from Device information (DI) page
+ *   for a given frequency. Calibration value is not available for all frequency
+ *   bands.
+ *
+ * @param[in] freq
+ *   HFRCODPLL frequency band
+ ******************************************************************************/
+static uint32_t HFRCODPLLDevinfoGet(CMU_HFRCODPLLFreq_TypeDef freq)
+{
+  uint32_t ret = 0U;
+
+  switch (freq) {
+    // 1, 2 and 4MHz share the same calibration word
+    case cmuHFRCODPLLFreq_1M0Hz:
+    case cmuHFRCODPLLFreq_2M0Hz:
+    case cmuHFRCODPLLFreq_4M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[0].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_7M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[3].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_13M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[6].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_16M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[7].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_19M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[8].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_26M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[10].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_32M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[11].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_38M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[12].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_48M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[13].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_56M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[14].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_64M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[15].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_80M0Hz:
+      ret = DEVINFO->HFRCODPLLCAL[16].HFRCODPLLCAL;
+      break;
+
+    case cmuHFRCODPLLFreq_UserDefined:
+      break;
+
+    default:
+      EFM_ASSERT(false);
+      break;
+  }
+  return ret;
+}
+
+/***************************************************************************//**
+ * @brief
  *   Get selected oscillator and frequency for @ref cmuClock_IADCCLK
  *   clock tree.
  *
@@ -1955,10 +2662,12 @@ static void iadcClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
       s = cmuSelect_EM01GRPACLK;
       break;
 
+#if defined(HFRCOEM23_PRESENT)
     case _CMU_IADCCLKCTRL_CLKSEL_HFRCOEM23:
       f = SystemHFRCOEM23ClockGet();
       s = cmuSelect_HFRCOEM23;
       break;
+#endif
 
     case _CMU_IADCCLKCTRL_CLKSEL_FSRCO:
       f = SystemFSRCOClockGet();
@@ -1985,7 +2694,7 @@ static void iadcClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
  ******************************************************************************/
 static void pclkDivMax(void)
 {
-  // Set largest divisor for PCLK clock tree
+  // Set largest divisor for PCLK clock tree.
   CMU_ClockDivSet(cmuClock_PCLK, 2U);
 }
 
@@ -2052,99 +2761,11 @@ static void rtccClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
 
 /***************************************************************************//**
  * @brief
- *   Get selected oscillator and frequency for @ref cmuClock_TRACECLK
- *   clock tree.
- *
- * @param[out] freq
- *   The frequency.
- *
- * @param[out] sel
- *   The selected oscillator.
- ******************************************************************************/
-static void traceClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
-{
-  uint32_t f = 0U;
-  CMU_Select_TypeDef s;
-
-  switch (CMU->TRACECLKCTRL & _CMU_TRACECLKCTRL_CLKSEL_MASK) {
-    case _CMU_TRACECLKCTRL_CLKSEL_PCLK:
-      f = SystemHCLKGet() / CMU_ClockDivGet(cmuClock_PCLK);
-      s = cmuSelect_PCLK;
-      break;
-
-    case _CMU_TRACECLKCTRL_CLKSEL_HCLK:
-      f = SystemHCLKGet();
-      s = cmuSelect_HCLK;
-      break;
-
-    case _CMU_TRACECLKCTRL_CLKSEL_HFRCOEM23:
-      f = SystemHFRCOEM23ClockGet();
-      s = cmuSelect_HFRCOEM23;
-      break;
-
-    default:
-      s = cmuSelect_Error;
-      EFM_ASSERT(false);
-      break;
-  }
-
-  if (freq != NULL) {
-    *freq = f;
-  }
-  if (sel != NULL) {
-    *sel = s;
-  }
-}
-
-/***************************************************************************//**
- * @brief
  *   Set wait-states to values valid for maximum allowable core clock frequency.
  ******************************************************************************/
 static void waitStateMax(void)
 {
-  waitStateSet(SystemMaxCoreClockGet());
-}
-
-/***************************************************************************//**
- * @brief
- *  Set wait-state settings valid for a given core clock frequency.
- *
- * @param[out] coreFreq
- *   Core clock frequency.
- ******************************************************************************/
-static void waitStateSet(uint32_t coreFreq)
-{
-  uint32_t mode;
-  bool mscLocked;
-
-  // Make sure the MSC is unlocked
-  mscLocked = (MSC->STATUS & _MSC_STATUS_REGLOCK_MASK)
-              == MSC_STATUS_REGLOCK_LOCKED;
-  MSC->LOCK = MSC_LOCK_LOCKKEY_UNLOCK;
-
-  // Get current flash read setting
-  mode = MSC->READCTRL & ~_MSC_READCTRL_MODE_MASK;
-
-  // Set new mode based on the core clock frequency
-  if (coreFreq <= CMU_MAX_FLASHREAD_FREQ_0WS) {
-    mode |= MSC_READCTRL_MODE_WS0;
-  } else {
-    mode |= MSC_READCTRL_MODE_WS1;
-  }
-  MSC->READCTRL = mode;
-
-  // Get current sram read setting
-  mode = SYSCFG->DMEM0RAMCTRL & ~_SYSCFG_DMEM0RAMCTRL_RAMWSEN_MASK;
-
-  // Set new mode based on the core clock frequency
-  if (coreFreq > CMU_MAX_SRAM_FREQ_0WS) {
-    mode |= 1 << _SYSCFG_DMEM0RAMCTRL_RAMWSEN_SHIFT;
-  }
-  SYSCFG->DMEM0RAMCTRL = mode;
-
-  if (mscLocked) {
-    MSC->LOCK = MSC_LOCK_LOCKKEY_LOCK;
-  }
+  flashWaitStateControl(SystemMaxCoreClockGet(), 0);
 }
 
 /***************************************************************************//**
@@ -2198,60 +2819,7 @@ static void wdog0ClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
   }
 }
 
-/***************************************************************************//**
- * @brief
- *   Get selected oscillator and frequency for @ref cmuClock_WDOG1CLK
- *   clock tree.
- *
- * @param[out] freq
- *   The frequency.
- *
- * @param[out] sel
- *   The selected oscillator.
- ******************************************************************************/
-static void wdog1ClkGet(uint32_t *freq, CMU_Select_TypeDef *sel)
-{
-  uint32_t f = 0U;
-  CMU_Select_TypeDef s;
-
-  switch (CMU->WDOG1CLKCTRL & _CMU_WDOG1CLKCTRL_CLKSEL_MASK) {
-    case _CMU_WDOG1CLKCTRL_CLKSEL_LFRCO:
-      f = SystemLFRCOClockGet();
-      s = cmuSelect_LFRCO;
-      break;
-
-    case _CMU_WDOG1CLKCTRL_CLKSEL_LFXO:
-      f = SystemLFXOClockGet();
-      s = cmuSelect_LFXO;
-      break;
-
-    case _CMU_WDOG1CLKCTRL_CLKSEL_ULFRCO:
-      f = SystemULFRCOClockGet();
-      s = cmuSelect_ULFRCO;
-      break;
-
-    case _CMU_WDOG1CLKCTRL_CLKSEL_HCLKDIV1024:
-      f = SystemHCLKGet() / 1024U;
-      s = cmuSelect_HCLKDIV1024;
-      break;
-
-    default:
-      s = cmuSelect_Error;
-      EFM_ASSERT(false);
-      break;
-  }
-
-  if (freq != NULL) {
-    *freq = f;
-  }
-  if (sel != NULL) {
-    *sel = s;
-  }
-}
-
-/** @endcond */
-
-#else // defined(_SILICON_LABS_32B_SERIES_2)
+#else   // defined(_SILICON_LABS_32B_SERIES_2)
 
 /*******************************************************************************
  ******************************   DEFINES   ************************************
@@ -3143,6 +3711,21 @@ static void setBusWaitState(uint32_t busFreq, int vscale)
 }
 #endif
 
+#if defined(PLFRCO_PRESENT)
+static bool deviceHasPlfrco(void)
+{
+  SYSTEM_ChipRevision_TypeDef rev;
+
+  if (_SILICON_LABS_GECKO_INTERNAL_SDID == 89) {
+    // check the xG13 rev and check if it's >= Rev A3
+    SYSTEM_ChipRevisionGet(&rev);
+    return (rev.major > 1) || (rev.minor >= 3);
+  } else {
+    return false;
+  }
+}
+#endif
+
 /***************************************************************************//**
  * @brief
  *   Configure various wait states to switch to a certain frequency
@@ -3379,17 +3962,23 @@ static uint32_t lfClkGet(CMU_Clock_TypeDef lfClkBranch)
       ret = SystemULFRCOClockGet();
       break;
 
+#if defined(PLFRCO_PRESENT)
+    case _CMU_LFACLKSEL_LFA_PLFRCO:
+      ret = SystemLFRCOClockGet();
+      break;
+#endif
+
 #if defined(_CMU_LFACLKSEL_LFA_HFCLKLE)
     case _CMU_LFACLKSEL_LFA_HFCLKLE:
       ret = SystemCoreClockGet()
-            / CMU_Log2ToDiv(((CMU->HFPRESC & _CMU_HFPRESC_HFCLKLEPRESC_MASK)
-                             >> _CMU_HFPRESC_HFCLKLEPRESC_SHIFT) + 1);
+            / SL_Log2ToDiv(((CMU->HFPRESC & _CMU_HFPRESC_HFCLKLEPRESC_MASK)
+                            >> _CMU_HFPRESC_HFCLKLEPRESC_SHIFT) + 1);
       break;
 #elif defined(_CMU_LFBCLKSEL_LFB_HFCLKLE)
     case _CMU_LFBCLKSEL_LFB_HFCLKLE:
       ret = SystemCoreClockGet()
-            / CMU_Log2ToDiv(((CMU->HFPRESC & _CMU_HFPRESC_HFCLKLEPRESC_MASK)
-                             >> _CMU_HFPRESC_HFCLKLEPRESC_SHIFT) + 1UL);
+            / SL_Log2ToDiv(((CMU->HFPRESC & _CMU_HFPRESC_HFCLKLEPRESC_MASK)
+                            >> _CMU_HFPRESC_HFCLKLEPRESC_SHIFT) + 1UL);
       break;
 #endif
 
@@ -3772,6 +4361,12 @@ uint32_t CMU_Calibrate(uint32_t HFCycles, CMU_Osc_TypeDef reference)
       CMU->CALCTRL = CMU_CALCTRL_UPSEL_LFRCO;
       break;
 
+#if defined(PLFRCO_PRESENT)
+    case cmuOsc_PLFRCO:
+      CMU->CALCTRL = CMU_CALCTRL_UPSEL_PLFRCO;
+      break;
+#endif
+
     case cmuOsc_HFXO:
       CMU->CALCTRL = CMU_CALCTRL_UPSEL_HFXO;
       break;
@@ -3861,6 +4456,12 @@ void CMU_CalibrateConfig(uint32_t downCycles, CMU_Osc_TypeDef downSel,
       calCtrl |= CMU_CALCTRL_DOWNSEL_LFRCO;
       break;
 
+#if defined(PLFRCO_PRESENT)
+    case cmuOsc_PLFRCO:
+      calCtrl |= CMU_CALCTRL_DOWNSEL_PLFRCO;
+      break;
+#endif
+
     case cmuOsc_HFXO:
       calCtrl |= CMU_CALCTRL_DOWNSEL_HFXO;
       break;
@@ -3896,6 +4497,12 @@ void CMU_CalibrateConfig(uint32_t downCycles, CMU_Osc_TypeDef downSel,
     case cmuOsc_LFRCO:
       calCtrl |= CMU_CALCTRL_UPSEL_LFRCO;
       break;
+
+#if defined(PLFRCO_PRESENT)
+    case cmuOsc_PLFRCO:
+      calCtrl |= CMU_CALCTRL_UPSEL_PLFRCO;
+      break;
+#endif
 
     case cmuOsc_HFXO:
       calCtrl |= CMU_CALCTRL_UPSEL_HFXO;
@@ -3996,14 +4603,14 @@ CMU_ClkDiv_TypeDef CMU_ClockDivGet(CMU_Clock_TypeDef clock)
       ret = (CMU_ClkDiv_TypeDef)((CMU->HFPERCLKDIV
                                   & _CMU_HFPERCLKDIV_HFPERCLKDIV_MASK)
                                  >> _CMU_HFPERCLKDIV_HFPERCLKDIV_SHIFT);
-      ret = CMU_Log2ToDiv(ret);
+      ret = SL_Log2ToDiv(ret);
       break;
 
     case CMU_HFCORECLKDIV_REG:
       ret = (CMU_ClkDiv_TypeDef)((CMU->HFCORECLKDIV
                                   & _CMU_HFCORECLKDIV_HFCORECLKDIV_MASK)
                                  >> _CMU_HFCORECLKDIV_HFCORECLKDIV_SHIFT);
-      ret = CMU_Log2ToDiv(ret);
+      ret = SL_Log2ToDiv(ret);
       break;
 
     case CMU_LFAPRESC0_REG:
@@ -4011,14 +4618,14 @@ CMU_ClkDiv_TypeDef CMU_ClockDivGet(CMU_Clock_TypeDef clock)
         case cmuClock_RTC:
           ret = (CMU_ClkDiv_TypeDef)((CMU->LFAPRESC0 & _CMU_LFAPRESC0_RTC_MASK)
                                      >> _CMU_LFAPRESC0_RTC_SHIFT);
-          ret = CMU_Log2ToDiv(ret);
+          ret = SL_Log2ToDiv(ret);
           break;
 
 #if defined(_CMU_LFAPRESC0_LETIMER0_MASK)
         case cmuClock_LETIMER0:
           ret = (CMU_ClkDiv_TypeDef)((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER0_MASK)
                                      >> _CMU_LFAPRESC0_LETIMER0_SHIFT);
-          ret = CMU_Log2ToDiv(ret);
+          ret = SL_Log2ToDiv(ret);
           break;
 #endif
 
@@ -4027,7 +4634,7 @@ CMU_ClkDiv_TypeDef CMU_ClockDivGet(CMU_Clock_TypeDef clock)
           ret = (CMU_ClkDiv_TypeDef)(((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LCD_MASK)
                                       >> _CMU_LFAPRESC0_LCD_SHIFT)
                                      + CMU_DivToLog2(cmuClkDiv_16));
-          ret = CMU_Log2ToDiv(ret);
+          ret = SL_Log2ToDiv(ret);
           break;
 #endif
 
@@ -4035,7 +4642,7 @@ CMU_ClkDiv_TypeDef CMU_ClockDivGet(CMU_Clock_TypeDef clock)
         case cmuClock_LESENSE:
           ret = (CMU_ClkDiv_TypeDef)((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LESENSE_MASK)
                                      >> _CMU_LFAPRESC0_LESENSE_SHIFT);
-          ret = CMU_Log2ToDiv(ret);
+          ret = SL_Log2ToDiv(ret);
           break;
 #endif
 
@@ -4052,7 +4659,7 @@ CMU_ClkDiv_TypeDef CMU_ClockDivGet(CMU_Clock_TypeDef clock)
         case cmuClock_LEUART0:
           ret = (CMU_ClkDiv_TypeDef)((CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART0_MASK)
                                      >> _CMU_LFBPRESC0_LEUART0_SHIFT);
-          ret = CMU_Log2ToDiv(ret);
+          ret = SL_Log2ToDiv(ret);
           break;
 #endif
 
@@ -4060,7 +4667,7 @@ CMU_ClkDiv_TypeDef CMU_ClockDivGet(CMU_Clock_TypeDef clock)
         case cmuClock_LEUART1:
           ret = (CMU_ClkDiv_TypeDef)((CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART1_MASK)
                                      >> _CMU_LFBPRESC0_LEUART1_SHIFT);
-          ret = CMU_Log2ToDiv(ret);
+          ret = SL_Log2ToDiv(ret);
           break;
 #endif
 
@@ -4542,8 +5149,8 @@ uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
       ret >>= (CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER0_MASK)
               >> _CMU_LFAPRESC0_LETIMER0_SHIFT;
 #else
-      ret /= CMU_Log2ToDiv((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER0_MASK)
-                           >> _CMU_LFAPRESC0_LETIMER0_SHIFT);
+      ret /= SL_Log2ToDiv((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER0_MASK)
+                          >> _CMU_LFAPRESC0_LETIMER0_SHIFT);
 #endif
       break;
 #endif
@@ -4555,8 +5162,8 @@ uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
       ret >>= (CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER1_MASK)
               >> _CMU_LFAPRESC0_LETIMER1_SHIFT;
 #else
-      ret /= CMU_Log2ToDiv((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER1_MASK)
-                           >> _CMU_LFAPRESC0_LETIMER1_SHIFT);
+      ret /= SL_Log2ToDiv((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER1_MASK)
+                          >> _CMU_LFAPRESC0_LETIMER1_SHIFT);
 #endif
       break;
 #endif
@@ -4569,8 +5176,8 @@ uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
                >> _CMU_LFAPRESC0_LCD_SHIFT)
               + CMU_DivToLog2(cmuClkDiv_16);
 #else
-      ret /= CMU_Log2ToDiv((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LCD_MASK)
-                           >> _CMU_LFAPRESC0_LCD_SHIFT);
+      ret /= SL_Log2ToDiv((CMU->LFAPRESC0 & _CMU_LFAPRESC0_LCD_MASK)
+                          >> _CMU_LFAPRESC0_LCD_SHIFT);
 #endif
       break;
 
@@ -4604,8 +5211,8 @@ uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
       ret >>= (CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART0_MASK)
               >> _CMU_LFBPRESC0_LEUART0_SHIFT;
 #else
-      ret /= CMU_Log2ToDiv((CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART0_MASK)
-                           >> _CMU_LFBPRESC0_LEUART0_SHIFT);
+      ret /= SL_Log2ToDiv((CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART0_MASK)
+                          >> _CMU_LFBPRESC0_LEUART0_SHIFT);
 #endif
       break;
 #endif
@@ -4617,8 +5224,8 @@ uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
       ret >>= (CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART1_MASK)
               >> _CMU_LFBPRESC0_LEUART1_SHIFT;
 #else
-      ret /= CMU_Log2ToDiv((CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART1_MASK)
-                           >> _CMU_LFBPRESC0_LEUART1_SHIFT);
+      ret /= SL_Log2ToDiv((CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART1_MASK)
+                          >> _CMU_LFBPRESC0_LEUART1_SHIFT);
 #endif
       break;
 #endif
@@ -4626,8 +5233,8 @@ uint32_t CMU_ClockFreqGet(CMU_Clock_TypeDef clock)
 #if defined(_CMU_LFBCLKEN0_CSEN_MASK)
     case (CMU_CSEN_LF_CLK_BRANCH << CMU_CLK_BRANCH_POS):
       ret = lfClkGet(cmuClock_LFB);
-      ret /= CMU_Log2ToDiv(((CMU->LFBPRESC0 & _CMU_LFBPRESC0_CSEN_MASK)
-                            >> _CMU_LFBPRESC0_CSEN_SHIFT) + 4UL);
+      ret /= SL_Log2ToDiv(((CMU->LFBPRESC0 & _CMU_LFBPRESC0_CSEN_MASK)
+                           >> _CMU_LFBPRESC0_CSEN_SHIFT) + 4UL);
       break;
 #endif
 
@@ -4778,7 +5385,7 @@ uint32_t CMU_ClockPrescGet(CMU_Clock_TypeDef clock)
           ret = (CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER0_MASK)
                 >> _CMU_LFAPRESC0_LETIMER0_SHIFT;
           /* Convert the exponent to a prescaler value. */
-          ret = CMU_Log2ToDiv(ret) - 1U;
+          ret = SL_Log2ToDiv(ret) - 1U;
           break;
 #endif
 
@@ -4787,7 +5394,7 @@ uint32_t CMU_ClockPrescGet(CMU_Clock_TypeDef clock)
           ret = (CMU->LFAPRESC0 & _CMU_LFAPRESC0_LESENSE_MASK)
                 >> _CMU_LFAPRESC0_LESENSE_SHIFT;
           /* Convert the exponent to a prescaler value. */
-          ret = CMU_Log2ToDiv(ret) - 1U;
+          ret = SL_Log2ToDiv(ret) - 1U;
           break;
 #endif
 
@@ -4795,7 +5402,7 @@ uint32_t CMU_ClockPrescGet(CMU_Clock_TypeDef clock)
         case cmuClock_LETIMER1:
           ret = (CMU->LFAPRESC0 & _CMU_LFAPRESC0_LETIMER1_MASK)
                 >> _CMU_LFAPRESC0_LETIMER1_SHIFT;
-          ret = CMU_Log2ToDiv(ret) - 1U;
+          ret = SL_Log2ToDiv(ret) - 1U;
           break;
 #endif
 
@@ -4804,7 +5411,7 @@ uint32_t CMU_ClockPrescGet(CMU_Clock_TypeDef clock)
         case cmuClock_LCDpre:
           ret = (CMU->LFAPRESC0 & _CMU_LFAPRESC0_LCD_MASK)
                 >> _CMU_LFAPRESC0_LCD_SHIFT;
-          ret = CMU_Log2ToDiv(ret) - 1U;
+          ret = SL_Log2ToDiv(ret) - 1U;
           break;
 #endif
 
@@ -4812,7 +5419,7 @@ uint32_t CMU_ClockPrescGet(CMU_Clock_TypeDef clock)
         case cmuClock_RTC:
           ret = (CMU->LFAPRESC0 & _CMU_LFAPRESC0_RTC_MASK)
                 >> _CMU_LFAPRESC0_RTC_SHIFT;
-          ret = CMU_Log2ToDiv(ret) - 1U;
+          ret = SL_Log2ToDiv(ret) - 1U;
           break;
 #endif
 
@@ -4830,7 +5437,7 @@ uint32_t CMU_ClockPrescGet(CMU_Clock_TypeDef clock)
           ret = (CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART0_MASK)
                 >> _CMU_LFBPRESC0_LEUART0_SHIFT;
           /* Convert the exponent to a prescaler value. */
-          ret = CMU_Log2ToDiv(ret) - 1U;
+          ret = SL_Log2ToDiv(ret) - 1U;
           break;
 #endif
 
@@ -4839,7 +5446,7 @@ uint32_t CMU_ClockPrescGet(CMU_Clock_TypeDef clock)
           ret = (CMU->LFBPRESC0 & _CMU_LFBPRESC0_LEUART1_MASK)
                 >> _CMU_LFBPRESC0_LEUART1_SHIFT;
           /* Convert the exponent to a prescaler value. */
-          ret = CMU_Log2ToDiv(ret) - 1U;
+          ret = SL_Log2ToDiv(ret) - 1U;
           break;
 #endif
 
@@ -4848,7 +5455,7 @@ uint32_t CMU_ClockPrescGet(CMU_Clock_TypeDef clock)
           ret = (CMU->LFBPRESC0 & _CMU_LFBPRESC0_CSEN_MASK)
                 >> _CMU_LFBPRESC0_CSEN_SHIFT;
           /* Convert the exponent to a prescaler value. */
-          ret = CMU_Log2ToDiv(ret + 4U) - 1U;
+          ret = SL_Log2ToDiv(ret + 4U) - 1U;
           break;
 #endif
 
@@ -5398,6 +6005,13 @@ CMU_Select_TypeDef CMU_ClockSelectGet(CMU_Clock_TypeDef clock)
           ret = cmuSelect_HFCLKLE;
           break;
 #endif
+
+#if defined(PLFRCO_PRESENT)
+        case CMU_LFACLKSEL_LFA_PLFRCO:
+          ret = cmuSelect_PLFRCO;
+          break;
+#endif
+
         default:
           ret = cmuSelect_Disabled;
           break;
@@ -5460,6 +6074,12 @@ CMU_Select_TypeDef CMU_ClockSelectGet(CMU_Clock_TypeDef clock)
           ret = cmuSelect_HFCLKLE;
           break;
 
+#if defined(PLFRCO_PRESENT)
+        case CMU_LFBCLKSEL_LFB_PLFRCO:
+          ret = cmuSelect_PLFRCO;
+          break;
+#endif
+
         default:
           ret = cmuSelect_Disabled;
           break;
@@ -5501,9 +6121,15 @@ CMU_Select_TypeDef CMU_ClockSelectGet(CMU_Clock_TypeDef clock)
           ret = cmuSelect_ULFRCO;
           break;
 
-#if defined (_CMU_LFECLKSEL_LFE_HFCLKLE)
+#if defined(_CMU_LFECLKSEL_LFE_HFCLKLE)
         case CMU_LFECLKSEL_LFE_HFCLKLE:
           ret = cmuSelect_HFCLKLE;
+          break;
+#endif
+
+#if defined(PLFRCO_PRESENT)
+        case CMU_LFECLKSEL_LFE_PLFRCO:
+          ret = cmuSelect_PLFRCO;
           break;
 #endif
 
@@ -5810,6 +6436,9 @@ CMU_Select_TypeDef CMU_ClockSelectGet(CMU_Clock_TypeDef clock)
  *   @ifnot DOXYDOC_EFM32_GECKO_FAMILY
  *   @li #cmuSelect_ULFRCO
  *   @endif
+ *   @if CMU_OSCENCMD_PLFRCOEN
+ *   @li #cmuSelect_PLFRCO
+ *   @endif
  ******************************************************************************/
 void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
 {
@@ -6057,6 +6686,13 @@ void CMU_ClockSelectSet(CMU_Clock_TypeDef clock, CMU_Select_TypeDef ref)
           /* ULFRCO is always on, there is no need to enable it. */
           tmp = _CMU_LFACLKSEL_LFA_ULFRCO;
           break;
+
+#if defined(PLFRCO_PRESENT)
+        case cmuSelect_PLFRCO:
+          CMU_OscillatorEnable(cmuOsc_PLFRCO, true, true);
+          tmp = _CMU_LFACLKSEL_LFA_PLFRCO;
+          break;
+#endif
 
         default:
           EFM_ASSERT(false);
@@ -7515,6 +8151,20 @@ void CMU_OscillatorEnable(CMU_Osc_TypeDef osc, bool enable, bool wait)
 #if defined(_SILICON_LABS_32B_SERIES_1)
       ensBitPos = _CMU_STATUS_USHFRCOENS_SHIFT;
 #endif
+      break;
+#endif
+
+#if defined(PLFRCO_PRESENT)
+    case cmuOsc_PLFRCO:
+      if (!deviceHasPlfrco()) {
+        while (true) { // PLFRCO is not available
+          EFM_ASSERT(false);
+        }
+      }
+      enBit = CMU_OSCENCMD_PLFRCOEN;
+      disBit = CMU_OSCENCMD_PLFRCODIS;
+      rdyBitPos = _CMU_STATUS_PLFRCORDY_SHIFT;
+      ensBitPos = _CMU_STATUS_PLFRCOENS_SHIFT;
       break;
 #endif
 

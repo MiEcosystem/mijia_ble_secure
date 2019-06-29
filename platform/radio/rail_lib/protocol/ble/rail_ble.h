@@ -149,6 +149,14 @@ RAIL_ENUM(RAIL_BLE_Phy_t) {
   RAIL_BLE_Coded500kbps,
 };
 
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
+// Self-referencing defines minimize compiler complaints when using RAIL_ENUM
+#define RAIL_BLE_1Mbps        ((RAIL_BLE_Phy_t) RAIL_BLE_1Mbps)
+#define RAIL_BLE_2Mbps        ((RAIL_BLE_Phy_t) RAIL_BLE_2Mbps)
+#define RAIL_BLE_Coded125kbps ((RAIL_BLE_Phy_t) RAIL_BLE_Coded125kbps)
+#define RAIL_BLE_Coded500kbps ((RAIL_BLE_Phy_t) RAIL_BLE_Coded500kbps)
+#endif//DOXYGEN_SHOULD_SKIP_THIS
+
 /**
  * @struct RAIL_BLE_State_t
  * @brief A state structure for BLE.

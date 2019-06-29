@@ -28,6 +28,9 @@ typedef struct {
 
 
 // Link layer config:
+#ifndef GECKO_BLUETOOTH_LL_PRIORITIES_DEFINED
+#define GECKO_BLUETOOTH_LL_PRIORITIES_DEFINED
+
 typedef struct {
   uint8_t scan_min;
   uint8_t scan_max;
@@ -44,10 +47,14 @@ typedef struct {
   uint8_t coex_pwm_period;
   uint8_t coex_pwm_dutycycle;
   uint8_t afh_scan_interval;
+  uint8_t adv_step;
+  uint8_t scan_step;
 }gecko_bluetooth_ll_priorities;
 
 //Default priority configuration
-#define GECKO_BLUETOOTH_PRIORITIES_DEFAULT { 191, 143, 175, 127, 135, 0, 55, 15, 175, 16, 16, 255, 0, 0, 0 }
+#define GECKO_BLUETOOTH_PRIORITIES_DEFAULT { 191, 143, 175, 127, 135, 0, 55, 15, 175, 16, 16, 255, 0, 0, 0, 4, 4 }
+
+#endif
 
 
 typedef struct {

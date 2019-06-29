@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Energy Management Unit (EMU) Peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -71,8 +71,7 @@
 
 /** @cond DO_NOT_INCLUDE_WITH_DOXYGEN */
 #if defined(_SILICON_LABS_32B_SERIES_0)
-/* Fix for errata EMU_E107 - non-WIC interrupt masks.
- * Zero Gecko and future families are not affected by errata EMU_E107. */
+/* Fix for errata EMU_E107 - non-WIC interrupt masks. */
 #if defined(_EFM32_GECKO_FAMILY)
 #define ERRATA_FIX_EMU_E107_ENABLE
 #define NON_WIC_INT_MASK_0    (~(0x0dfc0323U))
@@ -92,6 +91,16 @@
 #define ERRATA_FIX_EMU_E107_ENABLE
 #define NON_WIC_INT_MASK_0    (~(0xff020e63U))
 #define NON_WIC_INT_MASK_1    (~(0x00000046U))
+
+#elif defined(_EFM32_ZERO_FAMILY)
+#define ERRATA_FIX_EMU_E107_ENABLE
+#define NON_WIC_INT_MASK_0    (~(0x00005c6bU))
+#define NON_WIC_INT_MASK_1    (~(0x00000000U))
+
+#elif defined(_EFM32_HAPPY_FAMILY)
+#define ERRATA_FIX_EMU_E107_ENABLE
+#define NON_WIC_INT_MASK_0    (~(0x00085c6bU))
+#define NON_WIC_INT_MASK_1    (~(0x00000000U))
 
 #endif
 #endif
@@ -191,8 +200,11 @@ static errataFixDcdcHs_TypeDef errataFixDcdcHsState = errataFixDcdcHsInit;
 #define RAM1_BLOCK_SIZE   0x4000U // 16 kB blocks
 #define RAM2_BLOCKS            4U
 #define RAM2_BLOCK_SIZE   0x4000U // 16 kB blocks
-#elif defined(_SILICON_LABS_32B_SERIES_2)
+#elif defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
 #define RAM0_BLOCKS            6U
+#define RAM0_BLOCK_SIZE   0x4000U // 16 kB blocks
+#elif defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+#define RAM0_BLOCKS            2U
 #define RAM0_BLOCK_SIZE   0x4000U // 16 kB blocks
 #endif
 
@@ -381,6 +393,9 @@ static void emState(emState_TypeDef action)
 /* Get enable conditions for errata EMU_E107 fix. */
 __STATIC_INLINE bool getErrataFixEmuE107En(void)
 {
+#if defined(_EFM32_ZERO_FAMILY) || defined(_EFM32_HAPPY_FAMILY)
+  return true;
+#else
   /* SYSTEM_ChipRevisionGet could have been used here, but we would like a
    * faster implementation in this case.
    */
@@ -407,11 +422,14 @@ __STATIC_INLINE bool getErrataFixEmuE107En(void)
 #elif defined(_EFM32_WONDER_FAMILY)
   return (majorMinorRev == 0x0100);
 #else
-  /* Zero Gecko and future families are not affected by errata EMU_E107. */
+  /* Invalid configuration. */
+  EFM_ASSERT(false);
+  /* Return when assertions are disabled. */
   return false;
 #endif
+#endif /* #if defined(_EFM32_ZERO_FAMILY) || defined(_EFM32_HAPPY_FAMILY) #else */
 }
-#endif
+#endif /* #if defined(ERRATA_FIX_EMU_E107_ENABLE) */
 
 /* LP prepare / LN restore P/NFET count. */
 #define DCDC_LP_PFET_CNT        7
@@ -498,6 +516,46 @@ static void vScaleAfterWakeup(void)
 /*******************************************************************************
  **************************   GLOBAL FUNCTIONS   *******************************
  ******************************************************************************/
+
+/***************************************************************************//**
+ * @brief
+ *   Energy mode 2/3 pre-sleep hook function.
+ *
+ * @details
+ *   This function is called by EMU_EnterEM2() and EMU_EnterEM3() functions
+ *   just prior to execution of the WFI instruction. The function implementation
+ *   does not perform anything, but it is SL_WEAK so that it can be re-
+ *   implemented in application code if actions are needed.
+ *
+ * @note
+ *   The function is primarily meant to be used in systems with EFP circuitry.
+ *   (EFP = Energy Friendly Pmic (PMIC = Power Management IC)).
+ *   In such systems there is a need to drive certain signals to EFP pins to
+ *   notify about energy mode transitions.
+ ******************************************************************************/
+SL_WEAK void EMU_EM23PresleepHook(void)
+{
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Energy mode 2/3 post-sleep hook function.
+ *
+ * @details
+ *   This function is called by EMU_EnterEM2() and EMU_EnterEM3() functions
+ *   just after wakeup from the WFI instruction. The function implementation
+ *   does not perform anything, but it is SL_WEAK so that it can be re-
+ *   implemented in application code if actions are needed.
+ *
+ * @note
+ *   The function is primarily meant to be used in systems with EFP circuitry.
+ *   (EFP = Energy Friendly Pmic (PMIC = Power Management IC)).
+ *   In such systems there is a need to drive certain signals to EFP pins to
+ *   notify about energy mode transitions.
+ ******************************************************************************/
+SL_WEAK void EMU_EM23PostsleepHook(void)
+{
+}
 
 /***************************************************************************//**
  * @brief
@@ -601,11 +659,13 @@ void EMU_EnterEM2(bool restore)
   dcdcHsFixLnBlock();
 #endif
 
+  EMU_EM23PresleepHook();
 #if defined(ERRATA_FIX_EMU_E110_ENABLE)
   CORE_CRITICAL_SECTION(ramWFI(); )
 #else
   __WFI();
 #endif
+  EMU_EM23PostsleepHook();
 
 #if defined(ERRATA_FIX_DCDC_FETCNT_SET_ENABLE)
   dcdcFetCntSet(false);
@@ -688,8 +748,6 @@ void EMU_EnterEM2(bool restore)
  ******************************************************************************/
 void EMU_EnterEM3(bool restore)
 {
-  uint32_t cmuLocked;
-
 #if defined(ERRATA_FIX_EMU_E107_ENABLE)
   bool errataFixEmuE107En;
   uint32_t nonWicIntEn[2];
@@ -704,23 +762,19 @@ void EMU_EnterEM3(bool restore)
   vScaleDownEM23Setup();
 #endif
 
-  /* CMU registers may be locked. */
-#if defined(CMU_STATUS_LOCK)
-  cmuLocked = (CMU->STATUS & _CMU_STATUS_LOCK_MASK) == CMU_STATUS_LOCK_LOCKED;
-#else
+#if defined(_CMU_OSCENCMD_MASK)
+  uint32_t cmuLocked;
   cmuLocked = CMU->LOCK & CMU_LOCK_LOCKKEY_LOCKED;
-#endif
   CMU_Unlock();
 
-#if defined(_CMU_OSCENCMD_MASK)
   /* Disable LF oscillators. */
   CMU->OSCENCMD = CMU_OSCENCMD_LFXODIS | CMU_OSCENCMD_LFRCODIS;
-#endif
 
   /* Restore CMU register locking. */
   if (cmuLocked != 0U) {
     CMU_Lock();
   }
+#endif
 
   /* Enter Cortex deep sleep mode. */
   SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
@@ -746,11 +800,13 @@ void EMU_EnterEM3(bool restore)
   dcdcHsFixLnBlock();
 #endif
 
+  EMU_EM23PresleepHook();
 #if defined(ERRATA_FIX_EMU_E110_ENABLE)
   CORE_CRITICAL_SECTION(ramWFI(); )
 #else
   __WFI();
 #endif
+  EMU_EM23PostsleepHook();
 
 #if defined(ERRATA_FIX_DCDC_FETCNT_SET_ENABLE)
   dcdcFetCntSet(false);
@@ -774,7 +830,7 @@ void EMU_EnterEM3(bool restore)
     vScaleAfterWakeup();
 #endif
     /* If not restoring, and original clock was not HFRCO. */
-    /* As a result, he CMSIS core clock variable must be updated. */
+    /* As a result, the CMSIS core clock variable must be updated. */
     /* to HFRCO. */
     SystemCoreClockUpdate();
   }
@@ -1040,7 +1096,14 @@ void EMU_RamPowerDown(uint32_t start, uint32_t end)
 #elif defined(_EMU_RAM0CTRL_MASK)
   EMU->RAM0CTRL = EMU->RAM0CTRL | mask;
 #elif defined(_SILICON_LABS_32B_SERIES_2)
+#if defined(CMU_CLKEN0_SYSCFG)
+  CMU->CLKEN0_SET = CMU_CLKEN0_SYSCFG;
+#endif
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+  SYSCFG->DMEM0RETNCTRL = SYSCFG->DMEM0RETNCTRL | (mask << 1);
+#else
   SYSCFG->DMEM0RETNCTRL = SYSCFG->DMEM0RETNCTRL | mask;
+#endif
 #else
   // These devices are unable to power down RAM blocks.
   (void) mask;
@@ -1081,13 +1144,19 @@ void EMU_RamPowerDown(uint32_t start, uint32_t end)
 void EMU_RamPowerUp(void)
 {
 #if defined(_EMU_RAM0CTRL_MASK)
-  EMU->RAM0CTRL = 0x0;
+  EMU->RAM0CTRL = 0x0UL;
 #endif
 #if defined(_EMU_RAM1CTRL_MASK)
-  EMU->RAM1CTRL = 0x0;
+  EMU->RAM1CTRL = 0x0UL;
 #endif
 #if defined(_EMU_RAM2CTRL_MASK)
-  EMU->RAM2CTRL = 0x0;
+  EMU->RAM2CTRL = 0x0UL;
+#endif
+#if defined(_SYSCFG_DMEM0RETNCTRL_MASK)
+#if defined(CMU_CLKEN0_SYSCFG)
+  CMU->CLKEN0_SET = CMU_CLKEN0_SYSCFG;
+#endif
+  SYSCFG->DMEM0RETNCTRL = 0x0UL;
 #endif
 }
 
@@ -2016,7 +2085,11 @@ static void lpGetDevinfoVrefLowHigh(uint32_t *vrefL,
  ******************************************************************************/
 void EMU_DCDCModeSet(EMU_DcdcMode_TypeDef dcdcMode)
 {
+  bool dcdcLocked;
   uint32_t currentDcdcMode;
+
+  dcdcLocked = (EMU->PWRLOCK == EMU_PWRLOCK_LOCKKEY_LOCKED);
+  EMU_PowerUnlock();
 
   /* Wait for any previous write sync to complete and read DCDC mode. */
   while ((EMU->DCDCSYNC & EMU_DCDCSYNC_DCDCCTRLBUSY) != 0U) {
@@ -2074,6 +2147,10 @@ void EMU_DCDCModeSet(EMU_DcdcMode_TypeDef dcdcMode)
   BUS_RegBitWrite(&EMU->DCDCCLIMCTRL,
                   _EMU_DCDCCLIMCTRL_BYPLIMEN_SHIFT,
                   dcdcMode == emuDcdcMode_Bypass ? 0U : 1U);
+
+  if (dcdcLocked) {
+    EMU_PowerLock();
+  }
 }
 
 /***************************************************************************//**
@@ -2551,6 +2628,98 @@ bool EMU_DCDCPowerOff(void)
   return dcdcModeSet;
 }
 #endif
+
+#if defined(_DCDC_CTRL_MASK)
+/***************************************************************************//**
+ * @brief
+ *   Configure the DCDC regulator.
+ *
+ * @param[in] dcdcInit
+ *  The DCDC initialization structure.
+ *
+ * @return
+ *   True if initialization parameters are valid.
+ ******************************************************************************/
+bool EMU_DCDCInit(const EMU_DCDCInit_TypeDef *dcdcInit)
+{
+  bool dcdcLocked;
+
+  CMU->CLKEN0_SET = CMU_CLKEN0_DCDC;
+  DCDC->EN_SET    = DCDC_EN_EN;
+  dcdcLocked      = DCDC->LOCKSTATUS == DCDC_LOCKSTATUS_LOCK;
+  EMU_DCDCUnlock();
+
+  EMU->PFMBYPCTRL = ((uint32_t)dcdcInit->cmpThreshold << _EMU_PFMBYPCTRL_THRESSEL_SHIFT)
+                    | EMU_PFMBYPCTRL_VREGINCMPEN;
+  DCDC->CTRL = (DCDC->CTRL & ~(_DCDC_CTRL_IPKTMAXCTRL_MASK
+                               | _DCDC_CTRL_DCMONLYEN_MASK))
+               | ((uint32_t)dcdcInit->tonMax << _DCDC_CTRL_IPKTMAXCTRL_SHIFT)
+               | ((uint32_t)(dcdcInit->dcmOnlyEn ? 1U : 0U) << _DCDC_CTRL_DCMONLYEN_SHIFT);
+  DCDC->EM01CTRL0 = ((uint32_t)dcdcInit->driveSpeedEM01 << _DCDC_EM01CTRL0_DRVSPEED_SHIFT)
+                    | ((uint32_t)dcdcInit->peakCurrentEM01 << _DCDC_EM01CTRL0_IPKVAL_SHIFT);
+  DCDC->EM23CTRL0 = ((uint32_t)dcdcInit->driveSpeedEM23 << _DCDC_EM23CTRL0_DRVSPEED_SHIFT)
+                    | ((uint32_t)dcdcInit->peakCurrentEM23 << _DCDC_EM23CTRL0_IPKVAL_SHIFT);
+
+  EMU_DCDCModeSet(dcdcInit->mode);
+
+  if (dcdcLocked) {
+    EMU_DCDCLock();
+  }
+
+  return true;
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Set DCDC regulator operating mode.
+ *
+ * @param[in] dcdcMode
+ *   DCDC mode.
+ ******************************************************************************/
+void EMU_DCDCModeSet(EMU_DcdcMode_TypeDef dcdcMode)
+{
+  bool dcdcLocked;
+
+  DCDC->EN_SET = DCDC_EN_EN;
+  dcdcLocked = DCDC->LOCKSTATUS == DCDC_LOCKSTATUS_LOCK;
+  EMU_DCDCUnlock();
+
+  if (dcdcMode == emuDcdcMode_Bypass) {
+    DCDC->CTRL_CLR = DCDC_CTRL_MODE;
+    while ((DCDC->STATUS & DCDC_STATUS_BYPSW) == 0U) {
+      /* Wait for BYPASS switch enable. */
+    }
+    DCDC->EN_CLR = DCDC_EN_EN;
+  } else {
+    while ((DCDC->STATUS & DCDC_STATUS_VREGIN) != 0U) {
+      /* Wait for VREGIN voltage to rise above threshold. */
+    }
+    DCDC->IF_CLR = DCDC_IF_REGULATION;
+    DCDC->CTRL_SET = DCDC_CTRL_MODE;
+    while ((DCDC->IF & DCDC_IF_REGULATION) == 0U) {
+      /* Wait for DCDC to complete it's startup. */
+    }
+  }
+
+  if (dcdcLocked) {
+    EMU_DCDCLock();
+  }
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Power off the DCDC regulator.
+ *
+ * @return
+ *   Returns true.
+ ******************************************************************************/
+bool EMU_DCDCPowerOff(void)
+{
+  EMU_DCDCModeSet(emuDcdcMode_Bypass);
+  return true;
+}
+#endif
+
 /** @endcond */
 
 #if defined(EMU_STATUS_VMONRDY)

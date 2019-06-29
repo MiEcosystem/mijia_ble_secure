@@ -64,6 +64,8 @@ typedef enum bg_error
 	bg_err_command_incomplete                                                             =bg_errspc_bg+149,            //Data received does not form a complete command
 	bg_err_not_initialized                                                                =bg_errspc_bg+150,            //Feature or subsystem not initialized
 	bg_err_invalid_sync_handle                                                            =bg_errspc_bg+151,            //Invalid periodic advertising sync handle
+	bg_err_invalid_module_action                                                          =bg_errspc_bg+152,            //Bluetooth cannot be used on this hardware
+	bg_err_radio                                                                          =bg_errspc_bg+153,            //Error received from radio
 	bg_err_smp_passkey_entry_failed                                                       =bg_errspc_smp+1,             //The user input of passkey failed, for example, the user cancelled the operation
 	bg_err_smp_oob_not_available                                                          =bg_errspc_smp+2,             //Out of Band data is not available for authentication
 	bg_err_smp_authentication_requirements                                                =bg_errspc_smp+3,             //The pairing procedure cannot be performed as authentication requirements cannot be met due to IO capabilities of one or both devices

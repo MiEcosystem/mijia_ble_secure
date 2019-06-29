@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief System Peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -58,6 +58,9 @@ void SYSTEM_ChipRevisionGet(SYSTEM_ChipRevision_TypeDef *rev)
 {
 #if defined(_SYSCFG_CHIPREV_FAMILY_MASK)
   /* On series-2 (and higher) the revision info is in the SYSCFG->CHIPREV register. */
+#if defined(CMU_CLKEN0_SYSCFG)
+  CMU->CLKEN0_SET = CMU_CLKEN0_SYSCFG;
+#endif
   uint32_t chiprev = SYSCFG->CHIPREV;
   rev->family = (chiprev & _SYSCFG_CHIPREV_FAMILY_MASK) >> _SYSCFG_CHIPREV_FAMILY_SHIFT;
   rev->major  = (chiprev & _SYSCFG_CHIPREV_MAJOR_MASK)  >> _SYSCFG_CHIPREV_MAJOR_SHIFT;

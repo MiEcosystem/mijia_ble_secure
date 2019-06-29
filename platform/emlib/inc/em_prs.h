@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Peripheral Reflex System (PRS) peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -261,9 +261,9 @@ typedef enum {
   prsConsumerIADC0_SINGLETRIGGER = offsetof(PRS_TypeDef, CONSUMER_IADC0_SINGLETRIGGER), /**< IADC0 single trigger consumer. */
   prsConsumerLDMA_REQUEST0       = offsetof(PRS_TypeDef, CONSUMER_LDMAXBAR_DMAREQ0),    /**< LDMA Request 0 consumer. */
   prsConsumerLDMA_REQUEST1       = offsetof(PRS_TypeDef, CONSUMER_LDMAXBAR_DMAREQ1),    /**< LDMA Request 1 consumer. */
-  prsConsumerLETIMER0_CLEAR      = offsetof(PRS_TypeDef, CONSUMER_LETIMER_CLEAR),       /**< LETIMER0 clear consumer. */
-  prsConsumerLETIMER0_START      = offsetof(PRS_TypeDef, CONSUMER_LETIMER_START),       /**< LETIMER0 start consumer. */
-  prsConsumerLETIMER0_STOP       = offsetof(PRS_TypeDef, CONSUMER_LETIMER_STOP),        /**< LETIMER0 stop consumer. */
+  prsConsumerLETIMER0_CLEAR      = offsetof(PRS_TypeDef, CONSUMER_LETIMER0_CLEAR),      /**< LETIMER0 clear consumer. */
+  prsConsumerLETIMER0_START      = offsetof(PRS_TypeDef, CONSUMER_LETIMER0_START),      /**< LETIMER0 start consumer. */
+  prsConsumerLETIMER0_STOP       = offsetof(PRS_TypeDef, CONSUMER_LETIMER0_STOP),       /**< LETIMER0 stop consumer. */
   prsConsumerTIMER0_CC0          = offsetof(PRS_TypeDef, CONSUMER_TIMER0_CC0),          /**< TIMER0 capture/compare channel 0 consumer. */
   prsConsumerTIMER0_CC1          = offsetof(PRS_TypeDef, CONSUMER_TIMER0_CC1),          /**< TIMER0 capture/compare channel 1 consumer. */
   prsConsumerTIMER0_CC2          = offsetof(PRS_TypeDef, CONSUMER_TIMER0_CC2),          /**< TIMER0 capture/compare channel 2 consumer. */
@@ -284,14 +284,22 @@ typedef enum {
   prsConsumerUSART1_IR           = offsetof(PRS_TypeDef, CONSUMER_USART1_IR),           /**< USART1 IR consumer. */
   prsConsumerUSART1_RX           = offsetof(PRS_TypeDef, CONSUMER_USART1_RX),           /**< USART1 rx consumer. */
   prsConsumerUSART1_TRIGGER      = offsetof(PRS_TypeDef, CONSUMER_USART1_TRIGGER),      /**< USART1 trigger consumer. */
+#if USART_COUNT > 2
   prsConsumerUSART2_CLK          = offsetof(PRS_TypeDef, CONSUMER_USART2_CLK),          /**< USART2 clock consumer. */
   prsConsumerUSART2_IR           = offsetof(PRS_TypeDef, CONSUMER_USART2_IR),           /**< USART2 IR consumer. */
   prsConsumerUSART2_RX           = offsetof(PRS_TypeDef, CONSUMER_USART2_RX),           /**< USART2 rx consumer. */
   prsConsumerUSART2_TRIGGER      = offsetof(PRS_TypeDef, CONSUMER_USART2_TRIGGER),      /**< USART2 trigger consumer. */
+#endif
   prsConsumerWDOG0_SRC0          = offsetof(PRS_TypeDef, CONSUMER_WDOG0_SRC0),          /**< WDOG0 source 0 consumer. */
   prsConsumerWDOG0_SRC1          = offsetof(PRS_TypeDef, CONSUMER_WDOG0_SRC1),          /**< WDOG0 source 1 consumer. */
+#if WDOG_COUNT > 1
   prsConsumerWDOG1_SRC0          = offsetof(PRS_TypeDef, CONSUMER_WDOG1_SRC0),          /**< WDOG1 source 0 consumer. */
   prsConsumerWDOG1_SRC1          = offsetof(PRS_TypeDef, CONSUMER_WDOG1_SRC1),          /**< WDOG1 source 1 consumer. */
+#endif
+#if defined(EUART0)
+  prsConsumerEUART0_RX           = offsetof(PRS_TypeDef, CONSUMER_EUART0_RX),           /**< EUART0 RX consumer. */
+  prsConsumerEUART0_TRIGGER      = offsetof(PRS_TypeDef, CONSUMER_EUART0_TRIGGER),      /**< EUART0 TRIGGER Consumer. */
+#endif
 } PRS_Consumer_t;
 #endif
 

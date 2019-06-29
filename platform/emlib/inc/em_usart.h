@@ -2,7 +2,7 @@
  * @file
  * @brief Universal synchronous/asynchronous receiver/transmitter (USART/UART)
  *   peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>

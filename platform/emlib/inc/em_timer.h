@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Timer/counter (TIMER) peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -532,6 +532,10 @@ typedef struct {
  *****************************   PROTOTYPES   **********************************
  ******************************************************************************/
 
+#if defined(TIMER_STATUS_SYNCBUSY)
+void TIMER_SyncWait(TIMER_TypeDef * timer);
+#endif
+
 /***************************************************************************//**
  * @brief
  *   Validate TIMER register block pointer.
@@ -757,6 +761,7 @@ __STATIC_INLINE void TIMER_CounterSet(TIMER_TypeDef *timer, uint32_t val)
   timer->CNT = val;
 #if defined(TIMER_HAS_SET_CLEAR)
   if (!enabled) {
+    TIMER_SyncWait(timer);
     timer->EN_CLR = TIMER_EN_EN;
   }
 #endif
@@ -805,6 +810,7 @@ __STATIC_INLINE void TIMER_EnableDTI(TIMER_TypeDef *timer, bool enable)
 {
 #if defined(TIMER_HAS_SET_CLEAR)
   uint32_t timerEn = timer->EN & TIMER_EN_EN;
+  TIMER_SyncWait(timer);
   timer->EN_CLR = TIMER_EN_EN;
   if (enable) {
     timer->DTCFG_SET = TIMER_DTCFG_DTEN;

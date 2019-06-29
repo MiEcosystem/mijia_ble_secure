@@ -37,5 +37,9 @@
 #endif
 #define EMBER_AF_BOARD_TYPE BRD4104A
 
+// Select antenna path on EFR32xG2x devices:
+//   - RF2G2_IO1: 0
+//   - RF2G2_IO2: 1
+#define GECKO_RF_ANTENNA  0
 
 #endif // __BLE_CONFIG__

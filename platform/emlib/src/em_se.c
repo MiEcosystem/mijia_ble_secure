@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Secure Element API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -30,7 +30,7 @@
  ******************************************************************************/
 #include "em_device.h"
 
-#if defined(SEMAILBOX_PRESENT)
+#if defined(SEMAILBOX_PRESENT) || defined(CRYPTOACC_PRESENT)
 
 #include "em_se.h"
 #include "em_assert.h"
@@ -49,10 +49,61 @@
  ******************************   DEFINES    ***********************************
  ******************************************************************************/
 
+#if defined(SEMAILBOX_PRESENT)
+
 /* OTP initialization structure defines. */
 #define SE_OTP_MCU_SETTINGS_FLAG_SECURE_BOOT_ENABLE (1 << 16)
 #define SE_OTP_MCU_SETTINGS_FLAG_SECURE_BOOT_VERIFY_CERTIFICATE (1 << 17)
 #define SE_OTP_MCU_SETTINGS_FLAG_SECURE_BOOT_ANTI_ROLLBACK (1 << 18)
+
+#elif defined(CRYPTOACC_PRESENT)
+
+/* Size of Root Code Mailbox instance.
+   There are two instances, input and output. */
+#define ROOT_MAILBOX_SIZE  (512UL)
+
+/* Base addresses of the Root Code Input and Output Mailbox data structures.
+   (Must be stored in a RAM area which is not used by the root code)
+   We use the upper 1KB of FRC RAM for the root code mailboxes. */
+#define ROOT_MAILBOX_OUTPUT_BASE (RDMEM_FRCRAM_S_MEM_END + 1 - ROOT_MAILBOX_SIZE)
+#define ROOT_MAILBOX_INPUT_BASE  (ROOT_MAILBOX_OUTPUT_BASE - ROOT_MAILBOX_SIZE)
+
+/* Position of parameter number field in Root Code Input Mailbox LENGTH field.*/
+#define ROOT_MB_LENGTH_PARAM_NUM_SHIFT (24)
+
+/* Done flag indicating that the Root Code Mailbox handler has completed
+   processing the mailbox command. */
+#define ROOT_MB_DONE  (1 << 23)
+
+/* Root Code Configuration Status bits mask */
+#define ROOT_MB_OUTPUT_STATUS_CONFIG_BITS_MASK  (0xFFFF)
+
+#endif // #if defined(SEMAILBOX_PRESENT)
+
+/*******************************************************************************
+ ******************************   TYPEDEFS   ***********************************
+ ******************************************************************************/
+#if defined(CRYPTOACC_PRESENT)
+
+// Root Code Input Mailbox structure
+typedef struct {
+  volatile uint32_t magic;
+  volatile uint32_t command;
+  volatile uint32_t length;
+  volatile uint32_t data[0];
+} root_InputMailbox_t;
+
+// Root Code Output Mailbox structure
+typedef struct {
+  volatile uint32_t magic;
+  volatile uint32_t version;
+  volatile uint32_t status;
+  volatile uint32_t command;
+  volatile uint32_t length;
+  volatile uint32_t data[0];
+} root_OutputMailbox_t;
+
+#endif // #if defined(CRYPTOACC_PRESENT)
 
 /*******************************************************************************
  **************************   GLOBAL FUNCTIONS   *******************************
@@ -96,7 +147,7 @@ void SE_addDataInput(SE_Command_t *command, SE_DataTransfer_t *data)
  *   Add output data to a command
  *
  * @details
- *   This function adds a buffer of output data to the given SE command structure
+ *   This function adds a buffer of output data to the given command structure
  *   The buffer gets appended by reference at the end of the list of already
  *   added buffers.
  *
@@ -172,6 +223,8 @@ void SE_executeCommand(SE_Command_t *command)
     return;
   }
 
+#if defined(SEMAILBOX_PRESENT)
+
   // Wait for room available in the mailbox
   while (!(SEMAILBOX_HOST->TX_STATUS & SEMAILBOX_TX_STATUS_TXINT)) ;
 
@@ -190,13 +243,320 @@ void SE_executeCommand(SE_Command_t *command)
     SEMAILBOX_HOST->FIFO[0].DATA = command->parameters[i];
   }
 
+#elif defined(CRYPTOACC_PRESENT)
+
+  // Setup pointer to the Root Code Mailbox Input data structure
+  // (must be stored in a RAM area which is not used by the root code)
+  root_InputMailbox_t *rootInMb = (root_InputMailbox_t*)ROOT_MAILBOX_INPUT_BASE;
+  uint32_t *mbData;
+  unsigned int mbDataLen, inDataLen, i;
+  SE_DataTransfer_t *inDataDesc;
+  uint32_t *inData;
+  uint32_t checksum;
+
+  // Set base of Mailbox Input data structure in SYSCFG register in order
+  // for Root Code to find it.
+  SYSCFG->ROOTDATA0 = ROOT_MAILBOX_INPUT_BASE;
+
+  // Set base of Mailbox Output data structure in SYSCFG register in order
+  // for Root Code to know where to write output data.
+  // Write command into FIFO
+  SYSCFG->ROOTDATA1 = ROOT_MAILBOX_OUTPUT_BASE;
+
+  rootInMb->magic   = SE_RESPONSE_MAILBOX_VALID;
+  rootInMb->command = command->command;
+
+  // Write applicable parameters into Mailbox DATA array
+  mbData = (uint32_t*) rootInMb->data;
+  for (mbDataLen = 0; mbDataLen < command->num_parameters; mbDataLen++) {
+    mbData[mbDataLen] = command->parameters[mbDataLen];
+  }
+
+  // Write input data into Mailbox DATA array
+  for (inDataDesc = command->data_in, inDataLen = 0; inDataDesc;
+       inDataDesc = (SE_DataTransfer_t*) inDataDesc->next) {
+    inData = (uint32_t*) inDataDesc->data;
+    for (i = 0; i < inDataDesc->length; i++, inDataLen++) {
+      // Make sure we do not overflow the input mailbox.
+      EFM_ASSERT(mbDataLen < ROOT_MAILBOX_SIZE);
+      mbData[mbDataLen++] = inData[i];
+    }
+  }
+
+  // Write number of parameters and data words to 'length' field of mailbox.
+  rootInMb->length =
+    inDataLen | (command->num_parameters << ROOT_MB_LENGTH_PARAM_NUM_SHIFT);
+
+  // Calculate checksum using bitwise XOR over the all words in the mailbox
+  // data structure, minus the CHECKSUM word (32bit = 4bytes ) at the end.
+  checksum = rootInMb->magic;
+  checksum ^= rootInMb->command;
+  checksum ^= rootInMb->length;
+  for (i = 0; i < mbDataLen; i++) {
+    checksum ^= mbData[i];
+  }
+
+  // Finally, write the calculated checksum to mailbox checksum field
+  mbData[mbDataLen] = checksum;
+
+  __NVIC_SystemReset();
+
+#endif // #if defined(SEMAILBOX_PRESENT)
+
   return;
+}
+
+#if defined(CRYPTOACC_PRESENT)
+
+/***************************************************************************//**
+ * @brief
+ *   Check whether the Root Code Output Mailbox is valid.
+ *
+ * @return True if the Root Code Output Mailbox is valid (magic and checksum OK)
+ ******************************************************************************/
+bool rootIsOutputMailboxValid(void)
+{
+  // Setup pointer to the Root Code Output Mailbox data structure
+  // (must be stored in a RAM area which is not used by the root code)
+  root_OutputMailbox_t *rootOutMb = (root_OutputMailbox_t *) SYSCFG->ROOTDATA1;
+  uint32_t *mbPtr = (uint32_t*) rootOutMb;
+  uint32_t checksum;
+  unsigned int mbLen, cnt;
+
+  // Verify magic word of mailbox
+  if (rootOutMb->magic != SE_RESPONSE_MAILBOX_VALID) {
+    return false;
+  }
+
+  // Get length of mailbox
+  mbLen = sizeof(root_OutputMailbox_t) / sizeof(uint32_t) + rootOutMb->length;
+  if (mbLen >= ROOT_MAILBOX_SIZE) {
+    return false;
+  }
+  // Calculate checksum using bitwise XOR over all words in the mailbox
+  // data structure, minus the CHECKSUM word at the end.
+  for (checksum = 0, cnt = 0; cnt < mbLen; cnt++) {
+    checksum ^= mbPtr[cnt];
+  }
+
+  // Verify that the calculated checksum is equal to the mailbox checksum.
+  return (mbPtr[mbLen] == checksum);
 }
 
 /***************************************************************************//**
  * @brief
- *   Writes data to User Data section in MTP. Write data must be aligned to words
- *    and contain a number of bytes that is divisable by four.
+ *   Get current SE version
+ *
+ * @details
+ *   This function returns the current root code version
+ *
+ * @param[in]  version
+ *   Pointer to location where to copy the version of root code to.
+ *
+ * @return
+ *   One of the SE_RESPONSE return codes:
+ *   SE_RESPONSE_OK when the command was executed successfully
+ *   SE_RESPONSE_INVALID_PARAMETER when an invalid parameter was passed
+ *   SE_RESPONSE_MAILBOX_INVALID when the mailbox content is invalid
+ ******************************************************************************/
+SE_Response_t SE_getVersion(uint32_t *version)
+{
+  root_OutputMailbox_t *rootOutMb = (root_OutputMailbox_t *) SYSCFG->ROOTDATA1;
+
+  if (version == NULL) {
+    return SE_RESPONSE_INVALID_PARAMETER;
+  }
+
+  // First verify that the response is ok.
+  if (!rootIsOutputMailboxValid()) {
+    return SE_RESPONSE_MAILBOX_INVALID;
+  }
+
+  // Return the 'version' from the Output Mailbox
+  *version = rootOutMb->version;
+
+  return SE_RESPONSE_OK;
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Get Root Code Configuration Status bits
+ *
+ * @details
+ *   This function returns the current Root Code Configuration Status bits
+ *
+ * @param[in]  cfgStatus
+ *   Pointer to location where to copy Configuration Status bits
+ *   of the root code.
+ *
+ * @return
+ *   One of the SE_RESPONSE return codes:
+ *   SE_RESPONSE_OK when the command was executed successfully
+ *   SE_RESPONSE_INVALID_PARAMETER when an invalid parameter was passed
+ *   SE_RESPONSE_MAILBOX_INVALID when the mailbox content is invalid
+ ******************************************************************************/
+SE_Response_t SE_getConfigStatusBits(uint32_t *cfgStatus)
+{
+  root_OutputMailbox_t *rootOutMb = (root_OutputMailbox_t *) SYSCFG->ROOTDATA1;
+
+  if (cfgStatus == NULL) {
+    return SE_RESPONSE_INVALID_PARAMETER;
+  }
+
+  // First verify that the response is ok.
+  if (!rootIsOutputMailboxValid()) {
+    return SE_RESPONSE_MAILBOX_INVALID;
+  }
+
+  // Return the configuration status bits
+  *cfgStatus = rootOutMb->status & ROOT_MB_OUTPUT_STATUS_CONFIG_BITS_MASK;
+
+  return SE_RESPONSE_OK;
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Check whether the running command has completed.
+ *
+ * @details
+ *   This function polls the SE-to-host mailbox interrupt flag.
+ *
+ * @return True if a command has completed and the result is available
+ ******************************************************************************/
+bool SE_isCommandCompleted(void)
+{
+  root_OutputMailbox_t *rootOutMb = (root_OutputMailbox_t *) SYSCFG->ROOTDATA1;
+
+  // First verify that the response is ok
+  if (!rootIsOutputMailboxValid()) {
+    return false;
+  }
+
+  // Check status MB_DONE flag of the mailbox
+  return ((rootOutMb->status & ROOT_MB_DONE) == ROOT_MB_DONE);
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Read the status of the previously executed command.
+ *
+ * @details
+ *   This function reads the status of the previously executed command.
+ *
+ * @note
+ *   The command response needs to be read for every executed command, and can
+ *   only be read once per executed command (FIFO behavior).
+ *
+ * @return
+ *   One of the SE_RESPONSE return codes:
+ *   SE_RESPONSE_OK when the command was executed successfully or a signature
+ *   was successfully verified,
+ *   SE_RESPONSE_INVALID_COMMAND when the command ID was not recognized,
+ *   SE_RESPONSE_AUTHORIZATION_ERROR when the command is not authorized,
+ *   SE_RESPONSE_INVALID_SIGNATURE when signature verification failed,
+ *   SE_RESPONSE_BUS_ERROR when a bus error was thrown during the command, e.g.
+ *   because of conflicting Secure/Non-Secure memory accesses,
+ *   SE_RESPONSE_CRYPTO_ERROR on an internal SE failure, or
+ *   SE_RESPONSE_INVALID_PARAMETER when an invalid parameter was passed
+ ******************************************************************************/
+SE_Response_t SE_readCommandResponse(void)
+{
+  root_OutputMailbox_t *rootOutMb = (root_OutputMailbox_t *) SYSCFG->ROOTDATA1;
+
+  SE_waitCommandCompletion();
+
+  return (SE_Response_t)(rootOutMb->status & SE_RESPONSE_MASK);
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Acknowledge and get status and output data of a completed command.
+ *
+ * @details
+ *   This function acknowledges and gets the status and output data of a
+ *   completed mailbox command.
+ *   The mailbox command is acknowledged by inverting all bits in the checksum
+ *   (XOR with 0xFFFFFFFF).
+ *   The output data is copied into the linked list of output buffers pointed
+ *   to in the given command data structure.
+ *
+ * @param[in]  command
+ *   Pointer to a filled-out SE command structure.
+ *
+ * @return
+ *   One of the SE_RESPONSE return codes.
+ * @retval SE_RESPONSE_OK when the command was executed successfully or a
+ *                        signature was successfully verified,
+ * @retval SE_RESPONSE_INVALID_COMMAND when the command ID was not recognized,
+ * @retval SE_RESPONSE_AUTHORIZATION_ERROR when the command is not authorized,
+ * @retval SE_RESPONSE_INVALID_SIGNATURE when signature verification failed,
+ * @retval SE_RESPONSE_BUS_ERROR when a bus error was thrown during the command,
+ *                               e.g. because of conflicting Secure/Non-Secure
+ *                               memory accesses,
+ * @retval SE_RESPONSE_CRYPTO_ERROR on an internal SE failure, or
+ * @retval SE_RESPONSE_INVALID_PARAMETER when an invalid parameter was passed
+ * @retval SE_RESPONSE_MAILBOX_INVALID when mailbox command not done or invalid
+ ******************************************************************************/
+SE_Response_t SE_ackCommand(SE_Command_t *command)
+{
+  // Setup pointer to the Root Code Output Mailbox data structure
+  // (must be stored in a RAM area which is not used by the root code)
+  root_OutputMailbox_t *rootOutMb = (root_OutputMailbox_t *) SYSCFG->ROOTDATA1;
+  uint32_t *mbData = (uint32_t*) rootOutMb->data;
+  SE_DataTransfer_t *outDataDesc = command->data_out;
+  unsigned int outDataLen, outDataCnt, i, outDescLen;
+  uint32_t *outData;
+
+  // First verify that the Output Mailbox includes a valid response.
+  if (!SE_isCommandCompleted()) {
+    return SE_RESPONSE_MAILBOX_INVALID;
+  }
+
+  // Get output data length
+  outDataLen = rootOutMb->length;
+
+  // Acknowledge the output mailbox response by invalidating checksum
+  mbData[outDataLen] ^= 0xFFFFFFFFUL;
+
+  // Check command status code
+  if ((rootOutMb->status & SE_RESPONSE_MASK) != SE_RESPONSE_OK) {
+    return rootOutMb->status & SE_RESPONSE_MASK;
+  }
+
+  // Copy data from the Output Mailbox to the linked list of output
+  // buffers provided by the user
+  outDataCnt = 0;
+  while (outDataDesc && (outDataCnt < outDataLen)) {
+    outData = (uint32_t*) outDataDesc->data;
+    outDescLen =
+      (outDataDesc->length & SE_DATATRANSFER_LENGTH_MASK) / sizeof(uint32_t);
+    for (i = 0; (i < outDescLen) && (outDataCnt < outDataLen); i++) {
+      outData[i] = mbData[outDataCnt++];
+    }
+    // If we have reached the end of a buffer, go to next buffer descriptor
+    if (i == outDescLen) {
+      outDataDesc = (SE_DataTransfer_t*)
+                    ((uint32_t)outDataDesc->next & ~SE_DATATRANSFER_STOP);
+    }
+  }
+
+  // Check if the output data list is too small to copy all output data in
+  // mailbox.
+  if ((outDataDesc == 0) && (outDataCnt < outDataLen)) {
+    return SE_RESPONSE_INVALID_PARAMETER;
+  }
+
+  return SE_RESPONSE_OK;
+}
+
+#endif // #if defined(CRYPTOACC_PRESENT)
+
+#if defined(SEMAILBOX_PRESENT)
+
+/***************************************************************************//**
+ * @brief
+ *   Writes data to User Data section in MTP. Write data must be aligned to
+ *    word size and contain a number of bytes that is divisable by four.
  * @note
  *   It is recommended to erase the flash page before performing a write.
  *
@@ -559,7 +919,7 @@ SE_Response_t SE_debugLockStatus(SE_DebugStatus_t *status)
  * @retval SE_RESPONSE_OK when the command was executed successfully.
  * @retval SE_RESPONSE_INTERNAL_ERROR there was a problem locking the debug port.
  ******************************************************************************/
-SE_Response_t SE_debugLockApply()
+SE_Response_t SE_debugLockApply(void)
 {
   SE_Command_t command = SE_COMMAND_DEFAULT(SE_COMMAND_DBG_LOCK_APPLY);
   SE_executeCommand(&command);
@@ -583,7 +943,7 @@ SE_Response_t SE_debugLockApply()
  *                                       missing.
  * @retval SE_RESPONSE_INTERNAL_ERROR if there was a problem during execution.
  ******************************************************************************/
-SE_Response_t SE_debugSecureEnable()
+SE_Response_t SE_debugSecureEnable(void)
 {
   SE_Command_t command = SE_COMMAND_DEFAULT(SE_COMMAND_DBG_LOCK_ENABLE_SECURE);
   SE_executeCommand(&command);
@@ -602,7 +962,7 @@ SE_Response_t SE_debugSecureEnable()
  * @retval SE_RESPONSE_OK when the command was executed successfully.
  * @retval SE_RESPONSE_INTERNAL_ERROR if there was a problem during execution.
  ******************************************************************************/
-SE_Response_t SE_debugSecureDisable()
+SE_Response_t SE_debugSecureDisable(void)
 {
   SE_Command_t command = SE_COMMAND_DEFAULT(SE_COMMAND_DBG_LOCK_DISABLE_SECURE);
   SE_executeCommand(&command);
@@ -630,7 +990,7 @@ SE_Response_t SE_debugSecureDisable()
  * @retval SE_RESPONSE_INVALID_COMMAND if device erase is disabled.
  * @retval SE_RESPONSE_INTERNAL_ERROR if there was a problem during execution.
  ******************************************************************************/
-SE_Response_t SE_deviceErase()
+SE_Response_t SE_deviceErase(void)
 {
   SE_Command_t command = SE_COMMAND_DEFAULT(SE_COMMAND_DEVICE_ERASE);
   SE_executeCommand(&command);
@@ -657,7 +1017,7 @@ SE_Response_t SE_deviceErase()
  * @retval SE_RESPONSE_OK when the command was executed successfully.
  * @retval SE_RESPONSE_INTERNAL_ERROR if there was a problem during execution.
  ******************************************************************************/
-SE_Response_t SE_deviceEraseDisable()
+SE_Response_t SE_deviceEraseDisable(void)
 {
   SE_Command_t command = SE_COMMAND_DEFAULT(SE_COMMAND_DEVICE_ERASE_DISABLE);
   SE_executeCommand(&command);
@@ -665,7 +1025,9 @@ SE_Response_t SE_deviceEraseDisable()
   return SE_readCommandResponse();
 }
 
+#endif // #if defined(SEMAILBOX_PRESENT)
+
 /** @} (end addtogroup SE) */
 /** @} (end addtogroup emlib) */
 
-#endif /* defined(SEMAILBOX_PRESENT) */
+#endif /* defined(SEMAILBOX_PRESENT) || defined(CRYPTOACC_PRESENT) */

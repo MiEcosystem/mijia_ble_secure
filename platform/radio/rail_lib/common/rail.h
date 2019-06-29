@@ -69,6 +69,22 @@ extern "C" {
 void RAIL_GetVersion(RAIL_Version_t *version, bool verbose);
 
 /**
+ * Allocate a DMA channel for RAIL to work with
+ *
+ * @param[in] channel The DMA channel to use when copying memory. If a value of
+ *   RAIL_DMA_INVALID is passed, RAIL will stop using any DMA channel.
+ * @return Status code indicating success of the function call.
+ *
+ * In order to use this API, the application must initialize the DMA engine
+ * on the chip and allocate a DMA channel. This channel will be used
+ * periodically to copy memory more efficiently. This API should be called
+ * before RAIL_Init in order to have the most benefit. If the application wishes
+ * to take back control of the DMA channel that RAIL is using, this API may be
+ * called with a channel of RAIL_DMA_INVALID to tell RAIL to stop using DMA.
+ */
+RAIL_Status_t RAIL_UseDma(uint8_t channel);
+
+/**
  * Initializes RAIL.
  *
  * @param[in,out] railCfg The configuration and state structure for setting up
@@ -539,12 +555,12 @@ RAIL_Status_t RAIL_SetTime(RAIL_Time_t time);
  * This timer can be used to implement low-level protocol features.
  *
  * @warning Attempting to schedule the timer when it is
- *   still running from a previous request is bad practice, unless the cb callback is
- *   identical to that used in the previous request, in which case the
- *   timer is rescheduled to the new time. Note that if
- *   the original timer expires as it is being rescheduled, the callback
- *   may or may not occur. It is generally good practice to cancel a
- *   running timer before rescheduling it to minimize ambiguity.
+ *   still running from a previous request is bad practice, unless the cb
+ *   callback is identical to that used in the previous request, in which case
+ *   the timer is rescheduled to the new time. Note that if the original timer
+ *   expires as it is being rescheduled, the callback may or may not occur. It
+ *   is generally good practice to cancel a running timer before rescheduling
+ *   it to minimize ambiguity.
  */
 RAIL_Status_t RAIL_SetTimer(RAIL_Handle_t railHandle,
                             RAIL_Time_t time,
@@ -787,7 +803,7 @@ RAIL_Status_t RAIL_ConfigEvents(RAIL_Handle_t railHandle,
 /// that fit within RAIL's FIFOs while \ref RAIL_DataMethod_t::FIFO_MODE
 /// was designed for handling packets larger than RAIL's FIFOs could hold.
 /// Conceptually it is still useful to think of these modes this way, but
-/// functionally their disinction has become blurred by improvements in
+/// functionally their distinction has become blurred by improvements in
 /// RAIL's flexibility -- applications now have much more control over both
 /// receive and transmit FIFO sizes, and the FIFO-management and threshold
 /// APIs and related events are no longer restricted to \ref
@@ -2243,7 +2259,7 @@ RAIL_Status_t RAIL_ScheduleRx(RAIL_Handle_t railHandle,
                               const RAIL_SchedulerInfo_t *schedulerInfo);
 
 /******************************************************************************
- * Packet Infomation (RX)
+ * Packet Information (RX)
  *****************************************************************************/
 /// @addtogroup Packet_Information Packet Information
 /// @brief APIs to get information about received packets.
@@ -2315,6 +2331,38 @@ RAIL_RxPacketHandle_t RAIL_GetRxPacketInfo(RAIL_Handle_t railHandle,
                                            RAIL_RxPacketInfo_t *pPacketInfo);
 
 /**
+ * Get information about the live incoming packet (if any).
+ * Differs from \ref RAIL_GetRxPacketInfo() by only returning information
+ * about a packet actively being received, something which even the
+ * \ref RAIL_RX_PACKET_HANDLE_NEWEST may not represent if there are
+ * completed but unprocessed packets in the Rx FIFO.
+ *
+ * @param[in] railHandle A RAIL instance handle.
+ * @param[out] pPacketInfo Application provided pointer to store
+ * RAIL_RxPacketInfo_t for the incoming packet.
+ *
+ * This function can only be called from callback context, e.g.
+ * when handling \ref RAIL_EVENT_RX_FILTER_PASSED or
+ * \ref RAIL_EVENT_IEEE802154_DATA_REQUEST_COMMAND.
+ * It must not be used with receive \ref RAIL_DataMethod_t::FIFO_MODE
+ * if any portion of an incoming packet has already been extracted from
+ * the Rx FIFO.
+ *
+ * @note The incomplete data of an arriving packet is highly suspect because
+ *   it has not yet passed any CRC integrity checking. Also note that the
+ *   packet could be aborted, canceled, or fail momentarily, invalidating
+ *   its data in Packet mode. Furthermore, there is a small chance towards
+ *   the end of packet reception that the filled-in RAIL_RxPacketInfo_t
+ *   could include not only packet data received so far, but also some raw
+ *   radio-appended info detail bytes that RAIL's packet-completion
+ *   processing will subsequently deal with. It's up to the application to
+ *   know its packet format well enough to avoid confusing such info as
+ *   packet data.
+ */
+void RAIL_GetRxIncomingPacketInfo(RAIL_Handle_t railHandle,
+                                  RAIL_RxPacketInfo_t *pPacketInfo);
+
+/**
  * Convenience helper function to copy a full packet to a user-specified
  * contiguous buffer.
  *
@@ -2322,7 +2370,7 @@ RAIL_RxPacketHandle_t RAIL_GetRxPacketInfo(RAIL_Handle_t railHandle,
  *   least pPacketInfo->packetBytes in size to store the packet data
  *   contiguously. This buffer must never overlay RAIL's receive FIFO buffer.
  *   Exactly pPacketInfo->packetBytes of packet data will be written into it.
- * @param[out] pPacketInfo
+ * @param[in] pPacketInfo
  *   \ref RAIL_RxPacketInfo_t for the requested packet.
  * @return void.
  *
@@ -2337,11 +2385,11 @@ static inline
 void RAIL_CopyRxPacket(uint8_t *pDest,
                        const RAIL_RxPacketInfo_t *pPacketInfo)
 {
-  memcpy(pDest, pPacketInfo->firstPortionData, pPacketInfo->firstPortionBytes);
+  (void)memcpy(pDest, pPacketInfo->firstPortionData, pPacketInfo->firstPortionBytes);
   if (pPacketInfo->lastPortionData != NULL) {
-    memcpy(pDest + pPacketInfo->firstPortionBytes,
-           pPacketInfo->lastPortionData,
-           pPacketInfo->packetBytes - pPacketInfo->firstPortionBytes);
+    uint16_t size = pPacketInfo->packetBytes - pPacketInfo->firstPortionBytes;
+    (void)memcpy(pDest + pPacketInfo->firstPortionBytes,
+                 pPacketInfo->lastPortionData, size);
   }
 }
 
@@ -2731,7 +2779,7 @@ int16_t RAIL_GetAverageRssi(RAIL_Handle_t railHandle);
  * @return Status code indicating success of the function call.
  *
  * Adds an offset to the RSSI in dBm. This offset affects all functionality that
- * depends on RSSI values, such as CCA fuctions. The offset should not be
+ * depends on RSSI values, such as CCA functions. The offset should not be
  * modified dynamically during the RX of a packet.
  */
 RAIL_Status_t RAIL_SetRssiOffset(RAIL_Handle_t railHandle, int8_t rssiOffset);
@@ -3017,10 +3065,13 @@ RAIL_Status_t RAIL_EnableAddressFilterAddress(RAIL_Handle_t railHandle,
 ///   - RAIL_SetRxTransitions()
 ///   - RAIL_SetTxTransitions()
 ///
-/// Note, that if you are enabling auto-ACK (i.e., "enable" field is true)
-/// The "error" fields of rxTransitions and txTransitions are ignored.
+/// Note that if you are enabling auto-ACK (i.e., "enable" field is true)
+/// the "error" fields of rxTransitions and txTransitions are ignored.
 /// After all ACK sequences, (success or fail) the state machine will return
-/// the radio to the "success" state. If you need information about the
+/// the radio to the "success" state, which can be either
+/// \ref RAIL_RF_STATE_RX or \ref RAIL_RF_STATE_IDLE (returning to
+/// \ref RAIL_RF_STATE_TX is not supported).
+/// If you need information about the
 /// actual success of the ACK sequence, use RAIL events such as
 /// \ref RAIL_EVENT_TXACK_PACKET_SENT to make sure an ACK was sent, or
 /// \ref RAIL_EVENT_RX_ACK_TIMEOUT to make sure that an ACK was received
@@ -3129,20 +3180,23 @@ void RAIL_PauseTxAutoAck(RAIL_Handle_t railHandle, bool pause);
 bool RAIL_IsTxAutoAckPaused(RAIL_Handle_t railHandle);
 
 /**
- * Modifies the upcoming ACK to use the TX Buffer.
+ * Modifies the upcoming ACK to use the TX FIFO.
  *
  * @param[in] railHandle A RAIL instance handle.
  * @return Status code indicating success of the function call. The call will
  *   fail if it is too late to modify the outgoing ACK.
  *
- * This function allows the application to use the normal TX buffer as the data
- * source for the upcoming ACK. The ACK modification to use the TX buffer only
+ * This function allows the application to use the normal TX FIFO as the data
+ * source for the upcoming ACK. The ACK modification to use the TX FIFO only
  * applies to one ACK transmission.
  *
  * This function only returns true if the following conditions are met:
  *   - Radio has not already decided to use the ACK buffer AND
  *   - Radio is either looking for sync, receiving the packet after sync, or in
  *     the Rx2Tx turnaround before the ACK is sent.
+ *
+ * @note The TX FIFO must not be used for AutoACK when IEEE 802.15.4, Z-Wave,
+ *   or BLE protocols are active.
  */
 RAIL_Status_t RAIL_UseTxFifoForAutoAck(RAIL_Handle_t railHandle);
 
@@ -3623,7 +3677,10 @@ RAIL_Status_t RAIL_SetTaskPriority(RAIL_Handle_t railHandle,
 RAIL_Time_t RAIL_GetTransitionTime(void);
 
 /**
- * Set time needed to switch between protocols.
+ * Set time needed to switch between protocols. This API should
+ * only be called once, before any protocol is initialized via
+ * \ref RAIL_Init(). Changing this value during normal operation
+ * can result in improper scheduling behavior.
  *
  * @param[in] transitionTime Time needed to switch between protocols.
  */

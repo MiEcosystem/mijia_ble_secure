@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief General purpose utilities.
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -33,6 +33,7 @@
 
 #include "em_device.h"
 #include <stdbool.h>
+#include "em_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -282,6 +283,22 @@ __STATIC_INLINE uint32_t SL_RBIT(uint32_t value)
 __STATIC_INLINE uint32_t SL_RBIT16(uint32_t value)
 {
   return SL_RBIT(value) >> 16;
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Convert logarithm of 2 to division factor.
+ *
+ * @param[in] log2
+ *   Logarithm of 2.
+ *
+ * @return
+ *   Dividend.
+ ******************************************************************************/
+__STATIC_INLINE uint32_t SL_Log2ToDiv(uint32_t log2)
+{
+  EFM_ASSERT(log2 < 32U);
+  return 1UL << log2;
 }
 
 /** @} (end addtogroup COMMON) */

@@ -85,6 +85,8 @@ RAIL_ENUM_GENERIC(RAIL_AssertErrorCodes_t, uint32_t)
   RAIL_ASSERT_CHANNEL_HOPPING_INVALID_RADIO_CONFIG = 50,
   RAIL_ASSERT_CHANNEL_CHANGE_FAILED = 51,
   RAIL_ASSERT_INVALID_REGISTER = 52,
+  RAIL_ASSERT_FAILED_LO_DIV_NULL_STATE = 53,
+  RAIL_ASSERT_CACHE_CONFIG_FAILED = 54,
 };
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
@@ -141,6 +143,8 @@ RAIL_ENUM_GENERIC(RAIL_AssertErrorCodes_t, uint32_t)
 #define RAIL_ASSERT_CHANNEL_HOPPING_INVALID_RADIO_CONFIG       ((RAIL_AssertErrorCodes_t) RAIL_ASSERT_CHANNEL_HOPPING_INVALID_RADIO_CONFIG)
 #define RAIL_ASSERT_CHANNEL_CHANGE_FAILED                      ((RAIL_AssertErrorCodes_t) RAIL_ASSERT_CHANNEL_CHANGE_FAILED)
 #define RAIL_ASSERT_INVALID_REGISTER                           ((RAIL_AssertErrorCodes_t) RAIL_ASSERT_INVALID_REGISTER)
+#define RAIL_ASSERT_FAILED_LO_DIV_NULL_STATE                   ((RAIL_AssertErrorCodes_t) RAIL_ASSERT_FAILED_LO_DIV_NULL_STATE)
+#define RAIL_ASSERT_CACHE_CONFIG_FAILED                        ((RAIL_AssertErrorCodes_t) RAIL_ASSERT_CACHE_CONFIG_FAILED)
 #endif//DOXYGEN_SHOULD_SKIP_THIS
 
 /// Use this define to create an array of error messages that map to the codes
@@ -221,6 +225,8 @@ RAIL_ENUM_GENERIC(RAIL_AssertErrorCodes_t, uint32_t)
     /*50*/ "The radio config for this channel is not compatible with channel hopping", \
     /*51*/ "Channel change failed",                                                    \
     /*52*/ "Attempted to read invalid register",                                       \
+    /*53*/ "Can't read register value from NULL state",                                \
+    /*54*/ "DMP radio config caching failed",                                          \
 }
 
 /**

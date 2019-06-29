@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file
- * @brief init_mcu_efr32xg1.c
+ * @brief init_mcu.c
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -44,7 +44,10 @@
 // [8:0]  : (HFXOCTUNE) Calibration for HFXO CTUNE
 #define DEVINFO_HFXOCTUNE_MASK  0x01FFUL
 
+#define set_HFXO_CTUNE(val) do {hfxoInit.ctuneSteadyState = (val);} while (0)
+
 static void initMcu_clocks(void);
+static void initHFXO(void);
 
 void initMcu(void)
 {
@@ -72,13 +75,6 @@ void initMcu(void)
   rtccInit.cntMode               = rtccCntModeNormal;
   RTCC_Init(&rtccInit);
 
-#if defined(_SILICON_LABS_32B_SERIES_1_CONFIG_3)
-  /* xG13 devices have two RTCCs, one for the stack and another for the application.
-   * The clock for RTCC needs to be enabled in application code. In xG12 RTCC init
-   * is handled by the stack */
-  CMU_ClockEnable(cmuClock_RTCC, true);
-#endif
-
 #if defined(_EMU_CMD_EM01VSCALE0_MASK)
   // Set up EM0, EM1 energy mode configuration
   EMU_EM01Init_TypeDef em01Init = EMU_EM01INIT_DEFAULT;
@@ -98,31 +94,18 @@ void initMcu(void)
   RMU->CTRL = (RMU->CTRL & ~_RMU_CTRL_SYSRMODE_MASK) | RMU_CTRL_SYSRMODE_DEFAULT;
 #endif
 
+#if defined(_SILICON_LABS_32B_SERIES_1_CONFIG_3)
+  /* xG13 devices have two RTCCs, one for the stack and another for the application.
+   * The clock for RTCC needs to be enabled in application code. In xG12 RTCC init
+   * is handled by the stack */
+  CMU_ClockEnable(cmuClock_RTCC, true);
+#endif
 }
 
 static void initMcu_clocks(void)
 {
-// Initialize HFXO
-  // Use BSP_CLK_HFXO_INIT as last result (4th)
-  CMU_HFXOInit_TypeDef hfxoInit = BSP_CLK_HFXO_INIT;
-  // if Factory Cal exists in DEVINFO then use it above all (1st)
-  if (0 == (DEVINFO->MODULEINFO & DEVINFO_MODULEINFO_HFXOCALVAL_MASK)) {
-    hfxoInit.ctuneSteadyState = DEVINFO_MODULEINFO_CRYSTALOSCCALVAL
-        & DEVINFO_HFXOCTUNE_MASK;
-  }
-  // if User page has CTUNE from studio use that in 2nd place
-#if defined(MFG_CTUNE_ADDR) && (MFG_CTUNE_EN == 1)
-  else if (MFG_CTUNE_VAL != 0xFFFF) {
-    hfxoInit.ctuneSteadyState = MFG_CTUNE_VAL;
-  }
-#endif
-  // 3rd option, get data from header defined for product/board
-#if defined(BSP_CLK_HFXO_CTUNE) && BSP_CLK_HFXO_CTUNE >= 0
-  else {
-    hfxoInit.ctuneSteadyState = BSP_CLK_HFXO_CTUNE;
-  }
-#endif
-  CMU_HFXOInit(&hfxoInit);
+  // Initialize HFXO
+  initHFXO();
 
   // Set system HFXO frequency
   SystemHFXOClockSet(BSP_CLK_HFXO_FREQ);
@@ -146,6 +129,20 @@ static void initMcu_clocks(void)
   // Enabling HFBUSCLKLE clock for LE peripherals
   CMU_ClockEnable(cmuClock_HFLE, true);
 
+
+  //To use PLFRCO please remove commenting of these lines
+  //and comment out or delete the LFXO lines if they are present
+  //If using PLFRCO update gecko_configuration_t config's
+  //.bluetooth.sleep_clock_accuracy to 500 (ppm)
+//  #if defined(PLFRCO_PRESENT)
+//    /* Ensure LE modules are accessible */
+//    CMU_ClockEnable(cmuClock_CORELE, true);
+//    /* Enable PLFRCO as LFECLK in CMU (will also enable oscillator if not enabled) */
+//    CMU_ClockSelectSet(cmuClock_LFA, cmuSelect_PLFRCO);
+//    CMU_ClockSelectSet(cmuClock_LFB, cmuSelect_PLFRCO);
+//    CMU_ClockSelectSet(cmuClock_LFE, cmuSelect_PLFRCO);
+//  #endif
+
 #if(BSP_CLK_LFXO_PRESENT)
   // Initialize LFXO
   CMU_LFXOInit_TypeDef lfxoInit = BSP_CLK_LFXO_INIT;
@@ -165,4 +162,28 @@ static void initMcu_clocks(void)
   CMU_ClockSelectSet(cmuClock_LFB, cmuSelect_LFRCO);
   CMU_ClockSelectSet(cmuClock_LFE, cmuSelect_LFRCO);
 #endif
+}
+
+static void initHFXO(void)
+{
+  // Initialize HFXO
+  // Use BSP_CLK_HFXO_INIT as last result (4th)
+  CMU_HFXOInit_TypeDef hfxoInit = BSP_CLK_HFXO_INIT;
+  // if Factory Cal exists in DEVINFO then use it above all (1st)
+  if (0 == (DEVINFO->MODULEINFO & DEVINFO_MODULEINFO_HFXOCALVAL_MASK)) {
+    set_HFXO_CTUNE(DEVINFO_MODULEINFO_CRYSTALOSCCALVAL);
+  }
+  // if User page has CTUNE from studio use that in 2nd place
+#if (MFG_CTUNE_EN == 1)
+  else if (MFG_CTUNE_VAL != 0xFFFF) {
+    set_HFXO_CTUNE(MFG_CTUNE_VAL);
+  }
+#endif
+  // 3rd option, get data from header defined for product/board
+#if defined(BSP_CLK_HFXO_CTUNE) && BSP_CLK_HFXO_CTUNE >= 0
+  else {
+    set_HFXO_CTUNE(BSP_CLK_HFXO_CTUNE);
+  }
+#endif
+  CMU_HFXOInit(&hfxoInit);
 }

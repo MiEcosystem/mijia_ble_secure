@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief General Purpose IO (GPIO) peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -250,7 +250,7 @@ extern "C" {
 #define _GPIO_PORT_A_PIN_COUNT 6
 #define _GPIO_PORT_B_PIN_COUNT 5
 #define _GPIO_PORT_C_PIN_COUNT 6
-#define _GPIO_PORT_D_PIN_COUNT 6
+#define _GPIO_PORT_D_PIN_COUNT 7
 #define _GPIO_PORT_E_PIN_COUNT 0
 #define _GPIO_PORT_F_PIN_COUNT 8
 #define _GPIO_PORT_G_PIN_COUNT 0
@@ -262,7 +262,7 @@ extern "C" {
 #define _GPIO_PORT_A_PIN_MASK 0x003F
 #define _GPIO_PORT_B_PIN_MASK 0xF800
 #define _GPIO_PORT_C_PIN_MASK 0x0FC0
-#define _GPIO_PORT_D_PIN_MASK 0xFC00
+#define _GPIO_PORT_D_PIN_MASK 0xFE00
 #define _GPIO_PORT_E_PIN_MASK 0x0000
 #define _GPIO_PORT_F_PIN_MASK 0x00FF
 #define _GPIO_PORT_G_PIN_MASK 0x0000
@@ -327,7 +327,7 @@ extern "C" {
 #define _GPIO_PORT_A_PIN_COUNT 6
 #define _GPIO_PORT_B_PIN_COUNT 5
 #define _GPIO_PORT_C_PIN_COUNT 6
-#define _GPIO_PORT_D_PIN_COUNT 6
+#define _GPIO_PORT_D_PIN_COUNT 7
 #define _GPIO_PORT_E_PIN_COUNT 0
 #define _GPIO_PORT_F_PIN_COUNT 8
 #define _GPIO_PORT_G_PIN_COUNT 0
@@ -339,7 +339,7 @@ extern "C" {
 #define _GPIO_PORT_A_PIN_MASK 0x003F
 #define _GPIO_PORT_B_PIN_MASK 0xF800
 #define _GPIO_PORT_C_PIN_MASK 0x0FC0
-#define _GPIO_PORT_D_PIN_MASK 0xFC00
+#define _GPIO_PORT_D_PIN_MASK 0xFE00
 #define _GPIO_PORT_E_PIN_MASK 0x0000
 #define _GPIO_PORT_F_PIN_MASK 0x00FF
 #define _GPIO_PORT_G_PIN_MASK 0x0000
@@ -374,12 +374,12 @@ extern "C" {
 #define _GPIO_PORT_J_PIN_MASK 0x0000
 #define _GPIO_PORT_K_PIN_MASK 0x0000
 
-#elif defined (_SILICON_LABS_32B_SERIES_2_CONFIG_1)
+#elif defined (_SILICON_LABS_32B_SERIES_2)
 
-#define _GPIO_PORT_A_PIN_COUNT 7
-#define _GPIO_PORT_B_PIN_COUNT 2
-#define _GPIO_PORT_C_PIN_COUNT 6
-#define _GPIO_PORT_D_PIN_COUNT 5
+#define _GPIO_PORT_A_PIN_COUNT GPIO_PA_COUNT
+#define _GPIO_PORT_B_PIN_COUNT GPIO_PB_COUNT
+#define _GPIO_PORT_C_PIN_COUNT GPIO_PC_COUNT
+#define _GPIO_PORT_D_PIN_COUNT GPIO_PD_COUNT
 #define _GPIO_PORT_E_PIN_COUNT 0
 #define _GPIO_PORT_F_PIN_COUNT 0
 #define _GPIO_PORT_G_PIN_COUNT 0
@@ -388,10 +388,10 @@ extern "C" {
 #define _GPIO_PORT_J_PIN_COUNT 0
 #define _GPIO_PORT_K_PIN_COUNT 0
 
-#define _GPIO_PORT_A_PIN_MASK 0x007F
-#define _GPIO_PORT_B_PIN_MASK 0x0003
-#define _GPIO_PORT_C_PIN_MASK 0x003F
-#define _GPIO_PORT_D_PIN_MASK 0x001F
+#define _GPIO_PORT_A_PIN_MASK (GPIO_PA_MASK)
+#define _GPIO_PORT_B_PIN_MASK (GPIO_PB_MASK)
+#define _GPIO_PORT_C_PIN_MASK (GPIO_PC_MASK)
+#define _GPIO_PORT_D_PIN_MASK (GPIO_PD_MASK)
 #define _GPIO_PORT_E_PIN_MASK 0x0000
 #define _GPIO_PORT_F_PIN_MASK 0x0000
 #define _GPIO_PORT_G_PIN_MASK 0x0000

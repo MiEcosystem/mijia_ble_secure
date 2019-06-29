@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief System API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -235,6 +235,12 @@ typedef enum {
   systemPartFamilyFlex21 = DEVINFO_PART_FAMILY_FG | (21 << _DEVINFO_PART_FAMILYNUM_SHIFT),   /**< EFR32 Flex Gecko Series 2 Config 1 Value Device Family */
   systemPartFamilyBlue21 = DEVINFO_PART_FAMILY_BG | (21 << _DEVINFO_PART_FAMILYNUM_SHIFT),   /**< EFR32 Blue Gecko Series 2 Config 1 Value Device Family */
 #endif
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+  systemPartFamilyMighty22 = DEVINFO_PART_FAMILY_MG | (22 << _DEVINFO_PART_FAMILYNUM_SHIFT), /**< EFR32 Mighty Gecko Series 2 Config 2 Value Device Family */
+  systemPartFamilyFlex22 = DEVINFO_PART_FAMILY_FG | (22 << _DEVINFO_PART_FAMILYNUM_SHIFT),   /**< EFR32 Flex Gecko Series 2 Config 2 Value Device Family */
+  systemPartFamilyBlue22 = DEVINFO_PART_FAMILY_BG | (22 << _DEVINFO_PART_FAMILYNUM_SHIFT),   /**< EFR32 Blue Gecko Series 2 Config 2 Value Device Family */
+  systemPartFamilyXG22 = DEVINFO_PART_FAMILY_MG | (22 << _DEVINFO_PART_FAMILYNUM_SHIFT), /**< EFR32 Mighty Gecko Series 2 Config 2 Value Device Family */
+#endif
 /* Deprecated family #defines */
 #if defined(_DEVINFO_PART_DEVICE_FAMILY_G)
   systemPartFamilyGecko   = _DEVINFO_PART_DEVICE_FAMILY_G,   /**< Gecko Device Family. */
@@ -402,7 +408,6 @@ __STATIC_INLINE uint16_t SYSTEM_GetSRAMSize(void)
   /* Do not include EFR32xG1 RAMH. */
   sizekb--;
 #endif
-
   return sizekb;
 }
 
@@ -448,6 +453,7 @@ __STATIC_INLINE uint32_t SYSTEM_GetFlashPageSize(void)
   uint32_t tmp;
 
 #if defined(_SILICON_LABS_32B_SERIES_0)
+
 #if defined(_EFM32_GIANT_FAMILY)
   if (SYSTEM_GetProdRev() < 18) {
     /* Early Giant/Leopard devices did not have MEMINFO in DEVINFO. */
@@ -459,7 +465,7 @@ __STATIC_INLINE uint32_t SYSTEM_GetFlashPageSize(void)
     return FLASH_PAGE_SIZE;
   }
 #endif
-#endif
+#endif // defined(_SILICON_LABS_32B_SERIES_0)
 
 #if defined(_DEVINFO_MEMINFO_FLASHPAGESIZE_MASK)
   tmp = (DEVINFO->MEMINFO & _DEVINFO_MEMINFO_FLASHPAGESIZE_MASK)
@@ -510,7 +516,7 @@ __STATIC_INLINE uint16_t SYSTEM_GetPartNumber(void)
  ******************************************************************************/
 __STATIC_INLINE SYSTEM_PartFamily_TypeDef SYSTEM_GetFamily(void)
 {
-#if defined(_SYSCFG_CHIPREV_FAMILY_MASK)
+#if defined(_DEVINFO_PART_FAMILY_MASK)
   return (SYSTEM_PartFamily_TypeDef)
          ((uint32_t)((DEVINFO->PART & (_DEVINFO_PART_FAMILY_MASK
                                        | _DEVINFO_PART_FAMILYNUM_MASK))));

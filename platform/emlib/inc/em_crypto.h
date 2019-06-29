@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Cryptography accelerator peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -1139,6 +1139,22 @@ void CRYPTO_AES_CBC256(CRYPTO_TypeDef *crypto,
                        const uint8_t * key,
                        const uint8_t * iv,
                        bool encrypt);
+
+void CRYPTO_AES_PCBC128(CRYPTO_TypeDef *crypto,
+                        uint8_t * out,
+                        const uint8_t * in,
+                        unsigned int len,
+                        const uint8_t * key,
+                        const uint8_t * iv,
+                        bool encrypt);
+
+void CRYPTO_AES_PCBC256(CRYPTO_TypeDef *crypto,
+                        uint8_t * out,
+                        const uint8_t * in,
+                        unsigned int len,
+                        const uint8_t * key,
+                        const uint8_t * iv,
+                        bool encrypt);
 
 void CRYPTO_AES_CFB128(CRYPTO_TypeDef *crypto,
                        uint8_t * out,

@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Energy Management Unit (EMU) peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -299,6 +299,76 @@ typedef enum {
   /** DCDC capacitor is 4.7uF. */
   emuDcdcLnCompCtrl_4u7F,
 } EMU_DcdcLnCompCtrl_TypeDef;
+#endif
+
+#if defined(_DCDC_CTRL_MASK)
+/** DCDC mode. */
+typedef enum {
+  emuDcdcMode_Bypass,                     /**< DCDC regulator bypass. */
+  emuDcdcMode_Regulation                  /**< DCDC regulator on.     */
+} EMU_DcdcMode_TypeDef;
+
+/** VREGIN comparator threshold. */
+typedef enum {
+  emuVreginCmpThreshold_2v0 = 0,          /**< Comparator threshold is 2.0V. */
+  emuVreginCmpThreshold_2v1 = 1,          /**< Comparator threshold is 2.1V. */
+  emuVreginCmpThreshold_2v2 = 2,          /**< Comparator threshold is 2.2V. */
+  emuVreginCmpThreshold_2v3 = 3           /**< Comparator threshold is 2.3V. */
+} EMU_VreginCmpThreshold_TypeDef;
+
+/** DCDC Ton max timeout. */
+typedef enum {
+  emuDcdcTonMaxTimeout_Off    = _DCDC_CTRL_IPKTMAXCTRL_OFF,         /**< Ton max off.       */
+  emuDcdcTonMaxTimeout_0P35us = _DCDC_CTRL_IPKTMAXCTRL_TMAX_0P35us, /**< Ton max is 0.35us. */
+  emuDcdcTonMaxTimeout_0P63us = _DCDC_CTRL_IPKTMAXCTRL_TMAX_0P63us, /**< Ton max is 0.63us. */
+  emuDcdcTonMaxTimeout_0P91us = _DCDC_CTRL_IPKTMAXCTRL_TMAX_0P91us, /**< Ton max is 0.91us. */
+  emuDcdcTonMaxTimeout_1P19us = _DCDC_CTRL_IPKTMAXCTRL_TMAX_1P19us, /**< Ton max is 1.19us. */
+  emuDcdcTonMaxTimeout_1P47us = _DCDC_CTRL_IPKTMAXCTRL_TMAX_1P47us, /**< Ton max is 1.47us. */
+  emuDcdcTonMaxTimeout_1P75us = _DCDC_CTRL_IPKTMAXCTRL_TMAX_1P75us, /**< Ton max is 1.75us. */
+  emuDcdcTonMaxTimeout_2P03us = _DCDC_CTRL_IPKTMAXCTRL_TMAX_2P03us  /**< Ton max is 2.03us. */
+} EMU_DcdcTonMaxTimeout_TypeDef;
+
+/** DCDC drive speed. */
+typedef enum {
+  emuDcdcDriveSpeed_BestEmi        = _DCDC_EM01CTRL0_DRVSPEED_BEST_EMI,        /**< Lowest efficiency, lowest EMI. */
+  emuDcdcDriveSpeed_Default        = _DCDC_EM01CTRL0_DRVSPEED_DEFAULT_SETTING, /**< Default efficiency, acceptable EMI level. */
+  emuDcdcDriveSpeed_Intermediate   = _DCDC_EM01CTRL0_DRVSPEED_INTERMEDIATE,    /**< Small increase in efficiency from the default setting. */
+  emuDcdcDriveSpeed_BestEfficiency = _DCDC_EM01CTRL0_DRVSPEED_BEST_EFFICIENCY  /**< Highest efficiency, highest EMI. Small increase in efficiency from INTERMEDIATE setting. */
+} EMU_DcdcDriveSpeed_TypeDef;
+
+/** DCDC peak current setting. */
+typedef enum {
+#if defined(_DCDC_EM01CTRL0_IPKVAL_Load28mA)
+  emuDcdcPeakCurrent_Load28mA = _DCDC_EM01CTRL0_IPKVAL_Load28mA, /**< Load 28mA, peak current 70mA. */
+#endif
+#if defined(_DCDC_EM01CTRL0_IPKVAL_Load32mA)
+  emuDcdcPeakCurrent_Load32mA = _DCDC_EM01CTRL0_IPKVAL_Load32mA, /**< Load 32mA, peak current 80mA. */
+#endif
+#if defined(_DCDC_EM01CTRL0_IPKVAL_Load36mA)
+  emuDcdcPeakCurrent_Load36mA = _DCDC_EM01CTRL0_IPKVAL_Load36mA, /**< Load 36mA, peak current 90mA. */
+#endif
+  emuDcdcPeakCurrent_Load40mA = _DCDC_EM01CTRL0_IPKVAL_Load40mA, /**< Load 40mA, peak current 100mA. */
+  emuDcdcPeakCurrent_Load44mA = _DCDC_EM01CTRL0_IPKVAL_Load44mA, /**< Load 44mA, peak current 110mA. */
+  emuDcdcPeakCurrent_Load48mA = _DCDC_EM01CTRL0_IPKVAL_Load48mA, /**< Load 48mA, peak current 120mA. */
+  emuDcdcPeakCurrent_Load52mA = _DCDC_EM01CTRL0_IPKVAL_Load52mA, /**< Load 52mA, peak current 130mA. */
+  emuDcdcPeakCurrent_Load56mA = _DCDC_EM01CTRL0_IPKVAL_Load56mA, /**< Load 56mA, peak current 140mA. */
+  emuDcdcPeakCurrent_Load60mA = _DCDC_EM01CTRL0_IPKVAL_Load60mA, /**< Load 60mA, peak current 150mA. */
+#if defined(_DCDC_EM01CTRL0_IPKVAL_Load64mA)
+  emuDcdcPeakCurrent_Load64mA = _DCDC_EM01CTRL0_IPKVAL_Load64mA, /**< Load 64mA, peak current 160mA. */
+#endif
+#if defined(_DCDC_EM01CTRL0_IPKVAL_Load68mA)
+  emuDcdcPeakCurrent_Load68mA = _DCDC_EM01CTRL0_IPKVAL_Load68mA, /**< Load 68mA, peak current 170mA. */
+#endif
+#if defined(_DCDC_EM01CTRL0_IPKVAL_Load72mA)
+  emuDcdcPeakCurrent_Load72mA = _DCDC_EM01CTRL0_IPKVAL_Load72mA, /**< Load 72mA, peak current 180mA. */
+#endif
+#if defined(_DCDC_EM01CTRL0_IPKVAL_Load76mA)
+  emuDcdcPeakCurrent_Load76mA = _DCDC_EM01CTRL0_IPKVAL_Load76mA, /**< Load 76mA, peak current 190mA. */
+#endif
+#if defined(_DCDC_EM01CTRL0_IPKVAL_Load80mA)
+  emuDcdcPeakCurrent_Load80mA = _DCDC_EM01CTRL0_IPKVAL_Load80mA  /**< Load 80mA, peak current 200mA. */
+#endif
+} EMU_DcdcPeakCurrent_TypeDef;
 #endif
 
 #if defined(EMU_STATUS_VMONRDY)
@@ -659,6 +729,33 @@ typedef struct {
   }
 #endif
 
+#if defined(_DCDC_CTRL_MASK)
+/** DCDC regulator initialization structure. */
+typedef struct {
+  EMU_DcdcMode_TypeDef            mode;             /**< DCDC mode. */
+  EMU_VreginCmpThreshold_TypeDef  cmpThreshold;     /**< VREGIN comparator threshold. */
+  EMU_DcdcTonMaxTimeout_TypeDef   tonMax;           /**< Ton max timeout control. */
+  bool                            dcmOnlyEn;        /**< DCM only mode enable. */
+  EMU_DcdcDriveSpeed_TypeDef      driveSpeedEM01;   /**< DCDC drive speed in EM0/1. */
+  EMU_DcdcDriveSpeed_TypeDef      driveSpeedEM23;   /**< DCDC drive speed in EM2/3. */
+  EMU_DcdcPeakCurrent_TypeDef     peakCurrentEM01;  /**< EM0/1 peak current setting. */
+  EMU_DcdcPeakCurrent_TypeDef     peakCurrentEM23;  /**< EM2/3 peak current setting. */
+} EMU_DCDCInit_TypeDef;
+
+/** Default DCDC initialization. */
+#define EMU_DCDCINIT_DEFAULT                                                \
+  {                                                                         \
+    emuDcdcMode_Regulation,        /**< DCDC regulator on. */               \
+    emuVreginCmpThreshold_2v3,     /**< 2.3V VREGIN comparator treshold. */ \
+    emuDcdcTonMaxTimeout_1P19us,   /**< Ton max is 1.19us. */               \
+    true,                          /**< Enable DCM only mode. */            \
+    emuDcdcDriveSpeed_Default,     /**< Default efficiency in EM0/1. */     \
+    emuDcdcDriveSpeed_Default,     /**< Default efficiency in EM2/3. */     \
+    emuDcdcPeakCurrent_Load60mA,   /**< Default peak current in EM0/1. */   \
+    emuDcdcPeakCurrent_Load36mA    /**< Default peak current in EM2/3. */   \
+  }
+#endif
+
 #if defined(_EMU_DCDCCTRL_MASK)
 /** DCDC initialization structure. */
 typedef struct {
@@ -805,6 +902,8 @@ typedef struct {
 void EMU_EM01Init(const EMU_EM01Init_TypeDef *em01Init);
 #endif
 void EMU_EM23Init(const EMU_EM23Init_TypeDef *em23Init);
+void EMU_EM23PresleepHook(void);
+void EMU_EM23PostsleepHook(void);
 #if defined(_EMU_EM4CONF_MASK) || defined(_EMU_EM4CTRL_MASK)
 void EMU_EM4Init(const EMU_EM4Init_TypeDef *em4Init);
 #endif
@@ -860,20 +959,47 @@ void EMU_BUStatEnSet(bool enable);
 #if defined(_EMU_BUCTRL_EN_MASK)
 void EMU_BUEnableSet(bool enable);
 #endif
-#if defined(_EMU_DCDCCTRL_MASK)
+#if defined(_EMU_DCDCCTRL_MASK) || defined(_DCDC_CTRL_MASK)
 bool EMU_DCDCInit(const EMU_DCDCInit_TypeDef *dcdcInit);
 void EMU_DCDCModeSet(EMU_DcdcMode_TypeDef dcdcMode);
+bool EMU_DCDCPowerOff(void);
+#if !defined(_DCDC_CTRL_MASK)
 void EMU_DCDCConductionModeSet(EMU_DcdcConductionMode_TypeDef conductionMode, bool rcoDefaultSet);
 bool EMU_DCDCOutputVoltageSet(uint32_t mV, bool setLpVoltage, bool setLnVoltage);
 void EMU_DCDCOptimizeSlice(uint32_t em0LoadCurrentmA);
 void EMU_DCDCLnRcoBandSet(EMU_DcdcLnRcoBand_TypeDef band);
-bool EMU_DCDCPowerOff(void);
+#endif
 #endif
 #if defined(EMU_STATUS_VMONRDY)
 void EMU_VmonInit(const EMU_VmonInit_TypeDef *vmonInit);
 void EMU_VmonHystInit(const EMU_VmonHystInit_TypeDef *vmonInit);
 void EMU_VmonEnable(EMU_VmonChannel_TypeDef channel, bool enable);
 bool EMU_VmonChannelStatusGet(EMU_VmonChannel_TypeDef channel);
+#endif
+
+#if defined(_DCDC_CTRL_MASK)
+/***************************************************************************//**
+ * @brief
+ *   Lock DCDC registers in order to protect them against unintended
+ *   modification.
+ ******************************************************************************/
+__STATIC_INLINE void EMU_DCDCLock(void)
+{
+  DCDC->LOCK = ~DCDC_LOCK_LOCKKEY_UNLOCKKEY;
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Unlock the DCDCU so that writing to locked registers again is possible.
+ ******************************************************************************/
+__STATIC_INLINE void EMU_DCDCUnlock(void)
+{
+#if defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
+  DCDC->LOCK = 0xABCD;    // Bug in current CMSIS (DDM)
+#else
+  DCDC->LOCK = DCDC_LOCK_LOCKKEY_UNLOCKKEY;
+#endif
+}
 #endif
 
 /***************************************************************************//**

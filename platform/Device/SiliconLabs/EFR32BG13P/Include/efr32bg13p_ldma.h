@@ -1,10 +1,10 @@
 /***************************************************************************//**
  * @file
  * @brief EFR32BG13P_LDMA register and bit field definitions
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
- * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
+ * <b>Copyright 2019 Silicon Laboratories Inc. www.silabs.com</b>
  *******************************************************************************
  *
  * SPDX-License-Identifier: Zlib

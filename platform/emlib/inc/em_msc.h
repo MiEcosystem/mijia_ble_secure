@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Flash Controller (MSC) Peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -207,6 +207,15 @@ typedef struct {
   }
 
 #elif defined(_SILICON_LABS_32B_SERIES_2_CONFIG_1)
+/** EFR32XG21 incorporates 1 memory bank including ECC support. */
+#define MSC_ECC_BANKS  (1)
+/** Default MSC EccConfig initialization */
+#define MSC_ECCCONFIG_DEFAULT \
+  {                           \
+    { false },                \
+    { 0, 1 },                 \
+  }
+#elif defined(_SILICON_LABS_32B_SERIES_2_CONFIG_2)
 /** EFR32XG21 incorporates 1 memory bank including ECC support. */
 #define MSC_ECC_BANKS  (1)
 /** Default MSC EccConfig initialization */

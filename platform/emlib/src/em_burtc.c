@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Backup Real Time Counter (BURTC) Peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -359,7 +359,9 @@ void BURTC_Reset(void)
    * do this before the enable bit is cleared. */
   BURTC_SyncWait();
   BURTC->EN_CLR  = BURTC_EN_EN;
-  BURTC_SyncWait();
+  while (BURTC->SYNCBUSY != 0U) {
+    // Wait for the EN=0 to synchronize
+  }
   BURTC->CFG = _BURTC_CFG_RESETVALUE;
 #endif
 }

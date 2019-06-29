@@ -1,6 +1,6 @@
 /***************************************************************************//**
  * @file
- * @brief init_board_efr32xg1.c
+ * @brief init_board.c
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>

@@ -1,7 +1,7 @@
 /***************************************************************************//**
  * @file
  * @brief Cryptography accelerator peripheral API
- * @version 5.7.2
+ * @version 5.8.0
  *******************************************************************************
  * # License
  * <b>Copyright 2018 Silicon Laboratories Inc. www.silabs.com</b>
@@ -83,7 +83,7 @@
  ******************************************************************************/
 
 __STATIC_INLINE void CRYPTO_AES_ProcessLoop(CRYPTO_TypeDef *crypto,
-                                            uint32_t len,
+                                            unsigned int len,
                                             CRYPTO_DataReg_TypeDef inReg,
                                             const uint8_t * in,
                                             CRYPTO_DataReg_TypeDef outReg,
@@ -97,6 +97,15 @@ static void CRYPTO_AES_CBCx(CRYPTO_TypeDef *crypto,
                             const uint8_t * iv,
                             bool encrypt,
                             CRYPTO_KeyWidth_TypeDef keyWidth);
+
+static void CRYPTO_AES_PCBCx(CRYPTO_TypeDef *crypto,
+                             uint8_t * out,
+                             const uint8_t * in,
+                             unsigned int len,
+                             const uint8_t * key,
+                             const uint8_t * iv,
+                             bool encrypt,
+                             CRYPTO_KeyWidth_TypeDef keyWidth);
 
 static void CRYPTO_AES_CFBx(CRYPTO_TypeDef *crypto,
                             uint8_t * out,
@@ -320,6 +329,7 @@ void CRYPTO_SHA_1(CRYPTO_TypeDef *             crypto,
 
   while (len >= CRYPTO_SHA1_BLOCK_SIZE_IN_BYTES) {
     /* Write block to QDATA1.  */
+    CRYPTO_InstructionSequenceWait(crypto);
     CRYPTO_QDataWrite(&crypto->QDATA1BIG, (uint32_t *) msg);
 
     /* Execute SHA. */
@@ -352,6 +362,7 @@ void CRYPTO_SHA_1(CRYPTO_TypeDef *             crypto,
     }
 
     /* Write block to QDATA1BIG. */
+    CRYPTO_InstructionSequenceWait(crypto);
     CRYPTO_QDataWrite(&crypto->QDATA1BIG, shaBlock);
 
     /* Execute SH. */
@@ -377,6 +388,7 @@ void CRYPTO_SHA_1(CRYPTO_TypeDef *             crypto,
   }
 
   /* Write block to QDATA1BIG. */
+  CRYPTO_InstructionSequenceWait(crypto);
   CRYPTO_QDataWrite(&crypto->QDATA1BIG, shaBlock);
 
   /* Execute SHA. */
@@ -386,6 +398,7 @@ void CRYPTO_SHA_1(CRYPTO_TypeDef *             crypto,
                    CRYPTO_CMD_INSTR_DDATA0TODDATA1);
 
   /* Read the resulting message digest from DDATA0BIG.  */
+  CRYPTO_InstructionSequenceWait(crypto);
   ((uint32_t*)msgDigest)[0] = crypto->DDATA0BIG;
   ((uint32_t*)msgDigest)[1] = crypto->DDATA0BIG;
   ((uint32_t*)msgDigest)[2] = crypto->DDATA0BIG;
@@ -456,6 +469,7 @@ void CRYPTO_SHA_256(CRYPTO_TypeDef *             crypto,
 
   while (len >= CRYPTO_SHA256_BLOCK_SIZE_IN_BYTES) {
     /* Write block to QDATA1BIG.  */
+    CRYPTO_InstructionSequenceWait(crypto);
     CRYPTO_QDataWrite(&crypto->QDATA1BIG, (uint32_t *) msg);
 
     /* Execute SHA. */
@@ -488,6 +502,7 @@ void CRYPTO_SHA_256(CRYPTO_TypeDef *             crypto,
     }
 
     /* Write block to QDATA1BIG. */
+    CRYPTO_InstructionSequenceWait(crypto);
     CRYPTO_QDataWrite(&crypto->QDATA1BIG, shaBlock);
 
     /* Execute SHA. */
@@ -513,6 +528,7 @@ void CRYPTO_SHA_256(CRYPTO_TypeDef *             crypto,
   }
 
   /* Write the final block to QDATA1BIG. */
+  CRYPTO_InstructionSequenceWait(crypto);
   CRYPTO_QDataWrite(&crypto->QDATA1BIG, shaBlock);
 
   /* Execute SHA. */
@@ -522,6 +538,7 @@ void CRYPTO_SHA_256(CRYPTO_TypeDef *             crypto,
                    CRYPTO_CMD_INSTR_DDATA0TODDATA1);
 
   /* Read the resulting message digest from DDATA0BIG.  */
+  CRYPTO_InstructionSequenceWait(crypto);
   CRYPTO_DDataRead(&crypto->DDATA0BIG, (uint32_t *)msgDigest);
 }
 
@@ -707,6 +724,9 @@ void CRYPTO_Mul(CRYPTO_TypeDef * crypto,
     for (j = 0; j < numPartialOperandsB; j++) {
       /* Load the partial operand 2 B>>(j*`PARTIAL_OPERAND_WIDTH) to DDATA2
          (via DATA0). */
+      while ((crypto->STATUS & CRYPTO_STATUS_DMAACTIVE) == 0) {
+      }
+
 #ifdef USE_VARIABLE_SIZED_DATA_LOADS
       if ( (numWordsLastOperandB != 0) && (j == numPartialOperandsB - 1) ) {
         CRYPTO_DataWriteVariableSize(&crypto->DATA0,
@@ -736,6 +756,8 @@ void CRYPTO_Mul(CRYPTO_TypeDef * crypto,
       CRYPTO_DataWrite(&crypto->DATA1,
                        &R[(i + j + 1U) * PARTIAL_OPERAND_WIDTH_IN_32BIT_WORDS]);
 #endif
+      while ((crypto->STATUS & CRYPTO_STATUS_DMAACTIVE) == 0) {
+      }
       /* Store the least significant partial result. */
       CRYPTO_DataRead(&crypto->DATA0,
                       &R[(i + j) * PARTIAL_OPERAND_WIDTH_IN_32BIT_WORDS]);
@@ -876,6 +898,129 @@ void CRYPTO_AES_CBC256(CRYPTO_TypeDef *  crypto,
 {
   crypto->CTRL = CRYPTO_CTRL_AES_AES256;
   CRYPTO_AES_CBCx(crypto, out, in, len, key, iv, encrypt, cryptoKey256Bits);
+}
+
+/***************************************************************************//**
+ * @brief
+ *   AES Propagating Cipher-block chaining (PCBC) cipher mode encryption/decryption, 128 bit key.
+ *
+ * @details
+ *   Encryption:
+ * @verbatim
+ *           Plaintext                  Plaintext
+ *               |--------------+           |
+ *               V              V           V
+ * InitVector ->XOR        +-->XOR-------->XOR
+ *               |         |                |
+ *               V         |                V
+ *       +--------------+  |        +--------------+
+ * Key ->| Block cipher |  |  Key ->| Block cipher |
+ *       |  encryption  |  |        |  encryption  |
+ *       +--------------+  |        +--------------+
+ *               |---------+                |
+ *               V                          V
+ *           Ciphertext                 Ciphertext
+ * @endverbatim
+ *   Decryption:
+ * @verbatim
+ *         Ciphertext                 Ciphertext
+ *              |----------+                |
+ *              V          |                V
+ *       +--------------+  |        +--------------+
+ * Key ->| Block cipher |  |  Key ->| Block cipher |
+ *       |  decryption  |  |        |  decryption  |
+ *       +--------------+  |        +--------------+
+ *               |         |               |
+ *               V         V               V
+ * InitVector ->XOR  +--->XOR------------>XOR
+ *               |---+                     |
+ *               V                         V
+ *           Plaintext                  Plaintext
+ * @endverbatim
+ *   See general comments on layout and byte ordering of parameters.
+ *
+ * @param[in]  crypto
+ *   A pointer to the CRYPTO peripheral register block.
+ *
+ * @param[out] out
+ *   A buffer to place encrypted/decrypted data. Must be at least @p len long. It
+ *   may be set equal to @p in, in which case the input buffer is overwritten.
+ *
+ * @param[in] in
+ *   A buffer holding data to encrypt/decrypt. Must be at least @p len long.
+ *
+ * @param[in] len
+ *   A number of bytes to encrypt/decrypt. Must be a multiple of 16.
+ *
+ * @param[in] key
+ *   When encrypting, this is the 128 bit encryption key. When
+ *   decrypting, this is the 128 bit decryption key. The decryption key may
+ *   be generated from the encryption key with CRYPTO_AES_DecryptKey128().
+ *   If this argument is null, the key will not be loaded, as it is assumed
+ *   the key has been loaded into KEYHA previously.
+ *
+ * @param[in] iv
+ *   128 bit initialization vector to use.
+ *
+ * @param[in] encrypt
+ *   Set to true to encrypt, false to decrypt.
+ ******************************************************************************/
+void CRYPTO_AES_PCBC128(CRYPTO_TypeDef * crypto,
+                        uint8_t *         out,
+                        const uint8_t *   in,
+                        unsigned int      len,
+                        const uint8_t *   key,
+                        const uint8_t *   iv,
+                        bool              encrypt)
+{
+  crypto->CTRL = CRYPTO_CTRL_AES_AES128;
+  CRYPTO_AES_PCBCx(crypto, out, in, len, key, iv, encrypt, cryptoKey128Bits);
+}
+
+/***************************************************************************//**
+ * @brief
+ *   AES Propagating Cipher-block chaining (PCBC) cipher mode encryption/decryption, 256 bit
+ *   key.
+ *
+ * @details
+ *   See CRYPTO_AES_PCBC128() for the PCBC figure.
+ *
+ *   See general comments on layout and byte ordering of parameters.
+ *
+ * @param[in]  crypto
+ *   A pointer to the CRYPTO peripheral register block.
+ *
+ * @param[out] out
+ *   A buffer to place encrypted/decrypted data. Must be at least @p len long. It
+ *   may be set equal to @p in, in which case the input buffer is overwritten.
+ *
+ * @param[in] in
+ *   A buffer holding data to encrypt/decrypt. Must be at least @p len long.
+ *
+ * @param[in] len
+ *   A number of bytes to encrypt/decrypt. Must be a multiple of 16.
+ *
+ * @param[in] key
+ *   When encrypting, this is the 256 bit encryption key. When
+ *   decrypting, this is the 256 bit decryption key. The decryption key may
+ *   be generated from the encryption key with CRYPTO_AES_DecryptKey256().
+ *
+ * @param[in] iv
+ *   128 bit initialization vector to use.
+ *
+ * @param[in] encrypt
+ *   Set to true to encrypt, false to decrypt.
+ ******************************************************************************/
+void CRYPTO_AES_PCBC256(CRYPTO_TypeDef * crypto,
+                        uint8_t *         out,
+                        const uint8_t *   in,
+                        unsigned int      len,
+                        const uint8_t *   key,
+                        const uint8_t *   iv,
+                        bool              encrypt)
+{
+  crypto->CTRL = CRYPTO_CTRL_AES_AES256;
+  CRYPTO_AES_PCBCx(crypto, out, in, len, key, iv, encrypt, cryptoKey256Bits);
 }
 
 /***************************************************************************//**
@@ -1166,7 +1311,10 @@ void CRYPTO_AES_DecryptKey128(CRYPTO_TypeDef *  crypto,
   CRYPTO_DataWriteUnaligned(&crypto->KEYBUF, in);
 
   /* Do dummy encryption to generate decrypt key */
-  crypto->CMD  = CRYPTO_CMD_INSTR_AESENC;
+  crypto->CMD = CRYPTO_CMD_INSTR_AESENC;
+
+  /* Wait for the instruction to finish. */
+  CRYPTO_InstructionSequenceWait(crypto);
 
   /* Save decryption key */
   CRYPTO_DataReadUnaligned(&crypto->KEY, out);
@@ -1202,7 +1350,10 @@ void CRYPTO_AES_DecryptKey256(CRYPTO_TypeDef *  crypto,
   CRYPTO_DataWriteUnaligned(&crypto->KEYBUF, &in[16]);
 
   /* Do dummy encryption to generate a decrypt key. */
-  crypto->CMD  = CRYPTO_CMD_INSTR_AESENC;
+  crypto->CMD = CRYPTO_CMD_INSTR_AESENC;
+
+  /* Wait for the instruction to finish. */
+  CRYPTO_InstructionSequenceWait(crypto);
 
   /* Save the decryption key. */
   CRYPTO_DataReadUnaligned(&crypto->KEY, out);
@@ -1443,7 +1594,7 @@ __STATIC_INLINE void CRYPTO_DataReadUnaligned(volatile uint32_t * reg,
 {
   /* Check data is 32bit aligned, if not, read into temporary buffer and
      then move to user buffer. */
-  if ((uint32_t)val & 0x3) {
+  if ((uintptr_t)val & 0x3) {
     uint32_t temp[4];
     CRYPTO_DataRead(reg, temp);
     memcpy(val, temp, 16);
@@ -1464,7 +1615,7 @@ __STATIC_INLINE void CRYPTO_DataWriteUnaligned(volatile uint32_t * reg,
 {
   /* Check data is 32bit aligned, if not move to temporary buffer before
      writing.*/
-  if ((uint32_t)val & 0x3) {
+  if ((uintptr_t)val & 0x3) {
     uint32_t temp[4];
     memcpy(temp, val, 16);
     CRYPTO_DataWrite(reg, temp);
@@ -1496,7 +1647,7 @@ void CRYPTO_KeyBufWriteUnaligned(CRYPTO_TypeDef          *crypto,
 {
   /* Check if key val buffer is 32bit aligned, if not move to temporary
      aligned buffer before writing.*/
-  if ((uint32_t)val & 0x3) {
+  if ((uintptr_t)val & 0x3) {
     CRYPTO_KeyBuf_TypeDef temp;
     if (keyWidth == cryptoKey128Bits) {
       memcpy(temp, val, 16);
@@ -1564,30 +1715,96 @@ static void CRYPTO_AES_CBCx(CRYPTO_TypeDef *  crypto,
   if (encrypt) {
     CRYPTO_DataWriteUnaligned(&crypto->DATA0, iv);
 
-    crypto->SEQ0 = CRYPTO_CMD_INSTR_DATA1TODATA0XOR << _CRYPTO_SEQ0_INSTR0_SHIFT
-                   | CRYPTO_CMD_INSTR_AESENC        << _CRYPTO_SEQ0_INSTR1_SHIFT;
-
-    CRYPTO_AES_ProcessLoop(crypto, len,
-                           &crypto->DATA1, in,
-                           &crypto->DATA0, out);
+    CRYPTO_SEQ_LOAD_2(crypto,
+                      CRYPTO_CMD_INSTR_DATA1TODATA0XOR,
+                      CRYPTO_CMD_INSTR_AESENC);
   } else {
     CRYPTO_DataWriteUnaligned(&crypto->DATA2, iv);
 
-    crypto->SEQ0 = CRYPTO_CMD_INSTR_DATA1TODATA0      << _CRYPTO_SEQ0_INSTR0_SHIFT
-                   | CRYPTO_CMD_INSTR_AESDEC          << _CRYPTO_SEQ0_INSTR1_SHIFT
-                   | CRYPTO_CMD_INSTR_DATA2TODATA0XOR << _CRYPTO_SEQ0_INSTR2_SHIFT
-                   | CRYPTO_CMD_INSTR_DATA1TODATA2    << _CRYPTO_SEQ0_INSTR3_SHIFT;
-
-    crypto->SEQ1 = 0;
-
-    /* The following call is equivalent to the last call in the
-       'if( encrypt )' branch. However moving this
-       call outside the conditional scope results in slightly poorer
-       performance for some compiler optimizations. */
-    CRYPTO_AES_ProcessLoop(crypto, len,
-                           &crypto->DATA1, in,
-                           &crypto->DATA0, out);
+    CRYPTO_SEQ_LOAD_4(crypto,
+                      CRYPTO_CMD_INSTR_DATA1TODATA0,
+                      CRYPTO_CMD_INSTR_AESDEC,
+                      CRYPTO_CMD_INSTR_DATA2TODATA0XOR,
+                      CRYPTO_CMD_INSTR_DATA1TODATA2);
   }
+
+  CRYPTO_AES_ProcessLoop(crypto, len,
+                         &crypto->DATA1, in,
+                         &crypto->DATA0, out);
+}
+
+/***************************************************************************//**
+ * @brief
+ *   Propagating cipher-block chaining (PCBC) cipher mode encryption/decryption, 128/256 bit key.
+ *
+ * @details
+ *   See CRYPTO_AES_PCBC128() for PCBC figure.
+ *
+ *   See general comments on layout and byte ordering of parameters.
+ *
+ * @param[in]  crypto
+ *   A pointer to the CRYPTO peripheral register block.
+ *
+ * @param[out] out
+ *   A buffer to place encrypted/decrypted data. Must be at least @p len long. It
+ *   may be set equal to @p in, in which case the input buffer is overwritten.
+ *
+ * @param[in] in
+ *   A buffer holding data to encrypt/decrypt. Must be at least @p len long.
+ *
+ * @param[in] len
+ *   A number of bytes to encrypt/decrypt. Must be a multiple of 16.
+ *
+ * @param[in] key
+ *   When encrypting, this is the 256 bit encryption key. When
+ *   decrypting, this is the 256 bit decryption key. The decryption key may
+ *   be generated from the encryption key with CRYPTO_AES_DecryptKey256().
+ *
+ * @param[in] iv
+ *   128 bit initialization vector to use.
+ *
+ * @param[in] encrypt
+ *   Set to true to encrypt, false to decrypt.
+ *
+ * @param[in] keyWidth
+ *   Set to cryptoKey128Bits or cryptoKey256Bits.
+ ******************************************************************************/
+static void CRYPTO_AES_PCBCx(CRYPTO_TypeDef * crypto,
+                             uint8_t *         out,
+                             const uint8_t *   in,
+                             unsigned int      len,
+                             const uint8_t *   key,
+                             const uint8_t *   iv,
+                             bool              encrypt,
+                             CRYPTO_KeyWidth_TypeDef keyWidth)
+{
+  EFM_ASSERT((len % CRYPTO_AES_BLOCKSIZE) == 0U);
+
+  /* Initialize control registers. */
+  crypto->WAC = 0;
+
+  CRYPTO_KeyBufWriteUnaligned(crypto, key, keyWidth);
+  CRYPTO_DataWriteUnaligned(&crypto->DATA0, iv);
+
+  if (encrypt) {
+    CRYPTO_SEQ_LOAD_4(crypto,
+                      CRYPTO_CMD_INSTR_DATA1TODATA0XOR,
+                      CRYPTO_CMD_INSTR_AESENC,
+                      CRYPTO_CMD_INSTR_DATA0TODATA2,
+                      CRYPTO_CMD_INSTR_DATA1TODATA0XOR);
+  } else {
+    CRYPTO_SEQ_LOAD_6(crypto,
+                      CRYPTO_CMD_INSTR_DATA0TODATA3,
+                      CRYPTO_CMD_INSTR_DATA1TODATA0,
+                      CRYPTO_CMD_INSTR_AESDEC,
+                      CRYPTO_CMD_INSTR_DATA3TODATA0XOR,
+                      CRYPTO_CMD_INSTR_DATA0TODATA2,
+                      CRYPTO_CMD_INSTR_DATA1TODATA0XOR);
+  }
+
+  CRYPTO_AES_ProcessLoop(crypto, len,
+                         &crypto->DATA1, in,
+                         &crypto->DATA2, out);
 }
 
 /***************************************************************************//**
@@ -1646,28 +1863,23 @@ static void CRYPTO_AES_CFBx(CRYPTO_TypeDef *  crypto,
     /* Load IV */
     CRYPTO_DataWriteUnaligned(&crypto->DATA0, iv);
 
-    crypto->SEQ0 = CRYPTO_CMD_INSTR_AESENC            << _CRYPTO_SEQ0_INSTR0_SHIFT
-                   | CRYPTO_CMD_INSTR_DATA1TODATA0XOR << _CRYPTO_SEQ0_INSTR1_SHIFT;
-
-    CRYPTO_AES_ProcessLoop(crypto, len,
-                           &crypto->DATA1, in,
-                           &crypto->DATA0, out
-                           );
+    CRYPTO_SEQ_LOAD_2(crypto,
+                      CRYPTO_CMD_INSTR_AESENC,
+                      CRYPTO_CMD_INSTR_DATA1TODATA0XOR);
   } else {
     /* Load IV */
     CRYPTO_DataWriteUnaligned(&crypto->DATA2, iv);
 
-    crypto->SEQ0 = CRYPTO_CMD_INSTR_DATA2TODATA0      << _CRYPTO_SEQ0_INSTR0_SHIFT
-                   | CRYPTO_CMD_INSTR_AESENC          << _CRYPTO_SEQ0_INSTR1_SHIFT
-                   | CRYPTO_CMD_INSTR_DATA1TODATA0XOR << _CRYPTO_SEQ0_INSTR2_SHIFT
-                   | CRYPTO_CMD_INSTR_DATA1TODATA2    << _CRYPTO_SEQ0_INSTR3_SHIFT;
-    crypto->SEQ1 = 0;
-
-    CRYPTO_AES_ProcessLoop(crypto, len,
-                           &crypto->DATA1, in,
-                           &crypto->DATA0, out
-                           );
+    CRYPTO_SEQ_LOAD_4(crypto,
+                      CRYPTO_CMD_INSTR_DATA2TODATA0,
+                      CRYPTO_CMD_INSTR_AESENC,
+                      CRYPTO_CMD_INSTR_DATA1TODATA0XOR,
+                      CRYPTO_CMD_INSTR_DATA1TODATA2);
   }
+
+  CRYPTO_AES_ProcessLoop(crypto, len,
+                         &crypto->DATA1, in,
+                         &crypto->DATA0, out);
 }
 
 /***************************************************************************//**
@@ -1728,12 +1940,11 @@ static void CRYPTO_AES_CTRx(CRYPTO_TypeDef *  crypto,
 
   CRYPTO_DataWriteUnaligned(&crypto->DATA1, ctr);
 
-  crypto->SEQ0 = CRYPTO_CMD_INSTR_DATA1TODATA0    << _CRYPTO_SEQ0_INSTR0_SHIFT
-                 | CRYPTO_CMD_INSTR_AESENC        << _CRYPTO_SEQ0_INSTR1_SHIFT
-                 | CRYPTO_CMD_INSTR_DATA0TODATA3  << _CRYPTO_SEQ0_INSTR2_SHIFT
-                 | CRYPTO_CMD_INSTR_DATA1INC      << _CRYPTO_SEQ0_INSTR3_SHIFT;
-
-  crypto->SEQ1 = CRYPTO_CMD_INSTR_DATA2TODATA0XOR << _CRYPTO_SEQ1_INSTR4_SHIFT;
+  CRYPTO_SEQ_LOAD_4(crypto,
+                    CRYPTO_CMD_INSTR_DATA1TODATA0,
+                    CRYPTO_CMD_INSTR_AESENC,
+                    CRYPTO_CMD_INSTR_DATA1INC,
+                    CRYPTO_CMD_INSTR_DATA2TODATA0XOR);
 
   CRYPTO_AES_ProcessLoop(crypto, len,
                          &crypto->DATA2, in,
@@ -1790,11 +2001,13 @@ static void CRYPTO_AES_ECBx(CRYPTO_TypeDef *  crypto,
   CRYPTO_KeyBufWriteUnaligned(crypto, key, keyWidth);
 
   if (encrypt) {
-    crypto->SEQ0 = CRYPTO_CMD_INSTR_AESENC         << _CRYPTO_SEQ0_INSTR0_SHIFT
-                   | CRYPTO_CMD_INSTR_DATA0TODATA1 << _CRYPTO_SEQ0_INSTR1_SHIFT;
+    CRYPTO_SEQ_LOAD_2(crypto,
+                      CRYPTO_CMD_INSTR_AESENC,
+                      CRYPTO_CMD_INSTR_DATA0TODATA1);
   } else {
-    crypto->SEQ0 = CRYPTO_CMD_INSTR_AESDEC         << _CRYPTO_SEQ0_INSTR0_SHIFT
-                   | CRYPTO_CMD_INSTR_DATA0TODATA1 << _CRYPTO_SEQ0_INSTR1_SHIFT;
+    CRYPTO_SEQ_LOAD_2(crypto,
+                      CRYPTO_CMD_INSTR_AESDEC,
+                      CRYPTO_CMD_INSTR_DATA0TODATA1);
   }
 
   CRYPTO_AES_ProcessLoop(crypto, len,
@@ -1849,12 +2062,13 @@ static void CRYPTO_AES_OFBx(CRYPTO_TypeDef *  crypto,
 
   CRYPTO_DataWriteUnaligned(&crypto->DATA2, iv);
 
-  crypto->SEQ0 = CRYPTO_CMD_INSTR_DATA0TODATA1   << _CRYPTO_SEQ0_INSTR0_SHIFT
-                 | CRYPTO_CMD_INSTR_DATA2TODATA0 << _CRYPTO_SEQ0_INSTR1_SHIFT
-                 | CRYPTO_CMD_INSTR_AESENC       << _CRYPTO_SEQ0_INSTR2_SHIFT
-                 | CRYPTO_CMD_INSTR_DATA0TODATA2 << _CRYPTO_SEQ0_INSTR3_SHIFT;
-  crypto->SEQ1 = CRYPTO_CMD_INSTR_DATA1TODATA0XOR << _CRYPTO_SEQ1_INSTR4_SHIFT
-                 | CRYPTO_CMD_INSTR_DATA0TODATA1  << _CRYPTO_SEQ1_INSTR5_SHIFT;
+  CRYPTO_SEQ_LOAD_6(crypto,
+                    CRYPTO_CMD_INSTR_DATA0TODATA1,
+                    CRYPTO_CMD_INSTR_DATA2TODATA0,
+                    CRYPTO_CMD_INSTR_AESENC,
+                    CRYPTO_CMD_INSTR_DATA0TODATA2,
+                    CRYPTO_CMD_INSTR_DATA1TODATA0XOR,
+                    CRYPTO_CMD_INSTR_DATA0TODATA1);
 
   CRYPTO_AES_ProcessLoop(crypto, len,
                          &crypto->DATA0, in,
@@ -1890,7 +2104,7 @@ static void CRYPTO_AES_OFBx(CRYPTO_TypeDef *  crypto,
  *   may be set equal to @p in, in which case the input buffer is overwritten.
  ******************************************************************************/
 __STATIC_INLINE void CRYPTO_AES_ProcessLoop(CRYPTO_TypeDef *        crypto,
-                                            uint32_t                len,
+                                            unsigned int            len,
                                             CRYPTO_DataReg_TypeDef  inReg,
                                             const uint8_t  *        in,
                                             CRYPTO_DataReg_TypeDef  outReg,
@@ -1899,18 +2113,53 @@ __STATIC_INLINE void CRYPTO_AES_ProcessLoop(CRYPTO_TypeDef *        crypto,
   len /= CRYPTO_AES_BLOCKSIZE;
   crypto->SEQCTRL = 16UL << _CRYPTO_SEQCTRL_LENGTHA_SHIFT;
 
-  while (len > 0UL) {
-    len--;
-    /* Load data and trigger encryption. */
-    CRYPTO_DataWriteUnaligned(inReg, in);
+  if (((uintptr_t)in & 0x3) || ((uintptr_t)out & 0x3)) {
+    while (len > 0UL) {
+      len--;
+      /* Load data and trigger encryption. */
+      CRYPTO_DataWriteUnaligned(inReg, in);
+      CRYPTO_InstructionSequenceExecute(crypto);
 
-    crypto->CMD = CRYPTO_CMD_SEQSTART;
+      /* Wait for the sequence to finish. */
+      CRYPTO_InstructionSequenceWait(crypto);
+      /* Save encrypted/decrypted data. */
+      CRYPTO_DataReadUnaligned(outReg, out);
 
-    /* Save encrypted/decrypted data. */
-    CRYPTO_DataReadUnaligned(outReg, out);
+      out += 16;
+      in  += 16;
+    }
+  } else {
+    /* Optimized version, 15% faster for -O3. */
+    if (len > 0UL) {
+      /* Load first data and trigger encryption. */
+      CRYPTO_DataWrite(inReg, (uint32_t *)in);
+      CRYPTO_InstructionSequenceExecute(crypto);
 
-    out += 16;
-    in  += 16;
+      /* Do loop administration while CRYPTO engine is working. */
+      in += 16;
+      len--;
+
+      while (len > 0UL) {
+        /* Wait for the sequence to finish. */
+        CRYPTO_InstructionSequenceWait(crypto);
+        /* Save encrypted/decrypted data. */
+        CRYPTO_DataRead(outReg, (uint32_t *)out);
+
+        /* Load next data and retrigger encryption asap. */
+        CRYPTO_DataWrite(inReg, (uint32_t *)in);
+        CRYPTO_InstructionSequenceExecute(crypto);
+
+        /* Do loop administration while CRYPTO engine is working. */
+        out += 16;
+        in += 16;
+        len--;
+      }
+
+      /* Wait for the sequence to finish. */
+      CRYPTO_InstructionSequenceWait(crypto);
+      /* Save last encrypted/decrypted data. */
+      CRYPTO_DataRead(outReg, (uint32_t *)out);
+    }
   }
 }
 

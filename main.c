@@ -57,7 +57,6 @@
 
 #include "mi_config.h"
 
-
 #ifndef MAX_CONNECTIONS
 #define MAX_CONNECTIONS                1
 #endif
@@ -66,8 +65,6 @@
 #endif
 
 #define MSEC_TO_UNITS(TIME, RESOLUTION) (((TIME) * 1000) / (RESOLUTION))
-#define MS_2_TIMERTICK(ms)             ((TIMER_CLK_FREQ * (uint32)(ms)) / 1000)
-#define SEC_2_TIMERTICK(sec)           ((TIMER_CLK_FREQ * (sec)))
 
 #define TIMER_ID_OBJ_PERIOD_ADV        11
 #define TIMER_ID_CLEAR_BIND_CFM        12
@@ -126,8 +123,21 @@ uint8_t pair_code[PAIRCODE_NUMS];
 static uint32 pb0_press, pb1_press;
 
 extern void time_init(struct tm * time_ptr);
-static void advertising_init(uint8_t need_bind_confirm);
-static void advertising_start(void);
+
+static void advertising_init(uint8_t solicite_bind)
+{
+    MI_LOG_INFO("advertising init...\n");
+
+    if(MI_SUCCESS != mibeacon_adv_data_set(solicite_bind, 0, NULL, 0)){
+        MI_LOG_ERROR("mibeacon_data_set failed. \r\n");
+    }
+}
+
+static void advertising_start(void)
+{
+    MI_LOG_INFO("advertising start...\n");
+    mibeacon_adv_start(300);
+}
 
 int scan_keyboard(uint8_t *pdata, uint8_t len)
 {
@@ -142,7 +152,6 @@ void flush_keyboard_buffer(void)
     uint8_t tmp[16];
     while(SEGGER_RTT_ReadNoLock(0, tmp, 16));
 }
-
 
 void gpio_irq_handler(uint8_t pin)
 {
@@ -179,7 +188,6 @@ void gpio_irq_handler(uint8_t pin)
     }
 }
 
-
 void button_init(void)
 {
     // configure pushbutton PB0 and PB1 as inputs, with pull-up enabled
@@ -197,14 +205,12 @@ void button_init(void)
     GPIOINT_CallbackRegister(BSP_BUTTON1_PIN, gpio_irq_handler);
 }
 
-
 static void enqueue_new_objs()
 {
-	// get your battery
-    int8_t  battery = 100;
-    mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery), &battery);
+    static int8_t  battery;
+    battery = battery < 100 ? battery + 1 : 0;
+    mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery), &battery, 0);
 }
-
 
 void mi_schd_event_handler(schd_evt_t *p_event)
 {
@@ -217,9 +223,16 @@ void mi_schd_event_handler(schd_evt_t *p_event)
         break;
 
     case SCHD_EVT_REG_SUCCESS:
-    	// start periodic advertise objects.
-    	gecko_cmd_hardware_set_soft_timer(SEC_2_TIMERTICK(600), TIMER_ID_OBJ_PERIOD_ADV, 0);
-    	break;
+        // set register bit.
+        advertising_init(0);
+        gecko_cmd_hardware_set_soft_timer(SEC_2_TIMERTICK(60), TIMER_ID_OBJ_PERIOD_ADV, 0);
+        break;
+
+    case SCHD_EVT_KEY_DEL_SUCC:
+        // clear register bit.
+        advertising_init(0);
+        break;
+
     default:
         break;
     }
@@ -265,7 +278,7 @@ void lock_ops_handler (uint8_t opcode)
     obj_lock_event.user_id= get_mi_key_id();
     obj_lock_event.time   = time(NULL);
 
-    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
+    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event, 0);
 
     reply_lock_stat(opcode);
     send_lock_log(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
@@ -291,13 +304,12 @@ static void process_system_boot(struct gecko_cmd_packet *evt)
 
     mible_libs_config_t lib_cfg = {
             .msc_onoff = msc_pwr_manage,
-            .p_msc_iic_config = &msc_iic_config,
+            .p_msc_iic_config = (void*)&msc_iic_config,
     };
 
     mi_scheduler_init(10, mi_schd_event_handler, &lib_cfg);
     mi_scheduler_start(SYS_KEY_RESTORE);
 }
-
 
 static void process_softtimer(struct gecko_cmd_packet *evt)
 {
@@ -313,13 +325,16 @@ static void process_softtimer(struct gecko_cmd_packet *evt)
     }
 }
 
-
 static void process_external_signal(struct gecko_cmd_packet *evt)
 {
     if (evt->data.evt_system_external_signal.extsignals & EXT_SIGNAL_PB0_SHORT_PRESS) {
-        MI_LOG_DEBUG("Set bind confirm bit in mibeacon.\n");
-        advertising_init(1);
-        gecko_cmd_hardware_set_soft_timer(SEC_2_TIMERTICK(10), TIMER_ID_CLEAR_BIND_CFM, 1);
+        if (get_mi_reg_stat()) {
+            enqueue_new_objs();
+        } else {
+            MI_LOG_DEBUG("Set bind confirm bit in mibeacon.\n");
+            advertising_init(1);
+            gecko_cmd_hardware_set_soft_timer(SEC_2_TIMERTICK(10), TIMER_ID_CLEAR_BIND_CFM, 1);
+        }
     }
 
     if (evt->data.evt_system_external_signal.extsignals & EXT_SIGNAL_PB0_LONG_PRESS) {
@@ -410,7 +425,7 @@ int main()
             if (pair_code_num == PAIRCODE_NUMS) {
                 pair_code_num = 0;
                 need_kbd_input = false;
-                mi_input_oob(pair_code, sizeof(pair_code));
+                mi_schd_oob_rsp(pair_code, sizeof(pair_code));
             }
         }
 
@@ -424,72 +439,4 @@ int main()
     }
 }
 
-
-static void advertising_init(uint8_t need_bind_confirm)
-{
-    MI_LOG_INFO("advertising init...\n");
-
-    mibeacon_frame_ctrl_t frame_ctrl = {
-            .secure_auth  = 1,
-            .version      = 5,
-            .bond_confirm = need_bind_confirm
-    };
-
-    mibeacon_capability_t cap = {
-            .connectable = 1,
-            .encryptable = 1,
-            .bondAbility = 1
-    };
-
-    mible_addr_t dev_mac;
-    mible_gap_address_get(dev_mac);
-
-    mibeacon_cap_sub_io_t io = {
-            .in_digits   = 1,
-    };
-
-    mibeacon_config_t mibeacon_cfg = {
-            .frame_ctrl = frame_ctrl,
-            .pid = PRODUCT_ID,
-            .p_mac = &dev_mac,
-            .p_capability = &cap,
-            .p_cap_sub_IO = &io,
-    };
-
-    uint8_t service_data[31];
-    uint8_t service_data_len = 0;
-
-    if(MI_SUCCESS != mible_service_data_set(&mibeacon_cfg, service_data, &service_data_len)){
-        MI_LOG_ERROR("mibeacon_data_set failed. \r\n");
-        return;
-    }
-
-    uint8_t adv_data[31] = {2, 1, 6};
-    uint8_t adv_len = 3;
-
-    memcpy(adv_data+3, service_data, service_data_len);
-    adv_len += service_data_len;
-
-    MI_LOG_INFO("adv_data:\n");
-    MI_LOG_HEXDUMP(adv_data, adv_len);
-
-    mible_gap_adv_data_set(adv_data, adv_len, NULL, 0);
-    return;
-}
-
-
-static void advertising_start(void)
-{
-    MI_LOG_INFO("advertising start...\n");
-    mible_gap_adv_param_t adv_param =(mible_gap_adv_param_t){
-        .adv_type = MIBLE_ADV_TYPE_CONNECTABLE_UNDIRECTED,
-                .adv_interval_min = MSEC_TO_UNITS(200, 625),
-                .adv_interval_max = MSEC_TO_UNITS(200, 625),
-    };
-
-    if(MI_SUCCESS != mible_gap_adv_start(&adv_param)){
-        MI_LOG_ERROR("mible_gap_adv_start failed. \r\n");
-        return;
-    }
-}
 

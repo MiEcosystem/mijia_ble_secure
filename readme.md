@@ -8,8 +8,8 @@ nRF51硬件请参考[nordic_legacy分支](https://github.com/MiEcosystem/mijia_b
 ## 使用说明
 
 1. 下载 [nRF5 SDK 15.2.0](https://www.nordicsemi.com/Software-and-Tools/Software/nRF5-SDK/Download#infotabs)
-2. 由于 15.2.0 SDK 自带 nrfx twim driver 存在 bug, 因此需下载 [nrfx 1.2.0](https://github.com/NordicSemiconductor/nrfx/releases/tag/v1.2.0) 并替换原 SDK/modules/nrfx 
+2. 由于 15.2.0 SDK 自带 nrfx twim driver 存在 bug, 需下载 [nrfx 1.2.0](https://github.com/NordicSemiconductor/nrfx/releases/tag/v1.2.0) 并替换原 SDK/modules/nrfx 
 3. 进入到文件目录 SDK_15.2.0\examples\ble_peripheral\
 4. 执行 git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b nordic
 
-更多信息请参考[米家高安全级接入产品开发](https://github.com/MiEcosystem/miio_open/blob/master/ble/06-%E7%B1%B3%E5%AE%B6%E9%AB%98%E5%AE%89%E5%85%A8%E7%BA%A7BLE%E6%8E%A5%E5%85%A5%E4%BA%A7%E5%93%81%E5%BC%80%E5%8F%91.md)
+更多信息请参考[米家高安全级接入产品开发](https://github.com/MiEcosystem/miio_open/tree/master/ble)

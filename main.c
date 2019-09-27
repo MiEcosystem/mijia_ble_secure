@@ -94,7 +94,7 @@ static uint16_t                         m_conn_handle = BLE_CONN_HANDLE_INVALID;
 
 
 APP_TIMER_DEF(poll_timer);
-APP_TIMER_DEF(m_bindconfirm_timer);
+APP_TIMER_DEF(m_bind_timer);
 
 #define PAIRCODE_NUMS 6
 bool need_kbd_input;
@@ -122,7 +122,7 @@ const iic_config_t iic_config = {
 static void advertising_init(bool);
 static void ble_lock_ops_handler(uint8_t opcode);
 static void poll_timer_handler(void * p_context);
-static void bind_confirm_timeout(void * p_context);
+static void bind_window_timeout(void * p_context);
 void time_init(struct tm * time_ptr);
 
 /**@brief Function for assert macro callback.
@@ -164,7 +164,7 @@ static void timers_init(void)
     err_code = app_timer_create(&poll_timer, APP_TIMER_MODE_REPEATED, poll_timer_handler);
     APP_ERROR_CHECK(err_code);
 
-    err_code = app_timer_create(&m_bindconfirm_timer, APP_TIMER_MODE_SINGLE_SHOT, bind_confirm_timeout);
+    err_code = app_timer_create(&m_bind_timer, APP_TIMER_MODE_SINGLE_SHOT, bind_window_timeout);
     MI_ERR_CHECK(err_code);
 }
 
@@ -531,6 +531,12 @@ void bsp_event_handler(bsp_event_t event)
             }
             break;
 
+        case BSP_EVENT_KEY_1:
+            advertising_init(true);
+            err_code = app_timer_start(m_bind_timer, APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER), NULL);
+            MI_ERR_CHECK(err_code);
+            break;
+
         case BSP_EVENT_KEY_2:
             mi_scheduler_start(SYS_MSC_SELF_TEST);
             break;
@@ -539,11 +545,7 @@ void bsp_event_handler(bsp_event_t event)
             mi_scheduler_start(SYS_KEY_DELETE);
             break;
 
-        case BSP_EVENT_KEY_4:
-            advertising_init(true);
-            err_code = app_timer_start(m_bindconfirm_timer, APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER), NULL);
-            MI_ERR_CHECK(err_code);
-            break;
+
 
         default:
             break;
@@ -551,55 +553,15 @@ void bsp_event_handler(bsp_event_t event)
 }
 
 
-
 /**@brief Function for initializing the Advertising functionality.
  */
-static void advertising_init(bool need_bind_confirm)
+static void advertising_init(bool solicite_bind)
 {
     MI_LOG_INFO("advertising init...\n");
-    mibeacon_frame_ctrl_t frame_ctrl = {
-        .secure_auth    = 1,
-        .version        = 5,
-        .bond_confirm   = need_bind_confirm,
-    };
 
-    mibeacon_capability_t cap = {.connectable = 1,
-                                 .encryptable = 1,
-                                 .bondAbility = 1};
-    mibeacon_cap_sub_io_t IO = {.in_digits = 1};
-    mible_addr_t dev_mac;
-    mible_gap_address_get(dev_mac);
-
-    mibeacon_config_t mibeacon_cfg = {
-        .frame_ctrl = frame_ctrl,
-        .pid = PRODUCT_ID,
-        .p_mac = (mible_addr_t*)dev_mac, 
-        .p_capability = &cap,
-        .p_cap_sub_IO = &IO,
-        .p_obj = NULL,
-    };
-
-    uint8_t adv_data[31];
-    uint8_t adv_len;
-
-    // ADV Struct: Flags: LE General Discoverable Mode + BR/EDR Not supported.
-    adv_data[0] = 0x02;
-    adv_data[1] = 0x01;
-    adv_data[2] = 0x06;
-    adv_len     = 3;
-    
-    uint8_t service_data_len;
-    if(MI_SUCCESS != mible_service_data_set(&mibeacon_cfg, adv_data+3, &service_data_len)){
-        MI_LOG_ERROR("encode service data failed. \r\n");
-        return;
+    if (MI_SUCCESS != mibeacon_adv_data_set(solicite_bind, 0, NULL, 0)) {
+        MI_LOG_ERROR("encode mibeacon data failed. \r\n");
     }
-    adv_len += service_data_len;
-    
-    MI_LOG_HEXDUMP(adv_data, adv_len);
-
-    mible_gap_adv_data_set(adv_data, adv_len, adv_data, 0);
-
-    return;
 }
 
 /**@brief Function for initializing buttons and leds.
@@ -615,6 +577,12 @@ static void buttons_leds_init(void)
                                  bsp_event_handler);
     APP_ERROR_CHECK(err_code);
 
+
+    /* assign BUTTON 1 to set the bind confirm bit in mibeacon, for more details to check bsp_event_handler()*/
+    err_code = bsp_event_to_button_action_assign(0,
+                                             BSP_BUTTON_ACTION_PUSH,
+                                             BSP_EVENT_KEY_1);
+
     /* assign BUTTON 2 to initate MSC_SELF_TEST, for more details to check bsp_event_handler()*/
     err_code = bsp_event_to_button_action_assign(1,
                                              BSP_BUTTON_ACTION_PUSH,
@@ -623,14 +591,8 @@ static void buttons_leds_init(void)
 
     /* assign BUTTON 3 to clear KEYINFO in the FLASH, for more details to check bsp_event_handler()*/
     err_code = bsp_event_to_button_action_assign(2,
-                                             BSP_BUTTON_ACTION_PUSH,
+                                             BSP_BUTTON_ACTION_LONG_PUSH,
                                              BSP_EVENT_KEY_3);
-    APP_ERROR_CHECK(err_code);
-
-    /* assign BUTTON 4 to set the bind confirm bit in mibeacon, for more details to check bsp_event_handler()*/
-    err_code = bsp_event_to_button_action_assign(3,
-                                             BSP_BUTTON_ACTION_PUSH,
-                                             BSP_EVENT_KEY_4);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -642,21 +604,12 @@ static void power_manage(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
-
 /**@brief Function for starting advertising.
  */
 static void advertising_start(void)
 {
-    mible_gap_adv_param_t adv_param =(mible_gap_adv_param_t){
-        .adv_type = MIBLE_ADV_TYPE_CONNECTABLE_UNDIRECTED,
-        .adv_interval_min = MSEC_TO_UNITS(200, UNIT_0_625_MS),
-        .adv_interval_max = MSEC_TO_UNITS(300, UNIT_0_625_MS),
-    };
-    uint32_t err_code = mible_gap_adv_start(&adv_param);
-    if(MI_SUCCESS != err_code){
-        MI_LOG_ERROR("adv failed. %d \n", err_code);
-    }
+    uint32_t errno = mibeacon_adv_start(300);
+    MI_ERR_CHECK(errno);
 }
 
 void poll_timer_handler(void * p_context)
@@ -666,12 +619,11 @@ void poll_timer_handler(void * p_context)
 
     if (get_mi_reg_stat()) {
         uint8_t battery_stat = 100;
-        mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat);
+        mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat, 0);
     }
 }
 
-
-static void bind_confirm_timeout(void * p_context)
+static void bind_window_timeout(void * p_context)
 {
     MI_LOG_WARNING("bind confirm bit clear.\n");
     advertising_init(0);
@@ -706,12 +658,16 @@ void mi_schd_event_handler(schd_evt_t *p_event)
 
         default:
             MI_LOG_ERROR("Selected IO cap is not supported.\n");
-            mible_gap_disconnect(0);
         }
         break;
 
     case SCHD_EVT_KEY_DEL_SUCC:
         // device has been reset, restart adv mibeacon contains IO cap.
+        advertising_init(0);
+        break;
+
+    case SCHD_EVT_REG_SUCCESS:
+        // device has been registered.
         advertising_init(0);
         break;
 
@@ -762,7 +718,7 @@ static void ble_lock_ops_handler(uint8_t opcode)
     lock_event.user_id= get_mi_key_id();
     lock_event.time   = time(NULL);
 
-    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
+    mibeacon_obj_enque(MI_EVT_LOCK, sizeof(lock_event), &lock_event, 0);
 
     reply_lock_stat(opcode);
     send_lock_log(MI_EVT_LOCK, sizeof(lock_event), &lock_event);
@@ -817,7 +773,7 @@ int main(void)
             if (pair_code_num == PAIRCODE_NUMS) {
                 pair_code_num = 0;
                 need_kbd_input = false;
-                mi_input_oob(pair_code, sizeof(pair_code));
+                mi_schd_oob_rsp(pair_code, sizeof(pair_code));
             }
         }
 

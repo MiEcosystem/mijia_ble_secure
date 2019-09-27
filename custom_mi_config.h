@@ -16,7 +16,7 @@
 /**
  * @note Product identification got from xiaomi IoT developer platform.
  */
-#define PRODUCT_ID              463   // xiaomi BLE secure devboard
+#define PRODUCT_ID              794   // xiaomi BLE secure devboard
 
 
 /**
@@ -32,7 +32,7 @@
  *      MJSC   : 1
  *      MJA1   : 2
  */
-#define HAVE_MSC               2
+#define HAVE_MSC               1
 
 
 /**

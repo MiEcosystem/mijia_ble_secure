@@ -116,7 +116,8 @@ APP_TIMER_DEF(m_poll_timer);
 APP_TIMER_DEF(m_bindconfirm_timer);
 
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;                        /**< Handle of the current connection. */
-
+static uint16_t m_curr_times;
+static uint16_t m_max_times;
 /* YOUR_JOB: Declare all services structure your application is using
  *  BLE_XYZ_DEF(m_xyz);
  */
@@ -354,8 +355,6 @@ static void application_timers_start(void)
        ret_code_t err_code;
        err_code = app_timer_start(m_app_timer_id, TIMER_INTERVAL, NULL);
        APP_ERROR_CHECK(err_code); */
-    ret_code_t err_code = app_timer_start(m_poll_timer, APP_TIMER_TICKS(60000), NULL);
-    MI_ERR_CHECK(err_code);
 }
 
 
@@ -499,12 +498,34 @@ static void bsp_event_handler(bsp_event_t event)
             break;
 
         case BSP_EVENT_KEY_1:
-            mi_scheduler_start(SYS_MSC_SELF_TEST);
+            if (get_mi_reg_stat()) {
+                m_curr_times = 0;
+                m_max_times  = 100;
+                app_timer_start(m_poll_timer, APP_TIMER_TICKS(5000), NULL);
+            } else {
+                MI_LOG_INFO("start msc self test\n");
+                mi_scheduler_start(SYS_MSC_SELF_TEST);
+            }
             break;
 
         case BSP_EVENT_KEY_2:
             mi_scheduler_start(SYS_KEY_DELETE);
             advertising_init(0);
+            break;
+
+        case BSP_EVENT_KEY_3:
+            if (get_mi_reg_stat()) {
+                m_curr_times = 0;
+                m_max_times  = 10000;
+                app_timer_start(m_poll_timer, APP_TIMER_TICKS(5000), NULL);
+            }
+            break;
+
+        case BSP_EVENT_ADVERTISING_STOP:
+            if (get_mi_reg_stat()) {
+                app_timer_stop(m_poll_timer);
+                m_curr_times = 0;
+            }
             break;
 
         default:
@@ -538,7 +559,7 @@ static void buttons_leds_init()
                                              BSP_EVENT_KEY_0);
     APP_ERROR_CHECK(err_code);
 
-    /* assign BUTTON 2 to initate MSC_SELF_TEST, for more details to check bsp_event_handler()*/
+    /* assign BUTTON 2 to initate MSC_SELF_TEST or invoke send 100 unlock event*/
     err_code = bsp_event_to_button_action_assign(1,
                                              BSP_BUTTON_ACTION_PUSH,
                                              BSP_EVENT_KEY_1);
@@ -548,6 +569,16 @@ static void buttons_leds_init()
     err_code = bsp_event_to_button_action_assign(2,
                                              BSP_BUTTON_ACTION_LONG_PUSH,
                                              BSP_EVENT_KEY_2);
+
+    /* assign BUTTON 4 to invoke send 10000 unlock event */
+    err_code = bsp_event_to_button_action_assign(3,
+                                             BSP_BUTTON_ACTION_PUSH,
+                                             BSP_EVENT_KEY_3);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = bsp_event_to_button_action_assign(3,
+                                             BSP_BUTTON_ACTION_LONG_PUSH,
+                                             BSP_EVENT_ADVERTISING_STOP);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -603,14 +634,20 @@ static void bind_confirm_timeout(void * p_context)
 
 static void poll_timer_handler(void * p_context)
 {
-    time_t utc_time = time(NULL);
-    MI_LOG_INFO("%s", ctime(&utc_time));
+	time_t utc_time = time(NULL);
+	MI_LOG_INFO("The %d th event sent, %s", ++m_curr_times, ctime(&utc_time));
 
     // if device has been registered, it could boardcast mibeacon objects.
     if (get_mi_reg_stat()) {
-        uint8_t battery_stat = 100;
-        mibeacon_obj_enque(MI_STA_BATTERY, sizeof(battery_stat), &battery_stat, 0);
+       ble_lock_ops_handler(0);
     }
+
+    if (m_curr_times > m_max_times) {
+        app_timer_stop(m_poll_timer);
+        m_curr_times = 0;
+    }
+
+
 }
 
 void time_init(struct tm * time_ptr);
@@ -739,8 +776,7 @@ void ble_lock_ops_handler(uint8_t opcode)
     mibeacon_obj_enque(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event, 0);
             
     reply_lock_stat(opcode);
-    errno = send_lock_log(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
-    MI_ERR_CHECK(errno);
+    send_lock_log(MI_EVT_LOCK, sizeof(obj_lock_event), &obj_lock_event);
 }
 
 void stdio_rx_handler(uint8_t* p, uint8_t l)

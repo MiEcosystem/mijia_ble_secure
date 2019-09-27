@@ -92,8 +92,8 @@
 #include "mijia_profiles/stdio_service_server.h"
 #include "mi_config.h"
 
-#define DEVICE_NAME                     "secure_demo"                       /**< Name of device. Will be included in the advertising data. */
-#define MANUFACTURER_NAME               "Xiaomi Inc."                   /**< Manufacturer. Will be passed to Device Information Service. */
+#define DEVICE_NAME                     "secure_demo"                           /**< Name of device. Will be included in the advertising data. */
+#define MANUFACTURER_NAME               "Xiaomi Inc."                           /**< Manufacturer. Will be passed to Device Information Service. */
 
 #define APP_BLE_OBSERVER_PRIO           3                                       /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 #define APP_BLE_CONN_CFG_TAG            1                                       /**< A tag identifying the SoftDevice BLE configuration. */
@@ -122,7 +122,7 @@ static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;                        
  */
 
 // YOUR_JOB: Use UUIDs for service(s) used in your application.
-static void advertising_init(bool need_bind_confirm);
+static void advertising_init(bool solicited);
 static void advertising_start(void);
 static void poll_timer_handler(void * p_context);
 static void bind_confirm_timeout(void * p_context);
@@ -515,16 +515,10 @@ static void bsp_event_handler(bsp_event_t event)
 
 /**@brief Function for initializing the Advertising functionality.
  */
-static void advertising_init(bool need_bind_confirm)
+static void advertising_init(bool solicited)
 {
     MI_LOG_INFO("advertising init...\n");
-    // use user data parameter to set adv struct <complete local name>
-    uint8_t user_data[31], user_dlen;
-    user_data[0] = 1 + strlen(DEVICE_NAME);
-    user_data[1] = 9;  // complete local name
-    strcpy((char*)&user_data[2], DEVICE_NAME);
-    user_dlen = 2 + strlen(DEVICE_NAME);
-    mibeacon_adv_data_set(need_bind_confirm, 0, user_data, user_dlen);
+    mibeacon_adv_data_set(solicited, 0, NULL, 0);
     return;
 }
 
@@ -626,7 +620,7 @@ void time_init(struct tm * time_ptr);
 static bool need_kbd_input;
 static uint8_t pair_code_num;
 static uint8_t pair_code[PAIRCODE_NUMS];
-static uint8_t qr_code[16] = {
+static const uint8_t qr_code[16] = {
 0xa0,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xaa,0xab,0xac,0xad,0xae,0xaf,
 };
 
@@ -669,7 +663,12 @@ void mi_schd_event_handler(schd_evt_t *p_event)
         break;
 
     case SCHD_EVT_KEY_DEL_SUCC:
-        // device has been reset, restart adv mibeacon contains IO cap.
+        // device has been reset, need to re-init adv with IO cap.
+        advertising_init(0);
+        break;
+
+    case SCHD_EVT_REG_SUCCESS:
+        // device has been registered, need to re-init adv with registered bit.
         advertising_init(0);
         break;
 

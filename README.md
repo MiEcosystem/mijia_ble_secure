@@ -4,7 +4,7 @@
 
 ## 使用说明
 
-1. 运行 git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b 2.1.x/silabs
+1. 运行 git clone --recursive https://github.com/MiEcosystem/mijia_ble_secure.git -b silabs
 2. 将工程导入Simiplicity Studio IDE
 3. 安全芯片需连接此芯片默认的IIC接口 BSP_IIC0 (SCL PC10 / SDA PC11)
 

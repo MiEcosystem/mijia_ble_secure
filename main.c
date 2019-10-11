@@ -501,6 +501,7 @@ static void bsp_event_handler(bsp_event_t event)
             if (get_mi_reg_stat()) {
                 m_curr_times = 0;
                 m_max_times  = 100;
+                MI_LOG_INFO("start adv lock event %d times \n", m_max_times);
                 app_timer_start(m_poll_timer, APP_TIMER_TICKS(5000), NULL);
             } else {
                 MI_LOG_INFO("start msc self test\n");
@@ -517,12 +518,14 @@ static void bsp_event_handler(bsp_event_t event)
             if (get_mi_reg_stat()) {
                 m_curr_times = 0;
                 m_max_times  = 10000;
+                MI_LOG_INFO("start adv lock event %d times \n", m_max_times);
                 app_timer_start(m_poll_timer, APP_TIMER_TICKS(5000), NULL);
             }
             break;
 
         case BSP_EVENT_ADVERTISING_STOP:
             if (get_mi_reg_stat()) {
+                MI_LOG_INFO("stop adv lock event.\n");
                 app_timer_stop(m_poll_timer);
                 m_curr_times = 0;
             }

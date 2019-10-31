@@ -49,24 +49,7 @@
  */
 #define OOB_USE_NUMPAD_INPUT   1
 
-
-/**
- * @note mibeacon object advertising configuration
- *
- * The mibeacon object is an adv message contains the status or event. BLE gateway
- * can receive the beacon message (by active scanning) and upload it to server for
- * triggering customized home automation scene.
- *
- * OBJ_QUEUE_SIZE      : max num of objects can be concurrency advertising
- *                       ( actually, it will be sent one by one )
- * OBJ_ADV_INTERVAL_MS : the object adv interval
- * OBJ_ADV_TIMEOUT_MS  : the time one object will be continuously sent.
- */
-#define OBJ_QUEUE_SIZE         8
-#define OBJ_ADV_INTERVAL_MS    100
-#define OBJ_ADV_TIMEOUT_MS     3000
-
-
+#define MAX_ATT_MTU 247
 /**
  * @note Process mi scheduler in main loop (non-interrupt context).
  */

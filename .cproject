@@ -77,6 +77,7 @@
 									<listOptionValue builtIn="false" value="MI_LOG_ENABLED=1"/>
 									<listOptionValue builtIn="false" value="MI_ASSERT=1"/>
 									<listOptionValue builtIn="false" value="CUSTOMIZED_MI_CONFIG_FILE=&lt;custom_mi_config.h&gt;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=&quot;mbedtls/config.h&quot;"/>
 								</option>
 								<option id="com.silabs.ide.si32.gcc.cdt.managedbuild.tool.gnu.c.compiler.optimization.level.620932671" name="Optimization Level" superClass="com.silabs.ide.si32.gcc.cdt.managedbuild.tool.gnu.c.compiler.optimization.level" value="gnu.c.optimization.level.more" valueType="enumerated"/>
 								<inputType id="com.silabs.ide.si32.gcc.cdt.managedbuild.tool.gnu.c.compiler.input.738484497" superClass="com.silabs.ide.si32.gcc.cdt.managedbuild.tool.gnu.c.compiler.input"/>
